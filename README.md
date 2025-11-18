@@ -37,33 +37,59 @@ Infrastructure Terraform modulaire pour l'application KAMBRIQ sur AWS.
 
 1. Installer Terraform (>= 1.5.0)
 2. Configurer les credentials AWS (via `aws configure` ou variables d'environnement)
-3. Créer un fichier `terraform.tfvars` dans `envs/dev/` ou `envs/prod/` (voir `terraform.tfvars.example`)
+3. Le backend S3 est configuré : `kloudnat-infra-shared-store` dans `eu-central-1`
 
-### Environnement de développement
+### Déploiement via GitHub Actions (Recommandé)
+
+La pipeline GitHub Actions déploie automatiquement l'infrastructure :
+
+- **Branche `main`** → Déploie en **production**
+- **Branche `develop`** → Déploie en **dev**
+- **Pull Requests** → Exécute `terraform plan` et commente le PR
+
+#### Secrets GitHub requis
+
+Configurer les secrets suivants dans GitHub (Settings → Secrets and variables → Actions) :
+
+- `AWS_ACCESS_KEY_ID` : Clé d'accès AWS
+- `AWS_SECRET_ACCESS_KEY` : Clé secrète AWS
+- `DB_PASSWORD` : Mot de passe de la base de données
+- `JWT_SECRET` : Secret JWT pour l'authentification
+
+#### Déploiement manuel via GitHub Actions
+
+1. Aller dans l'onglet "Actions" du repository
+2. Sélectionner "Deploy Infrastructure"
+3. Cliquer sur "Run workflow"
+4. Choisir l'environnement (dev/prod) et l'action (plan/apply/destroy)
+
+### Déploiement local
+
+#### Environnement de développement
 
 ```bash
 cd envs/dev
-# Copier et éditer terraform.tfvars.example vers terraform.tfvars
-cp terraform.tfvars.example terraform.tfvars
-# Éditer terraform.tfvars avec vos valeurs
+# Les fichiers terraform.tfvars sont déjà créés (mais ignorés par git)
+# Éditer terraform.tfvars avec vos valeurs réelles
 
 terraform init
 terraform plan
 terraform apply
 ```
 
-### Environnement de production
+#### Environnement de production
 
 ```bash
 cd envs/prod
-# Copier et éditer terraform.tfvars.example vers terraform.tfvars
-cp terraform.tfvars.example terraform.tfvars
-# Éditer terraform.tfvars avec vos valeurs
+# Les fichiers terraform.tfvars sont déjà créés (mais ignorés par git)
+# Éditer terraform.tfvars avec vos valeurs réelles
 
 terraform init
 terraform plan
 terraform apply
 ```
+
+**Note** : Les fichiers `terraform.tfvars` sont ignorés par git (`.gitignore`) pour des raisons de sécurité. Ils contiennent des valeurs par défaut à remplacer.
 
 ## Variables d'environnement
 
@@ -76,27 +102,18 @@ Les outputs Terraform fournissent les informations nécessaires pour configurer 
 
 ## Backend Terraform (État)
 
-Actuellement, l'état Terraform est stocké localement. Pour la production, il est recommandé de migrer vers un backend S3 :
+L'état Terraform est stocké dans S3 : `kloudnat-infra-shared-store`
 
-1. Créer un bucket S3 pour l'état Terraform
-2. Configurer le backend dans `envs/*/backend.tf`
-3. Migrer l'état existant avec `terraform init -migrate-state`
+- **Dev** : `kambriq/dev/terraform.tfstate`
+- **Prod** : `kambriq/prod/terraform.tfstate`
 
-Exemple de configuration backend S3 :
+Région : `eu-central-1`
 
-```hcl
-terraform {
-  backend "s3" {
-    bucket = "kambriq-terraform-state"
-    key    = "dev/terraform.tfstate"
-    region = "eu-west-1"
-  }
-}
-```
+La configuration est déjà définie dans `envs/*/backend.tf`.
 
 ## TODO
 
-- [ ] Migrer l'état Terraform vers S3 backend
+- [x] Migrer l'état Terraform vers S3 backend
 - [ ] Ajouter des alarmes CloudWatch pour monitoring
 - [ ] Configurer des backups automatiques pour RDS
 - [ ] Ajouter des variables pour les secrets (via AWS Secrets Manager)

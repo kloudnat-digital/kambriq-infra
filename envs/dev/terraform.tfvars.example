@@ -1,7 +1,7 @@
 # Exemple de fichier terraform.tfvars pour l'environnement dev
 # Copier ce fichier vers terraform.tfvars et remplir les valeurs
 
-aws_region = "eu-west-1"
+aws_region = "eu-central-1"
 
 # Mot de passe de la base de données (à changer en production)
 db_password = "CHANGE_ME_STRONG_PASSWORD"
