@@ -1,0 +1,15 @@
+# Exemple de fichier terraform.tfvars pour l'environnement dev
+# Copier ce fichier vers terraform.tfvars et remplir les valeurs
+
+aws_region = "eu-west-1"
+
+# Mot de passe de la base de données (à changer en production)
+db_password = "CHANGE_ME_STRONG_PASSWORD"
+
+# Secret JWT pour l'authentification
+jwt_secret = "CHANGE_ME_JWT_SECRET_KEY"
+
+# Configuration SES
+ses_domain     = "kambriq.com"
+ses_from_email = "noreply@kambriq.com"
+
