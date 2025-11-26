@@ -107,6 +107,15 @@ L'infrastructure partagée doit être déployée **EN PREMIER** avant les enviro
    terraform apply
    ```
 
+5. **⚠️ IMPORTANT : Configurer les nameservers Route53** :
+   - Après le déploiement, récupérez les nameservers Route53 :
+     ```bash
+     terraform output route53_name_servers
+     ```
+   - Configurez ces nameservers dans votre registraire de domaine (GoDaddy, Namecheap, OVH, etc.)
+   - **Sans cette étape, les validations SES et ACM échoueront avec des timeouts**
+   - Voir le guide détaillé : [ROUTE53_DNS_SETUP.md](./ROUTE53_DNS_SETUP.md)
+
 ### Déploiement via GitHub Actions
 
 1. **Créer une Pull Request** vers `main` :
