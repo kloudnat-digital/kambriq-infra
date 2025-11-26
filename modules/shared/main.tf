@@ -24,6 +24,10 @@ data "aws_availability_zones" "available" {
 data "aws_caller_identity" "current" {}
 
 locals {
+  # Generate a unique suffix from account ID (hash to avoid exposing account ID in bucket names)
+  account_id_hash = substr(md5("${data.aws_caller_identity.current.account_id}-${var.aws_region}"), 0, 8)
+  
+  # Availability zones
   azs = length(var.availability_zones) > 0 ? var.availability_zones : slice(data.aws_availability_zones.available.names, 0, 2)
 }
 
@@ -252,7 +256,7 @@ resource "aws_acm_certificate_validation" "api" {
 # S3 Bucket for Logs
 resource "aws_s3_bucket" "logs" {
   count  = var.enable_s3_logs ? 1 : 0
-  bucket = "${local.name_prefix}-logs-${data.aws_caller_identity.current.account_id}"
+  bucket = "${local.name_prefix}-logs-${local.account_id_hash}"
 
   tags = {
     Name = "${local.name_prefix}-logs"
@@ -283,7 +287,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
 # S3 Bucket for Artifacts
 resource "aws_s3_bucket" "artifacts" {
   count  = var.enable_s3_artifacts ? 1 : 0
-  bucket = "${local.name_prefix}-artifacts-${data.aws_caller_identity.current.account_id}"
+  bucket = "${local.name_prefix}-artifacts-${local.account_id_hash}"
 
   tags = {
     Name = "${local.name_prefix}-artifacts"
