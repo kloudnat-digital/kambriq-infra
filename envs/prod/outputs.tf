@@ -1,87 +1,91 @@
-# Frontend
-output "frontend_url" {
-  description = "CloudFront URL for frontend"
-  value       = module.cloudfront.distribution_url
+# ============================================================================
+# AWS Region
+# ============================================================================
+output "region" {
+  description = "AWS region"
+  value       = var.aws_region
 }
 
-output "frontend_domain" {
-  description = "CloudFront domain name"
+# ============================================================================
+# Frontend (CloudFront + S3 Static)
+# ============================================================================
+output "frontend_cloudfront_domain" {
+  description = "CloudFront distribution domain name"
   value       = module.cloudfront.distribution_domain_name
 }
 
-# API
-output "api_url" {
-  description = "API Gateway URL"
-  value       = module.api_gateway.api_url
-}
-
-output "api_endpoint" {
-  description = "API Gateway endpoint"
-  value       = module.api_gateway.api_endpoint
-}
-
-# Database
-output "db_host" {
-  description = "Database host"
-  value       = module.rds.db_host
-}
-
-output "db_port" {
-  description = "Database port"
-  value       = module.rds.db_port
-}
-
-output "db_name" {
-  description = "Database name"
-  value       = module.rds.db_name
-}
-
-output "db_endpoint" {
-  description = "Database endpoint (host:port)"
-  value       = "${module.rds.db_host}:${module.rds.db_port}"
-}
-
-# S3
-output "s3_media_bucket" {
-  description = "S3 media bucket name"
-  value       = module.s3_media.bucket_id
-}
-
-output "s3_static_bucket" {
-  description = "S3 static site bucket name"
+output "frontend_s3_bucket_name" {
+  description = "S3 bucket name for static frontend site"
   value       = module.s3_static.bucket_id
 }
 
-# SES
-output "ses_from_email" {
-  description = "SES sender email"
-  value       = module.ses.from_email
+# ============================================================================
+# Media S3 Buckets
+# ============================================================================
+# Note: Currently only one media bucket exists (private). Both outputs
+# reference the same bucket. If separate public/private buckets are needed,
+# create an additional S3 bucket module.
+output "media_s3_public_bucket_name" {
+  description = "S3 bucket name for public media (currently same as private)"
+  value       = module.s3_media.bucket_id
 }
 
-output "ses_identity_arn" {
-  description = "SES email identity ARN"
-  value       = module.ses.email_identity_arn
+output "media_s3_private_bucket_name" {
+  description = "S3 bucket name for private media"
+  value       = module.s3_media.bucket_id
 }
 
+# ============================================================================
+# API Gateway
+# ============================================================================
+output "api_gateway_base_url" {
+  description = "API Gateway base URL (full URL with https://)"
+  value       = module.api_gateway.api_url
+}
+
+# ============================================================================
+# RDS Database
+# ============================================================================
+output "rds_endpoint" {
+  description = "RDS database endpoint (host:port)"
+  value       = "${module.rds.db_host}:${module.rds.db_port}"
+}
+
+output "rds_db_name" {
+  description = "RDS database name"
+  value       = module.rds.db_name
+}
+
+output "rds_username" {
+  description = "RDS database master username (password stored in SSM Parameter Store)"
+  value       = module.rds.db_username
+  sensitive   = true
+}
+
+# ============================================================================
+# SES (Email)
+# ============================================================================
+# SES resources are in the shared infrastructure stack
 output "ses_domain_identity_arn" {
   description = "SES domain identity ARN"
-  value       = module.ses.domain_identity_arn
+  value       = data.terraform_remote_state.shared.outputs.ses_domain_identity_arn
 }
 
-output "ses_domain_verification_token" {
-  description = "SES domain verification token (à ajouter dans DNS)"
-  value       = module.ses.domain_identity_verification_token
-  sensitive   = false
+output "ses_from_email" {
+  description = "SES sender email address"
+  value       = data.terraform_remote_state.shared.outputs.ses_from_email
 }
 
+# ============================================================================
 # Lambda
+# ============================================================================
 output "lambda_function_name" {
   description = "Lambda function name"
   value       = module.lambda.function_name
 }
 
-output "lambda_function_arn" {
-  description = "Lambda function ARN"
-  value       = module.lambda.function_arn
+output "cloudfront_distribution_id" {
+  description = "CloudFront distribution ID (for cache invalidation)"
+  value       = module.cloudfront.distribution_id
 }
 

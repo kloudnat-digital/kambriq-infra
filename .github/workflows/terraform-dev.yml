@@ -1,225 +1,97 @@
 # ============================================================================
-# Terraform Workflow - Dev Environment
+# Terraform - Development Environment
 # ============================================================================
+# Manages app infrastructure for dev (RDS, Lambda, API Gateway, S3, CloudFront).
+# This workflow manages the development infrastructure using Terraform.
 #
-# This workflow manages the dev environment infrastructure stack.
+# Purpose:
+#   - Automatically plan and apply Terraform changes for the dev environment
+#   - Runs on push to the 'develop' branch
+#   - Auto-approves applies for faster development iteration
 #
-# Triggers:
-# - Pull Request: Runs terraform plan only
-# - Push to main: Runs terraform plan + apply (optional, can be disabled)
+# Required GitHub Secrets:
+#   - AWS_ACCESS_KEY_ID: AWS access key for Terraform operations
+#   - AWS_SECRET_ACCESS_KEY: AWS secret key for Terraform operations
+#   - AWS_DEFAULT_REGION: AWS region (optional, defaults to eu-central-1)
 #
-# AWS Credentials Configuration:
-# Currently configured for Option 2: Static AWS Credentials
-#   - Set GitHub Secrets:
-#     - AWS_ACCESS_KEY_ID: your-access-key
-#     - AWS_SECRET_ACCESS_KEY: your-secret-key
-#     - AWS_REGION: eu-central-1 (or use default in env)
-#     - DB_PASSWORD_DEV: database password for DEV environment (must be different from prod)
-#     - JWT_SECRET_DEV: JWT secret key for DEV environment (must be different from prod)
+# Secrets Management:
+#   - Application secrets (DB password, JWT secrets) are NOT passed as Terraform variables
+#   - Secrets are managed via:
+#     - SSM Parameter Store / Secrets Manager (for Lambda environment variables)
+#     - Lambda environment variables configured directly (not via Terraform variables)
+#   - Terraform only manages infrastructure resources, not application secrets
 #
-# Alternative: Option 1 - OIDC with IAM Role (see comments in workflow)
-#   - Set GitHub Secrets:
-#     - AWS_ROLE_ARN: arn:aws:iam::ACCOUNT_ID:role/github-actions-role
-#     - AWS_REGION: eu-central-1
-#     - DB_PASSWORD_DEV: database password for DEV environment
-#     - JWT_SECRET_DEV: JWT secret key for DEV environment
-#   - Configure OIDC provider in AWS IAM (see AWS docs)
-#
-# How to generate JWT_SECRET:
-#   - Use a cryptographically secure random string (min. 32 characters recommended)
-#   - Example commands:
-#     - Linux/Mac: openssl rand -base64 32
-#     - Linux/Mac: openssl rand -hex 32
-#     - Python: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
-#     - Node.js: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-#
-# Note: This workflow depends on the shared stack being deployed first.
-# The shared stack outputs are consumed via terraform_remote_state.
-#
+# Terraform State:
+#   - Backend: S3 bucket 'kloudnat-infra-shared-store'
+#   - State file: kambriq/dev/terraform.tfstate
+#   - Region: eu-central-1
 # ============================================================================
 
 name: Terraform - Dev Environment
 
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'envs/dev/**'
-      - 'modules/**'
-      - '.github/workflows/terraform-dev.yml'
-
   push:
     branches:
-      - main
+      - develop
     paths:
       - 'envs/dev/**'
       - 'modules/**'
       - '.github/workflows/terraform-dev.yml'
+  workflow_dispatch:
+    # Allow manual triggering
 
 env:
-  AWS_REGION: eu-central-1
-  TF_VERSION: 1.5.0
-  WORKING_DIR: envs/dev
+  TF_IN_AUTOMATION: true
+  TF_INPUT: false
+  AWS_DEFAULT_REGION: eu-central-1
 
 jobs:
   terraform:
-    name: Terraform Dev
+    name: Terraform Plan & Apply (Dev)
     runs-on: ubuntu-latest
-
-    permissions:
-      id-token: write # Required for OIDC
-      contents: read
-      pull-requests: write # Required to comment on PRs
-
-    defaults:
-      run:
-        working-directory: ${{ env.WORKING_DIR }}
+    environment:
+      name: development
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: '1.5.0'
+          terraform_wrapper: false
+
       - name: Configure AWS credentials
-        # Using static credentials (Option 2)
-        # Required GitHub Secrets:
-        #   - AWS_ACCESS_KEY_ID
-        #   - AWS_SECRET_ACCESS_KEY
-        #   - AWS_REGION (or use env.AWS_REGION default)
-        #   - DB_PASSWORD_DEV (dev-specific database password)
-        #   - JWT_SECRET_DEV (dev-specific JWT secret)
-        #
-        # Alternative: To use OIDC (Option 1), comment out the section below
-        # and uncomment the OIDC section above, then configure AWS_ROLE_ARN secret.
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TF_VERSION }}
-          terraform_wrapper: false
-
-      - name: Terraform Format Check
-        id: fmt
-        run: terraform fmt -check
-        continue-on-error: true
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION || env.AWS_DEFAULT_REGION }}
 
       - name: Terraform Init
-        id: init
+        working-directory: envs/dev
         run: terraform init -input=false
 
+      - name: Terraform Format Check
+        working-directory: envs/dev
+        run: terraform fmt -check -recursive || (echo "❌ Terraform files are not formatted. Run 'terraform fmt' to fix." && exit 1)
+
       - name: Terraform Validate
-        id: validate
-        run: terraform validate -no-color
+        working-directory: envs/dev
+        run: terraform validate
 
       - name: Terraform Plan
-        id: plan
-        run: |
-          terraform plan -no-color -input=false -out=tfplan \
-            -var="db_password=${{ secrets.DB_PASSWORD_DEV }}" \
-            -var="jwt_secret=${{ secrets.JWT_SECRET_DEV }}" \
-            -var="aws_region=${{ env.AWS_REGION }}"
-        continue-on-error: true
-
-      - name: Save Plan Output
-        if: github.event_name == 'pull_request'
-        run: |
-          terraform show -no-color tfplan > plan.txt || echo "No plan available" > plan.txt
-          echo "## Terraform Plan Output (Dev)" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          cat plan.txt >> $GITHUB_STEP_SUMMARY || echo "Plan output not available" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-
-      - name: Comment PR with Plan
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const fs = require('fs');
-            let planOutput = 'Plan output not available';
-            try {
-              planOutput = fs.readFileSync('${{ env.WORKING_DIR }}/plan.txt', 'utf8');
-            } catch (error) {
-              planOutput = 'Error reading plan output';
-            }
-
-            const output = `#### Terraform Plan Results - Dev Environment 📖
-            
-            **Format Check**: \`${{ steps.fmt.outcome }}\`
-            **Initialization**: \`${{ steps.init.outcome }}\`
-            **Validation**: \`${{ steps.validate.outcome }}\`
-            **Plan**: \`${{ steps.plan.outcome }}\`
-
-            <details><summary>Show Plan</summary>
-
-            \`\`\`
-            ${planOutput}
-            \`\`\`
-
-            </details>
-
-            *Workflow: \`${{ github.workflow }}\`, Actor: @${{ github.actor }}*`;
-
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: output
-            })
-
-      - name: Upload Plan Artifact
-        if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
-        with:
-          name: terraform-plan-dev
-          path: ${{ env.WORKING_DIR }}/plan.txt
-          retention-days: 1
-          if-no-files-found: ignore
+        working-directory: envs/dev
+        run: terraform plan -input=false -out=tfplan
 
       - name: Terraform Apply
-        id: apply
-        # Uncomment the line below to enable auto-apply on push to main
-        # if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        if: false # Disabled by default - uncomment above to enable
-        run: |
-          if [ -f tfplan ]; then
-            terraform apply -auto-approve -input=false tfplan
-          else
-            terraform apply -auto-approve -input=false \
-              -var="db_password=${{ secrets.DB_PASSWORD_DEV }}" \
-              -var="jwt_secret=${{ secrets.JWT_SECRET_DEV }}" \
-              -var="aws_region=${{ env.AWS_REGION }}"
-          fi
+        working-directory: envs/dev
+        run: terraform apply -input=false -auto-approve tfplan
 
-      - name: Output Terraform State
-        if: always() && (steps.apply.conclusion == 'success' || steps.plan.conclusion == 'success')
+      - name: Terraform Output (non-sensitive)
+        working-directory: envs/dev
         run: |
-          terraform output -json > terraform-outputs.json || true
           echo "## Terraform Outputs (Dev)" >> $GITHUB_STEP_SUMMARY
-          echo '```json' >> $GITHUB_STEP_SUMMARY
-          cat terraform-outputs.json >> $GITHUB_STEP_SUMMARY || echo "No outputs available" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-
-      - name: Display Key Outputs
-        if: always() && (steps.apply.conclusion == 'success' || steps.plan.conclusion == 'success')
-        run: |
-          echo "### Key Infrastructure Outputs" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          terraform output -raw api_url >> /dev/null 2>&1 && echo "- **API URL**: \`$(terraform output -raw api_url)\`" >> $GITHUB_STEP_SUMMARY || true
-          terraform output -raw frontend_domain >> /dev/null 2>&1 && echo "- **Frontend Domain**: \`$(terraform output -raw frontend_domain)\`" >> $GITHUB_STEP_SUMMARY || true
-          terraform output -raw db_endpoint >> /dev/null 2>&1 && echo "- **DB Endpoint**: \`$(terraform output -raw db_endpoint)\`" >> $GITHUB_STEP_SUMMARY || true
-
-      - name: Upload Terraform outputs
-        if: always() && steps.apply.conclusion == 'success'
-        uses: actions/upload-artifact@v4
-        with:
-          name: terraform-outputs-dev
-          path: ${{ env.WORKING_DIR }}/terraform-outputs.json
-          retention-days: 30
-          if-no-files-found: ignore
-
+          terraform output -json | jq -r 'to_entries[] | select(.value.sensitive != true) | "\(.key): \(.value.value)"' >> $GITHUB_STEP_SUMMARY || true
+        continue-on-error: true

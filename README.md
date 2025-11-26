@@ -2,6 +2,12 @@
 
 Infrastructure Terraform modulaire pour l'application KAMBRIQ sur AWS.
 
+## 📚 Documentation
+
+- **[Guide d'usage Terraform](docs/setup/TERRAFORM_USAGE.md)** - Guide complet pour utiliser ce dépôt
+- **[Intégration avec l'application](docs/integration/APP_INTEGRATION.md)** - Comment l'app consomme les outputs Terraform
+- **[Résumé du nettoyage](docs/maintenance/CLEANUP_SUMMARY.md)** - Historique du nettoyage du dépôt
+
 ## Structure du projet
 
 ```
@@ -22,9 +28,55 @@ Infrastructure Terraform modulaire pour l'application KAMBRIQ sur AWS.
 └── versions.tf          # Contraintes de versions
 ```
 
-## Architecture
+## Architecture MVP KAMBRIQ – Serverless AWS
 
-### Vue d'ensemble
+### Vue d'ensemble de l'architecture MVP
+
+Pour le MVP (v1.0.0), l'architecture retenue est **100 % serverless AWS** pour optimiser les coûts et simplifier l'opérationnel :
+
+**Frontend :**
+- **S3 + CloudFront** : Next.js en export statique (`output: 'export'`)
+  - Bucket S3 pour héberger les fichiers statiques
+  - Distribution CloudFront pour la CDN et le HTTPS
+  - Pas de serveur à gérer, coûts très faibles
+
+**Backend :**
+- **Lambda + API Gateway** : NestJS déployé comme fonction serverless
+  - Lambda Node.js 20.x (512MB, 30s timeout)
+  - API Gateway HTTP API pour le routage
+  - Auto-scaling selon la charge, pay-per-use
+
+**Base de données :**
+- **RDS PostgreSQL** : Instance dédiée t4g.micro
+  - 20GB gp3 storage
+  - Backups automatiques (7j en dev, 30j en prod)
+  - Accès via VPC privée depuis Lambda
+
+**Stockage :**
+- **S3** : Buckets séparés pour :
+  - Frontend statique (public via CloudFront)
+  - Médias/documents (privé, accès via API)
+
+**Email :**
+- **SES** : Amazon Simple Email Service
+  - Domain identity pour `kambriq.com`
+  - Email identity pour `noreply@kambriq.com`
+
+**Secrets & Configuration :**
+- **SSM Parameter Store / Secrets Manager** : Stockage des secrets
+  - Mots de passe de base de données
+  - Clés JWT
+  - Secrets OAuth
+  - **Jamais** dans Git ou Terraform outputs
+
+**Réseau :**
+- **VPC** : Réseau privé avec subnets publics/privés
+- **NAT Gateway** : 1 seul pour réduire les coûts
+- **Route53** : DNS pour `kambriq.com`
+
+> **Note** : Pour le MVP (v1.0.0), l'architecture retenue est 100 % serverless AWS (Lambda + API Gateway + S3 + CloudFront + RDS). Une migration vers ECS/EKS pourra être envisagée plus tard en fonction de la montée en charge et des besoins spécifiques (WebSockets, long-running tasks, etc.).
+
+### Vue d'ensemble des stacks Terraform
 
 L'infrastructure est organisée en **3 stacks Terraform** :
 
@@ -116,11 +168,70 @@ terraform apply
 2. Configurer les credentials AWS (via `aws configure` ou variables d'environnement)
 3. Le backend S3 est configuré : `kloudnat-infra-shared-store` dans `eu-central-1`
 
-### Déploiement via GitHub Actions (Recommandé)
+## CI/CD
+
+### Workflows GitHub Actions
 
 Trois workflows GitHub Actions gèrent le déploiement de l'infrastructure :
 
-#### 1. Workflow `terraform-shared.yml` - Infrastructure partagée
+#### Vue d'ensemble
+
+Les workflows Terraform sont configurés pour :
+- **Développement** : Déploiement automatique sur push vers `develop`
+- **Production** : Déploiement manuel ou via tags pour sécurité maximale
+- **Validation** : Format check, validation, et plan avant chaque apply
+
+### Workflows Terraform
+
+#### 1. Workflow `terraform-dev.yml` - Environnement de développement
+
+#### 1. Workflow `terraform-dev.yml` - Environnement de développement
+
+Gère le stack `dev` avec déploiement automatique.
+
+**Triggers :**
+- **Push vers `develop`** : Exécute `terraform fmt`, `validate`, `plan` et `apply` automatiquement
+- **Workflow Dispatch** : Déclenchement manuel possible
+
+**Comportement :**
+- Format check et validation avant chaque plan
+- Plan généré et sauvegardé
+- Apply automatique avec `-auto-approve` pour accélérer le développement
+- Outputs non-sensibles affichés dans le résumé GitHub Actions
+
+**Secrets requis :**
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_DEFAULT_REGION` (optionnel, défaut: `eu-central-1`)
+- `DB_PASSWORD_DEV`
+- `JWT_SECRET_DEV`
+
+#### 2. Workflow `terraform-prod.yml` - Environnement de production
+
+Gère le stack `prod` avec sécurité renforcée.
+
+**Triggers :**
+- **Workflow Dispatch** : Déclenchement manuel avec choix `plan` ou `apply`
+- **Push vers tags `v*`** : Déclenchement automatique sur version tags (plan + apply)
+
+**Comportement :**
+- **Job 1 (terraform-plan)** : Toujours exécuté, génère un plan et l'upload comme artifact
+- **Job 2 (terraform-apply)** : Exécuté uniquement si :
+  - Workflow dispatch avec `action = apply`
+  - Push vers un tag `v*`
+- Plan sauvegardé comme artifact pour review
+- Protection via GitHub Environments (décommenter pour activer l'approbation manuelle)
+
+**Secrets requis :**
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_DEFAULT_REGION` (optionnel, défaut: `eu-central-1`)
+- `DB_PASSWORD_PROD`
+- `JWT_SECRET_PROD`
+
+> **⚠️ Sécurité** : Le workflow prod nécessite une action explicite pour appliquer les changements. Toujours revoir le plan avant d'appliquer en production.
+
+#### 3. Workflow `terraform-shared.yml` - Infrastructure partagée
 
 Gère le stack `shared` (VPC, Route53, SES, ACM, S3 logs).
 
@@ -132,29 +243,6 @@ Gère le stack `shared` (VPC, Route53, SES, ACM, S3 logs).
 - Plan automatique sur les PRs (commentaire sur la PR)
 - Apply automatique sur push vers main (si fichiers modifiés dans `envs/shared/` ou `modules/`)
 
-#### 2. Workflow `terraform-dev.yml` - Environnement de développement
-
-Gère le stack `dev`.
-
-**Triggers :**
-- **Pull Request vers `main`** : Exécute `terraform fmt`, `validate` et `plan`
-- **Push vers `main`** : Exécute `terraform fmt`, `validate` et `plan` (apply désactivé par défaut)
-
-**Comportement :**
-- Plan automatique sur les PRs (commentaire sur la PR)
-- Apply sur push vers main : **désactivé par défaut** (décommenter dans le workflow pour activer)
-
-#### 3. Workflow `terraform-prod.yml` - Environnement de production
-
-Gère le stack `prod`. **Déclenchement manuel uniquement**.
-
-**Triggers :**
-- **Workflow Dispatch** : Déclenchement manuel depuis l'interface GitHub Actions
-
-**Comportement :**
-- Choix entre `plan` ou `apply`
-- Protection optionnelle via GitHub Environments (décommenter `environment: production`)
-
 **Pour lancer un apply en production :**
 
 1. Aller dans l'onglet "Actions" du repository
@@ -164,6 +252,15 @@ Gère le stack `prod`. **Déclenchement manuel uniquement**.
 5. Cliquer sur "Run workflow"
 
 ⚠️ **Note** : Pour la production, il est recommandé d'activer l'approbation manuelle dans GitHub (Settings → Environments → production) en décommentant la ligne `environment: production` dans le workflow.
+
+### Intégration avec le repo applicatif
+
+Les workflows Terraform génèrent des outputs qui sont consommés par les workflows de déploiement applicatif dans le repo `kambriq` :
+
+- **`deploy-dev.yml`** : Utilise les outputs Terraform pour configurer les builds
+- **`deploy-prod.yml`** : (À créer) Même principe pour la production
+
+Voir [`docs/integration/APP_INTEGRATION.md`](docs/integration/APP_INTEGRATION.md) pour les détails sur l'intégration. Voir aussi [`docs/setup/TERRAFORM_USAGE.md`](docs/setup/TERRAFORM_USAGE.md) pour un guide d'usage complet.
 
 #### Configuration des secrets GitHub
 
@@ -305,6 +402,11 @@ cd envs/dev  # ou envs/prod
 terraform output
 ```
 
+**📚 Documentation complète** : Voir [`docs/integration/APP_INTEGRATION.md`](docs/integration/APP_INTEGRATION.md) pour :
+- Le mapping complet entre outputs Terraform et variables d'environnement de l'application
+- Comment intégrer les outputs dans les pipelines CI/CD
+- La gestion des secrets via SSM Parameter Store
+
 ### Outputs disponibles
 
 #### Stack Shared (`envs/shared`)
@@ -337,33 +439,33 @@ terraform output
 
 #### Stack Dev/Prod (`envs/dev` et `envs/prod`)
 
-**Frontend :**
-- `frontend_url` : URL complète CloudFront pour le frontend (https://...)
-- `frontend_domain` : Nom de domaine CloudFront
+**AWS Region :**
+- `region` : Région AWS (ex: `eu-central-1`)
 
-**API :**
-- `api_url` : URL complète de l'API Gateway (https://...)
-- `api_endpoint` : Endpoint de l'API Gateway
+**Frontend :**
+- `frontend_cloudfront_domain` : Nom de domaine CloudFront
+- `frontend_s3_bucket_name` : Nom du bucket S3 pour le frontend statique
+
+**Media S3 :**
+- `media_s3_public_bucket_name` : Nom du bucket S3 pour les médias publics
+- `media_s3_private_bucket_name` : Nom du bucket S3 pour les médias privés
+- **Note** : Actuellement, les deux référencent le même bucket
+
+**API Gateway :**
+- `api_gateway_base_url` : URL complète de l'API Gateway (https://...)
 
 **Base de données :**
-- `db_host` : Host de la base de données PostgreSQL
-- `db_port` : Port de la base de données (par défaut 5432)
-- `db_name` : Nom de la base de données
-- `db_endpoint` : Endpoint complet (host:port)
-
-**S3 :**
-- `s3_static_bucket` : Nom du bucket S3 pour le frontend statique
-- `s3_media_bucket` : Nom du bucket S3 pour les médias/documents
+- `rds_endpoint` : Endpoint complet RDS (host:port)
+- `rds_db_name` : Nom de la base de données
+- `rds_username` : Nom d'utilisateur de la base de données (**sensible**)
 
 **SES :**
-- `ses_from_email` : Adresse email par défaut pour l'envoi (depuis shared)
-- `ses_identity_arn` : ARN de l'identité email SES (depuis shared)
 - `ses_domain_identity_arn` : ARN de l'identité domaine SES (depuis shared)
-- `ses_domain_verification_token` : Token de vérification DNS (depuis shared)
+- `ses_from_email` : Adresse email par défaut pour l'envoi (depuis shared)
 
 **Lambda :**
 - `lambda_function_name` : Nom de la fonction Lambda
-- `lambda_function_arn` : ARN de la fonction Lambda
+- `cloudfront_distribution_id` : ID de la distribution CloudFront (pour invalidation de cache)
 
 ### Utilisation dans le repo applicatif
 
@@ -398,13 +500,16 @@ La configuration est déjà définie dans `envs/*/backend.tf`.
 - [x] Créer une structure shared/dev/prod avec remote_state
 - [x] Créer des workflows GitHub Actions séparés par stack
 - [x] Séparer les secrets entre dev et prod
+- [x] Créer les workflows de déploiement applicatif (deploy-dev.yml)
 - [ ] Ajouter des alarmes CloudWatch pour monitoring
 - [ ] Configurer des backups automatiques pour RDS (déjà configuré : 7j dev, 30j prod)
-- [ ] Migrer les secrets vers AWS Secrets Manager
-- [ ] Configurer des domaines personnalisés pour CloudFront et API Gateway (prod)
+- [ ] Migrer les secrets vers AWS Secrets Manager (actuellement SSM Parameter Store)
+- [ ] Configurer des domaines personnalisés pour CloudFront et API Gateway (prod) - optionnel
 - [ ] Ajouter des règles de sécurité supplémentaires (WAF, etc.)
 - [ ] Optimiser les coûts avec Reserved Instances ou Savings Plans (si applicable)
 - [ ] Ajouter un certificat ACM pour CloudFront dans us-east-1 (si domaine personnalisé nécessaire)
+
+> **Note** : Pour le MVP (v1.0.0), l'architecture retenue est 100 % serverless AWS (Lambda + API Gateway + S3 + CloudFront + RDS). Une migration vers ECS/EKS pourra être envisagée plus tard en fonction de la montée en charge et des besoins spécifiques (WebSockets, long-running tasks, etc.).
 
 ## Coûts estimés (MVP)
 

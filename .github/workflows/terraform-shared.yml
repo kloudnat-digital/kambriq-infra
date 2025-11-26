@@ -1,7 +1,7 @@
 # ============================================================================
 # Terraform Workflow - Shared Infrastructure
 # ============================================================================
-#
+# Manages shared infrastructure (VPC, Route53, SES, ACM) used by all environments.
 # This workflow manages the shared infrastructure stack (VPC, Route53, SES, ACM).
 #
 # Triggers:

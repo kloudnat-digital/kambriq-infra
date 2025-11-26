@@ -1,3 +1,9 @@
+# ============================================================================
+# LEGACY: This module is no longer used in the active KAMBRIQ infrastructure.
+# It has been replaced by modules/shared which includes SES functionality.
+# This module is kept for historical reference only.
+# ============================================================================
+#
 # SES Domain Identity
 resource "aws_ses_domain_identity" "main" {
   domain = var.domain

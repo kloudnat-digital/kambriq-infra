@@ -1,3 +1,9 @@
+# ============================================================================
+# LEGACY: This module is no longer used in the active KAMBRIQ infrastructure.
+# It has been replaced by modules/shared which includes VPC/networking functionality.
+# This module is kept for historical reference only.
+# ============================================================================
+#
 # Pour simplifier et minimiser les coûts, on utilise la VPC par défaut
 # Pour la production, on peut créer une VPC dédiée avec des sous-réseaux privés
 

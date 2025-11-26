@@ -1,3 +1,7 @@
+# LEGACY: This refactoring plan has been completed.
+# The refactoring described here (shared module, remote_state) is already implemented.
+# This document is kept for historical reference only.
+#
 # Terraform Refactoring Plan - KAMBRIQ Infrastructure
 
 ## Objectif

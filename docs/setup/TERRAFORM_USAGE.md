@@ -1,0 +1,309 @@
+# Guide d'usage Terraform – KAMBRIQ
+
+Ce guide explique comment utiliser le dépôt Terraform pour déployer l'infrastructure AWS de KAMBRIQ.
+
+## 1. Objectif du repo
+
+Ce dépôt gère l'infrastructure AWS pour la plateforme KAMBRIQ via Terraform (Infrastructure as Code).
+
+**Infrastructure partagée** (stack `shared`) :
+- VPC avec subnets publics/privés
+- Route53 (DNS pour `kambriq.com`)
+- SES (Simple Email Service) - identités domaine et email
+- ACM (certificats SSL pour API Gateway)
+
+**Infrastructure applicative** (stacks `dev` et `prod`) :
+- RDS PostgreSQL (base de données)
+- Lambda (API NestJS)
+- API Gateway (point d'entrée HTTP API)
+- S3 (buckets pour frontend statique et médias)
+- CloudFront (CDN pour le frontend)
+- IAM (rôles et politiques)
+
+## 2. Structure du repo
+
+```
+kambriq-aws-iac-terraform/
+├── modules/              # Modules Terraform réutilisables
+│   ├── shared/          # Ressources partagées (VPC, Route53, SES, ACM)
+│   ├── network/         # Réseau (VPC, subnets, NAT Gateway)
+│   ├── rds-postgres/    # Base de données PostgreSQL
+│   ├── s3-static-site/  # Bucket S3 pour frontend Next.js
+│   ├── s3-media/        # Bucket S3 pour médias/documents
+│   ├── cloudfront/      # Distribution CloudFront
+│   ├── lambda-api/      # Fonction Lambda pour API NestJS
+│   ├── api-gateway/     # API Gateway HTTP API
+│   ├── ses/             # Simple Email Service
+│   └── iam/             # Rôles et policies IAM
+├── envs/                # Configurations par environnement
+│   ├── shared/          # Stack shared (VPC, DNS, SES, ACM)
+│   ├── dev/             # Environnement de développement
+│   └── prod/            # Environnement de production
+└── .github/workflows/   # Workflows GitHub Actions
+    ├── terraform-shared.yml  # Déploiement infrastructure partagée
+    ├── terraform-dev.yml     # Déploiement infrastructure dev
+    └── terraform-prod.yml    # Déploiement infrastructure prod
+```
+
+### Workflows GitHub Actions
+
+- **`terraform-shared.yml`** : Gère l'infrastructure partagée (VPC, Route53, SES, ACM)
+  - Sur PR : exécute `terraform plan` et commente la PR
+  - Sur push vers `main` : exécute `terraform plan` + `apply`
+
+- **`terraform-dev.yml`** : Gère l'infrastructure dev (RDS, Lambda, API Gateway, S3, CloudFront)
+  - Sur push vers `develop` : exécute `terraform plan` + `apply` automatiquement
+
+- **`terraform-prod.yml`** : Gère l'infrastructure prod (même ressources que dev)
+  - Déclenchement manuel (`workflow_dispatch`) avec choix `plan` ou `apply`
+  - Ou déclenchement automatique sur tags `v*` (plan + apply)
+
+## 3. Ordre de lecture des docs existants
+
+Pour comprendre l'infrastructure, lisez dans cet ordre :
+
+1. **`README.md`** (racine) : Vue d'ensemble de l'architecture, structure des stacks, différences dev/prod
+2. **`modules/`** : Documentation des modules réutilisables (chaque module a ses propres fichiers `.tf`)
+3. **`envs/shared/`** : Configuration de l'infrastructure partagée
+4. **`envs/dev/`** : Configuration de l'environnement de développement
+5. **`envs/prod/`** : Configuration de l'environnement de production
+
+> **Note** : Si des README spécifiques existent dans `envs/shared/`, `envs/dev/`, ou `envs/prod/`, consultez-les pour des détails spécifiques à chaque environnement.
+
+## 4. Déployer l'infra shared (VPC, Route53, SES, ACM)
+
+L'infrastructure partagée doit être déployée **EN PREMIER** avant les environnements dev et prod.
+
+### Déploiement local
+
+1. **Cloner le repo** :
+   ```bash
+   git clone <repo-url>
+   cd kambriq-aws-iac-terraform
+   ```
+
+2. **Vérifier la configuration du backend Terraform** :
+   - Le backend S3 est configuré dans `envs/shared/backend.tf`
+   - Bucket : `kloudnat-infra-shared-store`
+   - Région : `eu-central-1`
+   - State file : `kambriq/shared/terraform.tfstate`
+
+3. **Configurer les credentials AWS** :
+   ```bash
+   # Option 1 : AWS CLI profile
+   export AWS_PROFILE=your-profile
+   
+   # Option 2 : Variables d'environnement
+   export AWS_ACCESS_KEY_ID=your-key
+   export AWS_SECRET_ACCESS_KEY=your-secret
+   export AWS_DEFAULT_REGION=eu-central-1
+   ```
+
+4. **Déployer l'infrastructure shared** :
+   ```bash
+   cd envs/shared
+   terraform init
+   terraform plan
+   terraform apply
+   ```
+
+### Déploiement via GitHub Actions
+
+1. **Créer une Pull Request** vers `main` :
+   - Le workflow `terraform-shared.yml` s'exécute automatiquement
+   - Il fait un `terraform plan` et commente la PR avec les résultats
+
+2. **Merger la PR** (push vers `main`) :
+   - Le workflow `terraform-shared.yml` s'exécute automatiquement
+   - Il fait un `terraform plan` + `apply` si des fichiers dans `envs/shared/` ou `modules/` ont changé
+
+## 5. Déployer l'infra de dev (app KAMBRIQ)
+
+Une fois l'infrastructure shared déployée, vous pouvez déployer l'infrastructure dev.
+
+### Déploiement local
+
+1. **Se positionner dans le répertoire dev** :
+   ```bash
+   cd envs/dev
+   ```
+
+2. **Initialiser Terraform** :
+   ```bash
+   terraform init
+   ```
+   Terraform lit automatiquement les outputs de `shared` via `data.terraform_remote_state.shared`.
+
+3. **Planifier les changements** :
+   ```bash
+   terraform plan
+   ```
+
+4. **Appliquer les changements** :
+   ```bash
+   terraform apply
+   ```
+
+### Déploiement via GitHub Actions
+
+1. **Pousser vers la branche `develop`** :
+   - Le workflow `terraform-dev.yml` s'exécute automatiquement
+   - Il fait un `terraform plan` + `apply` automatiquement (auto-approve)
+
+2. **Vérifier les outputs** :
+   - Les outputs non-sensibles sont affichés dans le résumé GitHub Actions
+   - Pour voir tous les outputs : `terraform output` (localement) ou `terraform output -json` (dans le workflow)
+
+### ⚠️ Important : Gestion des secrets
+
+**Les secrets applicatifs (mot de passe DB, JWT secrets) ne sont PAS gérés via Terraform** :
+
+- ❌ Ne pas passer `DB_PASSWORD_DEV` ou `JWT_SECRET_DEV` comme variables Terraform (`TF_VAR_*`)
+- ❌ Ne pas stocker ces valeurs dans `terraform.tfvars` (ce fichier est ignoré par Git)
+- ✅ Stocker les secrets dans **AWS SSM Parameter Store** ou **AWS Secrets Manager**
+- ✅ Configurer les variables d'environnement Lambda directement (via Terraform ou AWS Console)
+- ✅ Utiliser la convention de nommage : `/kambriq/{environment}/{parameter_name}`
+
+Terraform ne gère que les ressources d'infrastructure, pas les secrets applicatifs.
+
+## 6. Déployer l'infra de prod (app KAMBRIQ)
+
+L'infrastructure prod suit le même principe que dev, mais avec des garde-fous supplémentaires.
+
+### Déploiement local
+
+1. **Se positionner dans le répertoire prod** :
+   ```bash
+   cd envs/prod
+   ```
+
+2. **Initialiser Terraform** :
+   ```bash
+   terraform init
+   ```
+
+3. **Planifier les changements** :
+   ```bash
+   terraform plan -out=tfplan
+   ```
+
+4. **Réviser le plan** attentivement avant d'appliquer
+
+5. **Appliquer les changements** :
+   ```bash
+   terraform apply tfplan
+   ```
+
+### Déploiement via GitHub Actions
+
+1. **Déclenchement manuel** (`workflow_dispatch`) :
+   - Aller dans l'onglet "Actions" du repository
+   - Sélectionner "Terraform - Prod Environment"
+   - Cliquer sur "Run workflow"
+   - Choisir `action = plan` pour générer un plan
+   - Réviser le plan dans les artifacts
+   - Relancer avec `action = apply` pour appliquer
+
+2. **Déclenchement automatique** (tags `v*`) :
+   - Créer un tag : `git tag v1.0.0 && git push origin v1.0.0`
+   - Le workflow `terraform-prod.yml` s'exécute automatiquement
+   - Il fait un `terraform plan` puis `apply` si le tag correspond à `v*`
+
+### ⚠️ Sécurité production
+
+- **Toujours réviser le plan** avant d'appliquer en production
+- **Ne jamais mettre de secrets applicatifs** dans les `terraform.tfvars` ou comme variables Terraform
+- **Utiliser GitHub Environments** avec approbation manuelle (décommenter dans le workflow si nécessaire)
+- **Vérifier les outputs** après chaque déploiement
+
+## 7. Relation avec le repo applicatif (kambriq)
+
+Ce dépôt Terraform gère uniquement l'infrastructure. Le code applicatif est dans le dépôt `kambriq`.
+
+### Flux de déploiement
+
+1. **Déployer l'infrastructure** (ce repo) :
+   - Déployer `shared` → `dev` → `prod` (dans cet ordre)
+   - Terraform génère des outputs (S3 bucket, CloudFront domain, API Gateway URL, Lambda function name)
+
+2. **Déployer l'application** (repo `kambriq`) :
+   - Le workflow `deploy-dev.yml` dans le repo applicatif :
+     - Checkout ce repo Terraform
+     - Lit les outputs Terraform depuis `envs/dev`
+     - Utilise ces outputs pour configurer le build Next.js (`NEXT_PUBLIC_*` variables)
+     - Déploie le frontend vers S3 + CloudFront
+     - Déploie l'API vers Lambda (nom de fonction depuis Terraform outputs)
+
+### Outputs Terraform utilisés par l'application
+
+| Output Terraform | Utilisé par | Description |
+|------------------|-------------|-------------|
+| `frontend_cloudfront_domain` | `deploy-dev.yml` | Domaine CloudFront pour le frontend |
+| `frontend_s3_bucket_name` | `deploy-dev.yml` | Bucket S3 pour déployer le frontend |
+| `media_s3_public_bucket_name` | `deploy-dev.yml` | Bucket S3 pour médias publics |
+| `api_gateway_base_url` | `deploy-dev.yml` | URL de l'API Gateway |
+| `lambda_function_name` | `deploy-dev.yml` | Nom de la fonction Lambda |
+| `region` | `deploy-dev.yml` | Région AWS |
+| `ses_from_email` | `deploy-dev.yml` | Email expéditeur SES |
+
+**Note** : Les secrets (DB password, JWT secrets) ne sont PAS dans les outputs Terraform. Ils sont gérés via SSM Parameter Store / Secrets Manager et configurés dans les variables d'environnement Lambda.
+
+## 8. Commandes utiles
+
+### Voir les outputs Terraform
+
+```bash
+# Tous les outputs (format texte)
+terraform output
+
+# Outputs en JSON
+terraform output -json
+
+# Un output spécifique
+terraform output -raw frontend_cloudfront_domain
+```
+
+### Vérifier l'état
+
+```bash
+# État actuel
+terraform state list
+
+# Détails d'une ressource
+terraform state show aws_s3_bucket.frontend
+```
+
+### Formater et valider
+
+```bash
+# Formater les fichiers
+terraform fmt -recursive
+
+# Valider la configuration
+terraform validate
+```
+
+## 9. Dépannage
+
+### Erreur : "Error loading state"
+
+- Vérifier que le backend S3 est correctement configuré
+- Vérifier les credentials AWS
+- Vérifier que le bucket `kloudnat-infra-shared-store` existe
+
+### Erreur : "Remote state data source not found"
+
+- Vérifier que l'infrastructure `shared` a été déployée avant `dev` ou `prod`
+- Vérifier que le state file `kambriq/shared/terraform.tfstate` existe dans S3
+
+### Erreur : "Invalid credentials"
+
+- Vérifier les variables d'environnement AWS ou le profile AWS
+- Vérifier les GitHub Secrets si vous utilisez GitHub Actions
+
+## 10. Ressources supplémentaires
+
+- [Documentation Terraform AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
+- [README principal](./README.md) - Architecture détaillée et workflows
+- [Documentation application](../../kambriq/docs/configuration/ENVIRONMENT_VARIABLES.md) - Variables d'environnement utilisées par l'app
+
