@@ -21,9 +21,13 @@ crash.*.log
 # Sensitive Configuration Files
 # ============================================================================
 
-# Exclude all .tfvars files, which are likely to contain sensitive data
-*.tfvars
+# Exclude .tfvars files that may contain sensitive data
+# Note: terraform.tfvars files are now tracked in Git as they only contain
+# non-sensitive configuration (secrets are in SSM Parameter Store)
+*.tfvars.local
 *.tfvars.json
+# Keep terraform.tfvars.example files tracked
+!*.tfvars.example
 
 # Ignore override files as they are usually used to override resources locally
 override.tf
