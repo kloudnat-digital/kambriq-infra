@@ -174,13 +174,24 @@ resource "aws_ses_domain_identity" "main" {
   domain = var.domain_name
 }
 
+# Route53 Record for SES Domain Verification
+resource "aws_route53_record" "ses_verification" {
+  zone_id = aws_route53_zone.main.zone_id
+  name    = "_amazonses.${aws_ses_domain_identity.main.domain}"
+  type    = "TXT"
+  ttl     = 600
+  records = [aws_ses_domain_identity.main.verification_token]
+}
+
 # Domain Identity Verification
 resource "aws_ses_domain_identity_verification" "main" {
   domain = aws_ses_domain_identity.main.id
 
   timeouts {
-    create = "5m"
+    create = "20m"
   }
+
+  depends_on = [aws_route53_record.ses_verification]
 }
 
 # Email Identity
@@ -245,8 +256,10 @@ resource "aws_acm_certificate_validation" "api" {
   ]
 
   timeouts {
-    create = "5m"
+    create = "20m"
   }
+
+  depends_on = [aws_route53_record.api_cert_validation]
 }
 
 # ============================================================================
