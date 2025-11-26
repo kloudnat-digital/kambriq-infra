@@ -4,16 +4,27 @@ variable "aws_region" {
   default     = "eu-central-1"
 }
 
+# ============================================================================
+# DEPRECATED: These variables are no longer used.
+# Secrets are now retrieved from SSM Parameter Store via data sources in main.tf:
+#   - /kambriq/dev/db/password
+#   - /kambriq/dev/api/jwt_secret
+# ============================================================================
+# These variables are kept for backward compatibility but are not used.
+# They can be removed in a future version.
+
 variable "db_password" {
-  description = "Database master password"
+  description = "[DEPRECATED] Database master password - now retrieved from SSM Parameter Store (/kambriq/dev/db/password)"
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 variable "jwt_secret" {
-  description = "JWT secret key"
+  description = "[DEPRECATED] JWT secret key - now retrieved from SSM Parameter Store (/kambriq/dev/api/jwt_secret)"
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 # Optional: Custom domains (leave empty for default CloudFront/API Gateway URLs)

@@ -130,6 +130,20 @@ resource "aws_security_group" "lambda" {
 }
 
 # ============================================================================
+# SSM Parameter Store - Secrets
+# ============================================================================
+
+# Database password from SSM Parameter Store
+data "aws_ssm_parameter" "db_password" {
+  name = "/kambriq/prod/db/password"
+}
+
+# JWT secret from SSM Parameter Store
+data "aws_ssm_parameter" "jwt_secret" {
+  name = "/kambriq/prod/api/jwt_secret"
+}
+
+# ============================================================================
 # RDS PostgreSQL
 # ============================================================================
 
@@ -139,7 +153,7 @@ module "rds" {
   env              = local.env
   db_name          = "kambriq"
   db_username      = "kambriq_admin"
-  db_password      = var.db_password
+  db_password      = data.aws_ssm_parameter.db_password.value
   instance_class   = "db.t4g.micro"
   allocated_storage = 20
   storage_type     = "gp3"
@@ -248,11 +262,11 @@ module "lambda" {
   db_port     = module.rds.db_port
   db_name     = module.rds.db_name
   db_username = module.rds.db_username
-  db_password = var.db_password
+  db_password = data.aws_ssm_parameter.db_password.value
 
   s3_media_bucket = module.s3_media.bucket_id
   ses_from_email  = data.terraform_remote_state.shared.outputs.ses_from_email
-  jwt_secret      = var.jwt_secret
+  jwt_secret      = data.aws_ssm_parameter.jwt_secret.value
 }
 
 # ============================================================================
