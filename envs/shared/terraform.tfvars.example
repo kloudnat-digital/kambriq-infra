@@ -1,0 +1,30 @@
+# ============================================================================
+# Fichier d'exemple de variables Terraform pour l'environnement SHARED
+# ============================================================================
+#
+# UTILISATION :
+# 1. Copier ce fichier vers terraform.tfvars :
+#    cp terraform.tfvars.example terraform.tfvars
+#
+# 2. Ajuster les valeurs si nécessaire (les valeurs par défaut sont généralement correctes)
+#
+# 3. Ce stack doit être déployé EN PREMIER avant dev et prod
+#
+# ============================================================================
+
+# Région AWS
+aws_region = "eu-central-1"
+
+# CIDR block pour la VPC (par défaut 10.0.0.0/16)
+vpc_cidr = "10.0.0.0/16"
+
+# Domaine principal (kambriq.com)
+domain_name = "kambriq.com"
+
+# Adresse email par défaut pour SES
+ses_from_email = "noreply@kambriq.com"
+
+# Activer les buckets S3 pour logs et artifacts
+enable_s3_logs     = true
+enable_s3_artifacts = true
+

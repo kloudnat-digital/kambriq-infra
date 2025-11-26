@@ -1,0 +1,190 @@
+# ============================================================================
+# Terraform Workflow - Prod Environment
+# ============================================================================
+#
+# This workflow manages the production environment infrastructure stack.
+#
+# Triggers:
+# - Manual only (workflow_dispatch) - requires explicit approval
+#
+# AWS Credentials Configuration:
+# Currently configured for Option 2: Static AWS Credentials
+#   - Set GitHub Secrets:
+#     - AWS_ACCESS_KEY_ID: your-access-key
+#     - AWS_SECRET_ACCESS_KEY: your-secret-key
+#     - AWS_REGION: eu-central-1 (or use default in env)
+#     - DB_PASSWORD_PROD: database password for PROD environment (must be different from dev)
+#     - JWT_SECRET_PROD: JWT secret key for PROD environment (must be different from dev)
+#
+# Alternative: Option 1 - OIDC with IAM Role (see comments in workflow)
+#   - Set GitHub Secrets:
+#     - AWS_ROLE_ARN: arn:aws:iam::ACCOUNT_ID:role/github-actions-prod-role
+#     - AWS_REGION: eu-central-1
+#     - DB_PASSWORD_PROD: database password for PROD environment
+#     - JWT_SECRET_PROD: JWT secret key for PROD environment
+#   - Configure OIDC provider in AWS IAM (see AWS docs)
+#
+# How to generate JWT_SECRET:
+#   - Use a cryptographically secure random string (min. 32 characters recommended)
+#   - Example commands:
+#     - Linux/Mac: openssl rand -base64 32
+#     - Linux/Mac: openssl rand -hex 32
+#     - Python: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+#     - Node.js: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+#
+# Security Best Practices:
+#   - NEVER reuse the same secrets between dev and prod
+#   - Use strong, unique passwords for each environment
+#   - Rotate secrets regularly
+#   - Consider using AWS Secrets Manager for production secrets
+#
+# GitHub Environment Protection:
+# - Configure a "production" environment in GitHub Settings → Environments
+# - Enable "Required reviewers" to require manual approval before apply
+# - This adds an extra layer of protection for production deployments
+#
+# Note: This workflow depends on the shared stack being deployed first.
+# The shared stack outputs are consumed via terraform_remote_state.
+#
+# ============================================================================
+
+name: Terraform - Prod Environment
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Terraform action to perform'
+        required: true
+        type: choice
+        options:
+          - plan
+          - apply
+        default: 'plan'
+
+env:
+  AWS_REGION: eu-central-1
+  TF_VERSION: 1.5.0
+  WORKING_DIR: envs/prod
+
+jobs:
+  terraform:
+    name: Terraform Prod
+    runs-on: ubuntu-latest
+    
+    # Uncomment to enable GitHub Environment protection (requires manual approval)
+    # environment: production
+
+    permissions:
+      id-token: write # Required for OIDC
+      contents: read
+
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        # Using static credentials (Option 2)
+        # Required GitHub Secrets:
+        #   - AWS_ACCESS_KEY_ID
+        #   - AWS_SECRET_ACCESS_KEY
+        #   - AWS_REGION (or use env.AWS_REGION default)
+        #   - DB_PASSWORD_PROD (prod-specific database password - MUST be different from dev)
+        #   - JWT_SECRET_PROD (prod-specific JWT secret - MUST be different from dev)
+        #
+        # Alternative: To use OIDC (Option 1), comment out the section below
+        # and uncomment the OIDC section above, then configure AWS_ROLE_ARN secret.
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform Format Check
+        id: fmt
+        run: terraform fmt -check
+        continue-on-error: false
+
+      - name: Terraform Init
+        id: init
+        run: terraform init -input=false
+
+      - name: Terraform Validate
+        id: validate
+        run: terraform validate -no-color
+
+      - name: Terraform Plan
+        id: plan
+        if: github.event.inputs.action == 'plan' || github.event.inputs.action == 'apply'
+        run: |
+          terraform plan -no-color -input=false -out=tfplan \
+            -var="db_password=${{ secrets.DB_PASSWORD_PROD }}" \
+            -var="jwt_secret=${{ secrets.JWT_SECRET_PROD }}" \
+            -var="aws_region=${{ env.AWS_REGION }}"
+        continue-on-error: false
+
+      - name: Display Plan Summary
+        if: github.event.inputs.action == 'plan' || github.event.inputs.action == 'apply'
+        run: |
+          echo "## Terraform Plan Output (Prod)" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          terraform show -no-color tfplan >> $GITHUB_STEP_SUMMARY || echo "Plan output not available" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Save Plan Output
+        if: github.event.inputs.action == 'plan' || github.event.inputs.action == 'apply'
+        run: |
+          terraform show -no-color tfplan > plan.txt || echo "No plan available" > plan.txt
+
+      - name: Upload Plan Artifact
+        if: github.event.inputs.action == 'plan' || github.event.inputs.action == 'apply'
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-prod
+          path: ${{ env.WORKING_DIR }}/plan.txt
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Terraform Apply
+        id: apply
+        if: github.event.inputs.action == 'apply'
+        run: |
+          terraform apply -auto-approve -input=false tfplan
+
+      - name: Output Terraform State
+        if: always() && (steps.apply.conclusion == 'success' || (steps.plan.conclusion == 'success' && github.event.inputs.action == 'plan'))
+        run: |
+          terraform output -json > terraform-outputs.json || true
+          echo "## Terraform Outputs (Prod)" >> $GITHUB_STEP_SUMMARY
+          echo '```json' >> $GITHUB_STEP_SUMMARY
+          cat terraform-outputs.json >> $GITHUB_STEP_SUMMARY || echo "No outputs available" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Display Key Outputs
+        if: always() && (steps.apply.conclusion == 'success' || (steps.plan.conclusion == 'success' && github.event.inputs.action == 'plan'))
+        run: |
+          echo "### Key Infrastructure Outputs" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          terraform output -raw api_url >> /dev/null 2>&1 && echo "- **API URL**: \`$(terraform output -raw api_url)\`" >> $GITHUB_STEP_SUMMARY || true
+          terraform output -raw frontend_domain >> /dev/null 2>&1 && echo "- **Frontend Domain**: \`$(terraform output -raw frontend_domain)\`" >> $GITHUB_STEP_SUMMARY || true
+          terraform output -raw db_endpoint >> /dev/null 2>&1 && echo "- **DB Endpoint**: \`$(terraform output -raw db_endpoint)\`" >> $GITHUB_STEP_SUMMARY || true
+
+      - name: Upload Terraform outputs
+        if: always() && steps.apply.conclusion == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-outputs-prod
+          path: ${{ env.WORKING_DIR }}/terraform-outputs.json
+          retention-days: 30
+          if-no-files-found: ignore
+

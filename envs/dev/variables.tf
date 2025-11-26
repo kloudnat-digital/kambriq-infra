@@ -16,15 +16,28 @@ variable "jwt_secret" {
   sensitive   = true
 }
 
-variable "ses_domain" {
-  description = "SES domain name"
+# Optional: Custom domains (leave empty for default CloudFront/API Gateway URLs)
+variable "cloudfront_domain" {
+  description = "Custom domain for CloudFront (optional, e.g., app-dev.kambriq.com)"
   type        = string
-  default     = "kambriq.com"
+  default     = ""
 }
 
-variable "ses_from_email" {
-  description = "SES sender email address"
+variable "cloudfront_certificate_arn" {
+  description = "ACM certificate ARN for CloudFront custom domain (must be in us-east-1)"
   type        = string
-  default     = "noreply@kambriq.com"
+  default     = ""
+}
+
+variable "api_domain" {
+  description = "Custom domain for API Gateway (optional, e.g., api-dev.kambriq.com)"
+  type        = string
+  default     = ""
+}
+
+variable "api_certificate_arn" {
+  description = "ACM certificate ARN for API Gateway custom domain"
+  type        = string
+  default     = ""
 }
 

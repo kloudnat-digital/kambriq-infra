@@ -58,6 +58,16 @@ output "ses_from_email" {
   value       = module.ses.from_email
 }
 
+output "ses_identity_arn" {
+  description = "SES email identity ARN"
+  value       = module.ses.email_identity_arn
+}
+
+output "ses_domain_identity_arn" {
+  description = "SES domain identity ARN"
+  value       = module.ses.domain_identity_arn
+}
+
 output "ses_domain_verification_token" {
   description = "SES domain verification token (à ajouter dans DNS)"
   value       = module.ses.domain_identity_verification_token
