@@ -150,20 +150,20 @@ data "aws_ssm_parameter" "jwt_secret" {
 module "rds" {
   source = "../../modules/rds-postgres"
 
-  env              = local.env
-  db_name          = "kambriq"
-  db_username      = "kambriq_admin"
-  db_password      = data.aws_ssm_parameter.db_password.value
-  instance_class   = "db.t4g.micro"
+  env               = local.env
+  db_name           = "kambriq"
+  db_username       = "kambriq_admin"
+  db_password       = data.aws_ssm_parameter.db_password.value
+  instance_class    = "db.t4g.micro"
   allocated_storage = 20
-  storage_type     = "gp3"
+  storage_type      = "gp3"
 
   vpc_id            = data.terraform_remote_state.shared.outputs.vpc_id
   subnet_ids        = data.terraform_remote_state.shared.outputs.private_subnet_ids
   security_group_id = aws_security_group.rds.id
 
-  backup_retention_period = 30 # Plus de backups en prod
-  skip_final_snapshot    = false # Toujours créer un snapshot final en prod
+  backup_retention_period = 30    # Plus de backups en prod
+  skip_final_snapshot     = false # Toujours créer un snapshot final en prod
 }
 
 # ============================================================================
@@ -197,7 +197,7 @@ module "cloudfront" {
   s3_bucket_id                   = module.s3_static.bucket_id
   s3_bucket_regional_domain_name = module.s3_static.bucket_regional_domain_name
   domain_name                    = var.cloudfront_domain
-  certificate_arn               = var.cloudfront_certificate_arn
+  certificate_arn                = var.cloudfront_certificate_arn
 }
 
 # Bucket policy S3 pour CloudFront OAI
@@ -234,10 +234,10 @@ resource "aws_s3_bucket_policy" "static" {
 module "iam" {
   source = "../../modules/iam"
 
-  env                  = local.env
+  env                   = local.env
   rds_security_group_id = aws_security_group.rds.id
-  s3_media_bucket_arn  = module.s3_media.bucket_arn
-  ses_identity_arn     = data.terraform_remote_state.shared.outputs.ses_email_identity_arn
+  s3_media_bucket_arn   = module.s3_media.bucket_arn
+  ses_identity_arn      = data.terraform_remote_state.shared.outputs.ses_email_identity_arn != null ? data.terraform_remote_state.shared.outputs.ses_email_identity_arn : ""
 }
 
 # ============================================================================
@@ -247,15 +247,15 @@ module "iam" {
 module "lambda" {
   source = "../../modules/lambda-api"
 
-  env              = local.env
-  runtime          = "nodejs20.x"
-  handler          = "dist/main.handler"
-  timeout          = 30
-  memory_size      = 512
+  env         = local.env
+  runtime     = "nodejs20.x"
+  handler     = "dist/main.handler"
+  timeout     = 30
+  memory_size = 512
 
-  role_arn         = module.iam.lambda_role_arn
-  vpc_id           = data.terraform_remote_state.shared.outputs.vpc_id
-  subnet_ids       = data.terraform_remote_state.shared.outputs.private_subnet_ids
+  role_arn          = module.iam.lambda_role_arn
+  vpc_id            = data.terraform_remote_state.shared.outputs.vpc_id
+  subnet_ids        = data.terraform_remote_state.shared.outputs.private_subnet_ids
   security_group_id = aws_security_group.lambda.id
 
   db_host     = module.rds.db_host

@@ -14,7 +14,8 @@ variable "s3_media_bucket_arn" {
 }
 
 variable "ses_identity_arn" {
-  description = "SES identity ARN for sending emails"
+  description = "SES identity ARN for sending emails (can be null if SES is not configured)"
   type        = string
+  default     = ""
 }
 

@@ -53,9 +53,11 @@ resource "aws_iam_role_policy" "lambda_s3" {
 }
 
 # Policy pour envoi d'emails via SES
+# Note: Only created if ses_identity_arn is provided (SES configured manually)
 resource "aws_iam_role_policy" "lambda_ses" {
-  name = "kambriq-lambda-ses-${var.env}"
-  role = aws_iam_role.lambda.id
+  count = var.ses_identity_arn != "" ? 1 : 0
+  name  = "kambriq-lambda-ses-${var.env}"
+  role  = aws_iam_role.lambda.id
 
   policy = jsonencode({
     Version = "2012-10-17"

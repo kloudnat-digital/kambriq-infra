@@ -116,6 +116,12 @@ L'infrastructure partagée doit être déployée **EN PREMIER** avant les enviro
    - **Sans cette étape, les validations SES et ACM échoueront avec des timeouts**
    - Voir le guide détaillé : [ROUTE53_DNS_SETUP.md](./ROUTE53_DNS_SETUP.md)
 
+6. **⚠️ IMPORTANT : Créer manuellement les certificats ACM et identités SES** :
+   - **Les certificats ACM et identités SES ne sont plus créés automatiquement par Terraform**
+   - Ils doivent être créés et validés manuellement dans la console AWS
+   - Après création, récupérez les ARNs et ajoutez-les dans `envs/shared/terraform.tfvars`
+   - Voir le guide détaillé : [ACM_SES_MANUAL_SETUP.md](./ACM_SES_MANUAL_SETUP.md)
+
 ### Déploiement via GitHub Actions
 
 1. **Créer une Pull Request** vers `main` :

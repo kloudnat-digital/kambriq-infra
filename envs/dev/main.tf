@@ -143,20 +143,20 @@ data "aws_ssm_parameter" "jwt_secret" {
 module "rds" {
   source = "../../modules/rds-postgres"
 
-  env              = local.env
-  db_name          = "kambriq"
-  db_username      = "kambriq_admin"
-  db_password      = data.aws_ssm_parameter.db_password.value
-  instance_class   = "db.t4g.micro"
+  env               = local.env
+  db_name           = "kambriq"
+  db_username       = "kambriq_admin"
+  db_password       = data.aws_ssm_parameter.db_password.value
+  instance_class    = "db.t4g.micro"
   allocated_storage = 20
-  storage_type     = "gp3"
+  storage_type      = "gp3"
 
   vpc_id            = data.terraform_remote_state.shared.outputs.vpc_id
   subnet_ids        = data.terraform_remote_state.shared.outputs.private_subnet_ids
   security_group_id = aws_security_group.rds.id
 
   backup_retention_period = 7
-  skip_final_snapshot    = true # Pour dev, on peut supprimer sans snapshot
+  skip_final_snapshot     = true # Pour dev, on peut supprimer sans snapshot
 }
 
 # ============================================================================
@@ -228,10 +228,10 @@ resource "aws_s3_bucket_policy" "static" {
 module "iam" {
   source = "../../modules/iam"
 
-  env                  = local.env
+  env                   = local.env
   rds_security_group_id = aws_security_group.rds.id
-  s3_media_bucket_arn  = module.s3_media.bucket_arn
-  ses_identity_arn     = data.terraform_remote_state.shared.outputs.ses_email_identity_arn
+  s3_media_bucket_arn   = module.s3_media.bucket_arn
+  ses_identity_arn      = data.terraform_remote_state.shared.outputs.ses_email_identity_arn != null ? data.terraform_remote_state.shared.outputs.ses_email_identity_arn : ""
 }
 
 # ============================================================================
@@ -241,15 +241,15 @@ module "iam" {
 module "lambda" {
   source = "../../modules/lambda-api"
 
-  env              = local.env
-  runtime          = "nodejs20.x"
-  handler          = "dist/main.handler"
-  timeout          = 30
-  memory_size      = 512
+  env         = local.env
+  runtime     = "nodejs20.x"
+  handler     = "dist/main.handler"
+  timeout     = 30
+  memory_size = 512
 
-  role_arn         = module.iam.lambda_role_arn
-  vpc_id           = data.terraform_remote_state.shared.outputs.vpc_id
-  subnet_ids       = data.terraform_remote_state.shared.outputs.private_subnet_ids
+  role_arn          = module.iam.lambda_role_arn
+  vpc_id            = data.terraform_remote_state.shared.outputs.vpc_id
+  subnet_ids        = data.terraform_remote_state.shared.outputs.private_subnet_ids
   security_group_id = aws_security_group.lambda.id
 
   db_host     = module.rds.db_host

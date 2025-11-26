@@ -26,7 +26,7 @@ data "aws_caller_identity" "current" {}
 locals {
   # Generate a unique suffix from account ID (hash to avoid exposing account ID in bucket names)
   account_id_hash = substr(md5("${data.aws_caller_identity.current.account_id}-${var.aws_region}"), 0, 8)
-  
+
   # Availability zones
   azs = length(var.availability_zones) > 0 ? var.availability_zones : slice(data.aws_availability_zones.available.names, 0, 2)
 }
@@ -169,98 +169,18 @@ resource "aws_route53_zone" "main" {
 # ============================================================================
 # SES Domain Identity
 # ============================================================================
-
-resource "aws_ses_domain_identity" "main" {
-  domain = var.domain_name
-}
-
-# Route53 Record for SES Domain Verification
-resource "aws_route53_record" "ses_verification" {
-  zone_id = aws_route53_zone.main.zone_id
-  name    = "_amazonses.${aws_ses_domain_identity.main.domain}"
-  type    = "TXT"
-  ttl     = 600
-  records = [aws_ses_domain_identity.main.verification_token]
-}
-
-# Domain Identity Verification
-resource "aws_ses_domain_identity_verification" "main" {
-  domain = aws_ses_domain_identity.main.id
-
-  timeouts {
-    create = "20m"
-  }
-
-  depends_on = [aws_route53_record.ses_verification]
-}
-
-# Email Identity
-resource "aws_ses_email_identity" "main" {
-  email = var.ses_from_email
-}
-
-# DKIM Configuration
-resource "aws_ses_domain_dkim" "main" {
-  domain = aws_ses_domain_identity.main.domain
-}
+# Note: SES identities (domain/email) are created and verified manually in AWS Console.
+# The ARNs and domain/email values are provided via variables.
+# No Terraform resources are created here - only outputs are provided based on variables.
 
 # ============================================================================
 # ACM Certificates
 # ============================================================================
-# Note: CloudFront certificates must be in us-east-1, but we'll create them
-# in the main region for now. The root module will need to handle us-east-1
-# separately if needed. For simplicity, we create both in the main region.
-# If CloudFront custom domain is needed, create the certificate manually
-# in us-east-1 or use a separate provider configuration in the root module.
-
-# Certificate for API Gateway (in the main region)
-resource "aws_acm_certificate" "api" {
-  domain_name       = "*.${var.domain_name}"
-  validation_method = "DNS"
-
-  subject_alternative_names = [var.domain_name]
-
-  lifecycle {
-    create_before_destroy = true
-  }
-
-  tags = {
-    Name = "${local.name_prefix}-api-cert"
-    Type = "shared"
-  }
-}
-
-# DNS Validation Records for API Certificate
-resource "aws_route53_record" "api_cert_validation" {
-  for_each = {
-    for dvo in aws_acm_certificate.api.domain_validation_options : dvo.domain_name => {
-      name   = dvo.resource_record_name
-      record = dvo.resource_record_value
-      type   = dvo.resource_record_type
-    }
-  }
-
-  allow_overwrite = true
-  name            = each.value.name
-  records         = [each.value.record]
-  ttl             = 60
-  type            = each.value.type
-  zone_id         = aws_route53_zone.main.zone_id
-}
-
-# Certificate Validation for API
-resource "aws_acm_certificate_validation" "api" {
-  certificate_arn = aws_acm_certificate.api.arn
-  validation_record_fqdns = [
-    for record in aws_route53_record.api_cert_validation : record.fqdn
-  ]
-
-  timeouts {
-    create = "20m"
-  }
-
-  depends_on = [aws_route53_record.api_cert_validation]
-}
+# Note: ACM certificates are created and validated manually in AWS Console.
+# The ARNs are provided via variables:
+# - api_acm_certificate_arn: Certificate for API Gateway (must be in eu-central-1)
+# - cloudfront_acm_certificate_arn: Certificate for CloudFront (must be in us-east-1)
+# No Terraform resources are created here - only outputs are provided based on variables.
 
 # ============================================================================
 # S3 Buckets for Logs and Artifacts

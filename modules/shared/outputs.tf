@@ -59,46 +59,53 @@ output "route53_name_servers" {
 # ============================================================================
 # SES Outputs
 # ============================================================================
+# Note: SES identities are created manually in AWS Console.
+# These outputs reflect the ARNs and values provided via variables.
 
 output "ses_domain_identity_arn" {
-  description = "SES domain identity ARN"
-  value       = aws_ses_domain_identity.main.arn
+  description = "SES domain identity ARN (provided via variable, created manually in AWS Console)"
+  value       = var.ses_domain_identity_arn != "" ? var.ses_domain_identity_arn : null
 }
 
 output "ses_email_identity_arn" {
-  description = "SES email identity ARN"
-  value       = aws_ses_email_identity.main.arn
+  description = "SES email identity ARN (provided via variable, created manually in AWS Console)"
+  value       = var.ses_email_identity_arn != "" ? var.ses_email_identity_arn : null
+}
+
+output "ses_domain" {
+  description = "SES domain (e.g., kambriq.com)"
+  value       = var.ses_domain
 }
 
 output "ses_from_email" {
-  description = "Default sender email address"
+  description = "SES sender email address (e.g., noreply@kambriq.com)"
   value       = var.ses_from_email
 }
 
 output "ses_domain_verification_token" {
-  description = "SES domain verification token (for DNS)"
-  value       = aws_ses_domain_identity.main.verification_token
+  description = "[DEPRECATED] SES domain verification token - no longer available (SES created manually)"
+  value       = null
 }
 
 output "ses_dkim_tokens" {
-  description = "SES DKIM tokens for DNS configuration"
-  value       = aws_ses_domain_dkim.main.dkim_tokens
+  description = "[DEPRECATED] SES DKIM tokens - no longer available (SES created manually)"
+  value       = []
 }
 
 # ============================================================================
 # ACM Certificate Outputs
 # ============================================================================
+# Note: ACM certificates are created manually in AWS Console.
+# These outputs reflect the ARNs provided via variables.
 
 output "api_certificate_arn" {
-  description = "ACM certificate ARN for API Gateway"
-  value       = aws_acm_certificate_validation.api.certificate_arn
+  description = "ACM certificate ARN for API Gateway (provided via variable, created manually in AWS Console, must be in eu-central-1)"
+  value       = var.api_acm_certificate_arn != "" ? var.api_acm_certificate_arn : null
 }
 
-# Note: CloudFront certificates must be in us-east-1.
-# If needed, create a separate certificate in us-east-1 in the root module.
 output "cloudfront_certificate_arn" {
-  description = "ACM certificate ARN for CloudFront (must be created in us-east-1 separately)"
-  value       = null
+  description = "ACM certificate ARN for CloudFront (provided via variable, created manually in AWS Console, must be in us-east-1)"
+  value       = var.cloudfront_acm_certificate_arn != "" ? var.cloudfront_acm_certificate_arn : null
 }
 
 # ============================================================================
