@@ -13,7 +13,7 @@ Infrastructure Terraform modulaire pour l'application KAMBRIQ sur AWS.
 ```
 .
 ├── modules/              # Modules Terraform réutilisables
-│   ├── shared/          # NOUVEAU : Ressources partagées (VPC, Route53, SES, ACM)
+│   ├── shared/          # Ressources partagées (VPC, Route53, SES, ACM)
 │   ├── rds-postgres/    # Base de données PostgreSQL
 │   ├── s3-static-site/  # Bucket S3 pour frontend Next.js
 │   ├── s3-media/        # Bucket S3 pour médias/documents
@@ -22,9 +22,15 @@ Infrastructure Terraform modulaire pour l'application KAMBRIQ sur AWS.
 │   ├── api-gateway/     # API Gateway HTTP API
 │   └── iam/             # Rôles et policies IAM
 ├── envs/                # Configurations par environnement
-│   ├── shared/          # NOUVEAU : Stack shared (VPC, DNS, SES, ACM)
+│   ├── shared/          # Stack shared (VPC, DNS, SES, ACM)
 │   ├── dev/             # Environnement de développement
 │   └── prod/            # Environnement de production
+├── docs/                # Documentation organisée par usage
+│   ├── setup/           # Guides de démarrage (TERRAFORM_USAGE.md)
+│   ├── integration/     # Guides d'intégration (APP_INTEGRATION.md)
+│   └── maintenance/     # Documentation de maintenance
+├── legacy/              # Modules et fichiers obsolètes (référence uniquement)
+│   └── modules/         # Anciens modules (network, ses) - non utilisés
 └── versions.tf          # Contraintes de versions
 ```
 
@@ -185,8 +191,6 @@ Les workflows Terraform sont configurés pour :
 
 #### 1. Workflow `terraform-dev.yml` - Environnement de développement
 
-#### 1. Workflow `terraform-dev.yml` - Environnement de développement
-
 Gère le stack `dev` avec déploiement automatique.
 
 **Triggers :**
@@ -203,8 +207,8 @@ Gère le stack `dev` avec déploiement automatique.
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
 - `AWS_DEFAULT_REGION` (optionnel, défaut: `eu-central-1`)
-- `DB_PASSWORD_DEV`
-- `JWT_SECRET_DEV`
+
+**Note** : Les secrets applicatifs (DB password, JWT secrets) ne sont **pas** passés via GitHub Secrets. Ils sont gérés via SSM Parameter Store / Secrets Manager et configurés directement dans les variables d'environnement Lambda.
 
 #### 2. Workflow `terraform-prod.yml` - Environnement de production
 
@@ -226,8 +230,8 @@ Gère le stack `prod` avec sécurité renforcée.
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
 - `AWS_DEFAULT_REGION` (optionnel, défaut: `eu-central-1`)
-- `DB_PASSWORD_PROD`
-- `JWT_SECRET_PROD`
+
+**Note** : Les secrets applicatifs (DB password, JWT secrets) ne sont **pas** passés via GitHub Secrets. Ils sont gérés via SSM Parameter Store / Secrets Manager et configurés directement dans les variables d'environnement Lambda.
 
 > **⚠️ Sécurité** : Le workflow prod nécessite une action explicite pour appliquer les changements. Toujours revoir le plan avant d'appliquer en production.
 
@@ -269,41 +273,23 @@ Configurer les secrets suivants dans GitHub (Settings → Secrets and variables 
 **Option 1 : OIDC avec IAM Role (Recommandé)**
 - `AWS_ROLE_ARN` : ARN du rôle IAM (ex: `arn:aws:iam::ACCOUNT_ID:role/github-actions-role`)
 - `AWS_REGION` : `eu-central-1`
-- `DB_PASSWORD_DEV` : Mot de passe de la base de données pour DEV (⚠️ différent de prod)
-- `JWT_SECRET_DEV` : Secret JWT pour DEV (⚠️ différent de prod)
-- `DB_PASSWORD_PROD` : Mot de passe de la base de données pour PROD (⚠️ différent de dev)
-- `JWT_SECRET_PROD` : Secret JWT pour PROD (⚠️ différent de dev)
 
 **Option 2 : Credentials statiques**
 - `AWS_ACCESS_KEY_ID` : Clé d'accès AWS
 - `AWS_SECRET_ACCESS_KEY` : Clé secrète AWS
 - `AWS_REGION` : `eu-central-1`
-- `DB_PASSWORD_DEV` : Mot de passe de la base de données pour DEV (⚠️ différent de prod)
-- `JWT_SECRET_DEV` : Secret JWT pour DEV (⚠️ différent de prod)
-- `DB_PASSWORD_PROD` : Mot de passe de la base de données pour PROD (⚠️ différent de dev)
-- `JWT_SECRET_PROD` : Secret JWT pour PROD (⚠️ différent de dev)
 
-**Comment générer un JWT_SECRET sécurisé :**
-
-```bash
-# Option 1 : OpenSSL (Linux/Mac)
-openssl rand -base64 32
-
-# Option 2 : OpenSSL (hex)
-openssl rand -hex 32
-
-# Option 3 : Python
-python3 -c "import secrets; print(secrets.token_urlsafe(32))"
-
-# Option 4 : Node.js
-node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-```
+**⚠️ Important** : Les secrets applicatifs (DB password, JWT secrets) ne sont **pas** stockés dans GitHub Secrets. Ils sont gérés via :
+- **SSM Parameter Store** ou **AWS Secrets Manager** pour les secrets de production
+- **Variables d'environnement Lambda** configurées directement (pas via Terraform variables)
+- Les workflows Terraform ne gèrent que l'infrastructure, pas les secrets applicatifs
 
 **⚠️ Bonnes pratiques de sécurité :**
+- Les secrets applicatifs (DB password, JWT secrets) sont stockés dans SSM Parameter Store / Secrets Manager
 - Ne jamais réutiliser les mêmes secrets entre dev et prod
 - Utiliser des mots de passe forts et uniques pour chaque environnement
 - Générer des JWT_SECRET d'au moins 32 caractères
-- Envisager d'utiliser AWS Secrets Manager pour les secrets de production
+- Les workflows Terraform ne manipulent pas les secrets applicatifs, uniquement l'infrastructure
 
 **Configuration OIDC :**
 1. Créer un OIDC provider dans AWS IAM (si pas déjà fait)
@@ -562,10 +548,11 @@ Chaque workflow :
 
 ## Notes importantes
 
-- **Secrets séparés** : Les secrets sont séparés entre dev et prod (`DB_PASSWORD_DEV`/`DB_PASSWORD_PROD`, `JWT_SECRET_DEV`/`JWT_SECRET_PROD`) pour des raisons de sécurité.
+- **Gestion des secrets** : Les secrets applicatifs (DB password, JWT secrets) sont gérés via SSM Parameter Store / Secrets Manager, **pas** via GitHub Secrets ou Terraform variables. Les workflows Terraform ne manipulent que l'infrastructure.
 - **Stack shared en premier** : Le stack `shared` doit être déployé avant `dev` et `prod` car ces derniers dépendent de ses outputs.
 - **VPC dédiée** : Une VPC dédiée est créée dans le stack `shared` (plus de VPC par défaut).
 - **NAT Gateway unique** : Un seul NAT Gateway est créé pour réduire les coûts (dans une AZ publique).
-- **Secrets Manager** : Pour la production, envisager de migrer vers AWS Secrets Manager au lieu de variables Terraform.
+- **Documentation organisée** : La documentation est organisée par usage dans `docs/setup/`, `docs/integration/`, et `docs/maintenance/`.
+- **Modules legacy** : Les anciens modules (`network`, `ses`) ont été déplacés dans `legacy/` et ne sont plus utilisés.
 - **Coûts** : Les ressources sont configurées pour minimiser les coûts tout en restant fonctionnelles.
 
