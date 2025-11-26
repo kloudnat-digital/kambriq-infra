@@ -311,9 +311,3 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "artifacts" {
   }
 }
 
-# ============================================================================
-# Data Sources
-# ============================================================================
-
-data "aws_caller_identity" "current" {}
-
