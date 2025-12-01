@@ -59,8 +59,10 @@ output "route53_name_servers" {
 # ============================================================================
 # SES Outputs
 # ============================================================================
-# Note: SES identities are created manually in AWS Console.
+# SES identities are created manually in AWS Console.
 # These outputs reflect the ARNs and values provided via variables.
+# SES and ACM certificates are managed manually - Terraform only consumes ARNs passed via tfvars.
+# See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions.
 
 output "ses_domain_identity_arn" {
   description = "SES domain identity ARN (provided via variable, created manually in AWS Console)"
@@ -75,6 +77,11 @@ output "ses_email_identity_arn" {
 output "ses_domain" {
   description = "SES domain (e.g., kambriq.com)"
   value       = var.ses_domain
+}
+
+output "ses_region" {
+  description = "AWS region where SES identities are created (e.g., eu-central-1)"
+  value       = var.ses_region
 }
 
 output "ses_from_email" {
@@ -95,8 +102,10 @@ output "ses_dkim_tokens" {
 # ============================================================================
 # ACM Certificate Outputs
 # ============================================================================
-# Note: ACM certificates are created manually in AWS Console.
+# ACM certificates are created manually in AWS Console.
 # These outputs reflect the ARNs provided via variables.
+# SES and ACM certificates are managed manually - Terraform only consumes ARNs passed via tfvars.
+# See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions.
 
 output "api_certificate_arn" {
   description = "ACM certificate ARN for API Gateway (provided via variable, created manually in AWS Console, must be in eu-central-1)"

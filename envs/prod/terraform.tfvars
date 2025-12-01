@@ -103,7 +103,9 @@ ses_from_email = "noreply@kambriq.com"
 # 3. Décommenter et remplir les valeurs ci-dessous :
 
 # cloudfront_domain          = "app.kambriq.com"
-# cloudfront_certificate_arn = "arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERTIFICATE_ID"
+# Certificat ACM CloudFront créé manuellement en us-east-1
+# Voir docs/setup/SES_AND_ACM_MANUAL_SETUP.md pour les instructions
+cloudfront_certificate_arn = "arn:aws:acm:us-east-1:051551940370:certificate/78e0e011-48de-4cc5-835c-9f51304f2292"
 
 # api_domain                = "api.kambriq.com"
 # api_certificate_arn        = "arn:aws:acm:eu-central-1:ACCOUNT_ID:certificate/CERTIFICATE_ID"

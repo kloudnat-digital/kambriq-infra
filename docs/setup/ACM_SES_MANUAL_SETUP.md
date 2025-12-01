@@ -4,6 +4,8 @@ Ce guide explique comment créer et configurer manuellement les certificats ACM 
 
 **⚠️ IMPORTANT** : Les certificats ACM et les identités SES ne sont **plus créés automatiquement** par Terraform. Ils doivent être créés et validés manuellement dans la console AWS avant de déployer l'infrastructure.
 
+**Architecture** : SES et ACM sont gérés manuellement - Terraform consomme uniquement des ARNs passés via les tfvars. Aucune ressource `aws_ses_*` ou `aws_acm_certificate` n'est créée par Terraform.
+
 ## 1. Pourquoi une configuration manuelle ?
 
 - **ACM** : Les certificats nécessitent une validation DNS qui peut être complexe à automatiser

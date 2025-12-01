@@ -74,7 +74,9 @@ aws_region = "eu-central-1"
 # Pour activer des domaines personnalisés, décommenter et remplir :
 
 # cloudfront_domain          = "app-dev.kambriq.com"
-# cloudfront_certificate_arn = "arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERTIFICATE_ID"
+# Certificat ACM CloudFront créé manuellement en us-east-1
+# Voir docs/setup/SES_AND_ACM_MANUAL_SETUP.md pour les instructions
+cloudfront_certificate_arn = "arn:aws:acm:us-east-1:051551940370:certificate/061b780e-6b44-4535-96e3-e36c537d802f"
 
 # api_domain                = "api-dev.kambriq.com"
 # api_certificate_arn        = "arn:aws:acm:eu-central-1:ACCOUNT_ID:certificate/CERTIFICATE_ID"

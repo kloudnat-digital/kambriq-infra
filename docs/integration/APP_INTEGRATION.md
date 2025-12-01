@@ -459,9 +459,132 @@ If an output is missing:
 3. Verify `FRONTEND_URL` in Lambda matches the frontend URL
 4. Check API Gateway integration with Lambda
 
+## Phase 2 – CloudFront Routing `/api/*` to API Gateway (TODO)
+
+### Current State
+
+Currently, CloudFront only serves the frontend from S3. API Gateway is accessed directly via its endpoint URL, not through CloudFront.
+
+**Current Architecture** :
+```
+Navigateur → CloudFront → S3 (frontend uniquement)
+           → API Gateway (accès direct, pas via CloudFront)
+```
+
+### Target Architecture (MVP)
+
+**Target Architecture** :
+```
+Navigateur → CloudFront → S3 (frontend)
+           → CloudFront → /api/* → API Gateway → Lambda
+```
+
+### Required Changes
+
+#### 1. Update CloudFront Module
+
+**File** : `modules/cloudfront/main.tf`
+
+Add API Gateway as an origin and create a cache behavior for `/api/*`:
+
+```hcl
+# Add variable for API Gateway endpoint
+variable "api_gateway_endpoint" {
+  description = "API Gateway HTTP API endpoint (e.g., abc123.execute-api.eu-central-1.amazonaws.com)"
+  type        = string
+  default     = ""
+}
+
+# Add origin for API Gateway (if endpoint provided)
+origin {
+  domain_name = var.api_gateway_endpoint
+  origin_id   = "API-Gateway-${var.env}"
+  
+  custom_origin_config {
+    http_port              = 80
+    https_port             = 443
+    origin_protocol_policy = "https-only"
+    origin_ssl_protocols   = ["TLSv1.2"]
+  }
+}
+
+# Add cache behavior for /api/* (before default_cache_behavior)
+ordered_cache_behavior {
+  path_pattern     = "/api/*"
+  allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+  cached_methods   = ["GET", "HEAD"]
+  target_origin_id = "API-Gateway-${var.env}"
+  
+  forwarded_values {
+    query_string = true
+    headers      = ["Authorization", "Content-Type", "X-Requested-With"]
+    cookies {
+      forward = "all"
+    }
+  }
+  
+  viewer_protocol_policy = "redirect-to-https"
+  min_ttl                = 0
+  default_ttl             = 0  # No cache for API responses
+  max_ttl                 = 0
+  compress                = true
+}
+```
+
+#### 2. Update Environment Configurations
+
+**Files** : `envs/dev/main.tf`, `envs/prod/main.tf`
+
+Pass the API Gateway endpoint to the CloudFront module:
+
+```hcl
+module "cloudfront" {
+  source = "../../modules/cloudfront"
+
+  env                            = local.env
+  s3_bucket_id                   = module.s3_static.bucket_id
+  s3_bucket_regional_domain_name = module.s3_static.bucket_regional_domain_name
+  domain_name                    = var.cloudfront_domain != "" ? var.cloudfront_domain : ""
+  certificate_arn                = var.cloudfront_certificate_arn != "" ? var.cloudfront_certificate_arn : ""
+  api_gateway_endpoint           = module.api_gateway.api_endpoint  # Add this line
+}
+```
+
+#### 3. Update CloudFront Outputs
+
+**File** : `modules/cloudfront/outputs.tf`
+
+Add the hosted zone ID for Route53 records:
+
+```hcl
+output "distribution_hosted_zone_id" {
+  description = "CloudFront distribution hosted zone ID (for Route53 alias records)"
+  value       = aws_cloudfront_distribution.main.hosted_zone_id
+}
+```
+
+### Benefits
+
+- ✅ Single entry point (same domain for frontend and API)
+- ✅ Simplified CORS configuration
+- ✅ Edge caching capabilities (if needed)
+- ✅ Consistent domain for cookies and authentication
+
+### Notes
+
+- The cache behavior for `/api/*` should have `default_ttl = 0` to avoid caching API responses
+- All query strings and necessary headers (Authorization, Content-Type) must be forwarded
+- Cookies must be forwarded for authentication to work
+
+### Related Documentation
+
+- [Terraform Current State](../architecture/TERRAFORM_CURRENT_STATE.md) - Detailed comparison with target architecture
+- [Phase 2 Documentation](../phase-2/phase-2.md) - Alternative architecture with direct `api.kambriq.com`
+
 ## Related Documentation
 
 - [Environment Variables Documentation](../../kambriq/docs/configuration/ENVIRONMENT_VARIABLES.md) - Complete mapping and usage guide
 - [Lambda Deployment Guide](../../kambriq/docs/deployment/lambda-deployment.md) - Backend deployment details
 - [Frontend S3/CloudFront Deployment](../../kambriq/docs/deployment/frontend-s3-cloudfront.md) - Frontend deployment details
+- [Terraform Current State](../architecture/TERRAFORM_CURRENT_STATE.md) - Current architecture state vs target
 

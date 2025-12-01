@@ -169,18 +169,24 @@ resource "aws_route53_zone" "main" {
 # ============================================================================
 # SES Domain Identity
 # ============================================================================
-# Note: SES identities (domain/email) are created and verified manually in AWS Console.
+# SES identities (domain/email) are created and verified manually in AWS Console.
 # The ARNs and domain/email values are provided via variables.
 # No Terraform resources are created here - only outputs are provided based on variables.
+# 
+# SES and ACM certificates are managed manually - Terraform only consumes ARNs passed via tfvars.
+# See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions.
 
 # ============================================================================
 # ACM Certificates
 # ============================================================================
-# Note: ACM certificates are created and validated manually in AWS Console.
+# ACM certificates are created and validated manually in AWS Console.
 # The ARNs are provided via variables:
 # - api_acm_certificate_arn: Certificate for API Gateway (must be in eu-central-1)
 # - cloudfront_acm_certificate_arn: Certificate for CloudFront (must be in us-east-1)
 # No Terraform resources are created here - only outputs are provided based on variables.
+#
+# SES and ACM certificates are managed manually - Terraform only consumes ARNs passed via tfvars.
+# See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions.
 
 # ============================================================================
 # S3 Buckets for Logs and Artifacts

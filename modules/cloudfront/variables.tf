@@ -14,7 +14,7 @@ variable "s3_bucket_regional_domain_name" {
 }
 
 variable "certificate_arn" {
-  description = "ACM certificate ARN for custom domain (optional)"
+  description = "ACM certificate ARN for custom domain (optional). Certificate must be created manually in us-east-1. See docs/setup/SES_AND_ACM_MANUAL_SETUP.md"
   type        = string
   default     = ""
 }

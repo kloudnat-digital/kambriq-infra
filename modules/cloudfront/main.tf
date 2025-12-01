@@ -102,6 +102,10 @@ resource "aws_cloudfront_distribution" "main" {
     }
   }
 
+  # ACM Certificate Configuration
+  # ACM certificates are managed manually - Terraform only consumes ARNs passed via tfvars.
+  # CloudFront certificates must be created in us-east-1.
+  # See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions.
   viewer_certificate {
     cloudfront_default_certificate = var.certificate_arn == ""
     acm_certificate_arn            = var.certificate_arn != "" ? var.certificate_arn : null

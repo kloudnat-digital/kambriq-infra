@@ -42,12 +42,18 @@ module "shared" {
   domain_name = var.domain_name
 
   # SES Configuration (created manually in AWS Console)
+  # SES identities are managed manually - Terraform only consumes ARNs passed via tfvars.
+  # See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions.
   ses_domain              = var.ses_domain
+  ses_region              = var.ses_region
   ses_domain_identity_arn = var.ses_domain_identity_arn
   ses_from_email          = var.ses_from_email
   ses_email_identity_arn  = var.ses_email_identity_arn
 
   # ACM Certificates (created manually in AWS Console)
+  # ACM certificates are managed manually - Terraform only consumes ARNs passed via tfvars.
+  # CloudFront certificates must be in us-east-1, API Gateway certificates in eu-central-1.
+  # See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions.
   api_acm_certificate_arn        = var.api_acm_certificate_arn
   cloudfront_acm_certificate_arn = var.cloudfront_acm_certificate_arn
 

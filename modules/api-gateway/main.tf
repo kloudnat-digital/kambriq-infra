@@ -68,6 +68,9 @@ resource "aws_apigatewayv2_stage" "default" {
 }
 
 # Custom domain (optionnel)
+# ACM certificates are managed manually - Terraform only consumes ARNs passed via tfvars.
+# API Gateway certificates must be created in eu-central-1.
+# See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions.
 resource "aws_apigatewayv2_domain_name" "main" {
   count       = var.domain_name != "" ? 1 : 0
   domain_name = var.domain_name

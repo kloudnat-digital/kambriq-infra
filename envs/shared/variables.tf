@@ -19,11 +19,19 @@ variable "domain_name" {
 # SES Configuration
 # Note: SES identities must be created and verified manually in AWS Console.
 # After manual setup, provide the ARNs and domain/email values here.
+# SES and ACM certificates are managed manually - Terraform only consumes ARNs passed via tfvars.
+# See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions.
 
 variable "ses_domain" {
   description = "SES domain already verified in AWS Console (e.g., kambriq.com)"
   type        = string
   default     = "kambriq.com"
+}
+
+variable "ses_region" {
+  description = "AWS region where SES identities are created (e.g., eu-central-1)"
+  type        = string
+  default     = "eu-central-1"
 }
 
 variable "ses_domain_identity_arn" {
@@ -47,6 +55,8 @@ variable "ses_email_identity_arn" {
 # ACM Certificate Configuration
 # Note: ACM certificates must be created and validated manually in AWS Console.
 # After manual setup, provide the ARNs here.
+# CloudFront certificates must be created in us-east-1, API Gateway certificates in eu-central-1.
+# See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions.
 
 variable "api_acm_certificate_arn" {
   description = "ACM certificate ARN for API Gateway (created manually in AWS Console, must be in eu-central-1)"

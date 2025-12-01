@@ -119,8 +119,9 @@ L'infrastructure partagée doit être déployée **EN PREMIER** avant les enviro
 6. **⚠️ IMPORTANT : Créer manuellement les certificats ACM et identités SES** :
    - **Les certificats ACM et identités SES ne sont plus créés automatiquement par Terraform**
    - Ils doivent être créés et validés manuellement dans la console AWS
-   - Après création, récupérez les ARNs et ajoutez-les dans `envs/shared/terraform.tfvars`
+   - Après création, récupérez les ARNs et ajoutez-les dans les fichiers `terraform.tfvars`
    - Voir le guide détaillé : [ACM_SES_MANUAL_SETUP.md](./ACM_SES_MANUAL_SETUP.md)
+   - **Voir la section 11 ci-dessous** pour la mise à jour des tfvars après création des certificats
 
 ### Déploiement via GitHub Actions
 
@@ -316,7 +317,150 @@ terraform validate
 - Vérifier les variables d'environnement AWS ou le profile AWS
 - Vérifier les GitHub Secrets si vous utilisez GitHub Actions
 
-## 10. Ressources supplémentaires
+## 10. Mise à jour des tfvars après création des certificats ACM
+
+### Contexte
+
+Les certificats ACM pour CloudFront sont créés **manuellement** dans la console AWS en région **us-east-1** (obligatoire pour CloudFront). Une fois créés et validés, leurs ARNs doivent être ajoutés dans les fichiers `terraform.tfvars` avant le premier `terraform apply`.
+
+### Étapes
+
+#### 1. Créer les certificats ACM en us-east-1
+
+Suivez le guide [ACM_SES_MANUAL_SETUP.md](./ACM_SES_MANUAL_SETUP.md) pour créer les certificats :
+- **DEV** : Certificat pour CloudFront dev (ex: `*.dev.kambriq.com` ou `app-dev.kambriq.com`)
+- **PROD** : Certificat pour CloudFront prod (ex: `*.kambriq.com` ou `app.kambriq.com`)
+
+**⚠️ IMPORTANT** : Les certificats CloudFront **DOIVENT** être créés en région **us-east-1**, même si votre infrastructure est dans **eu-central-1**.
+
+#### 2. Récupérer les ARNs des certificats
+
+Une fois les certificats validés (statut = "Issued"), récupérez leurs ARNs :
+
+**Via la console AWS** :
+- Console AWS → Certificate Manager → Région **us-east-1**
+- Sélectionnez le certificat → Copiez l'ARN
+
+**Via AWS CLI** :
+```bash
+# Lister les certificats en us-east-1
+aws acm list-certificates --region us-east-1
+
+# Détails d'un certificat (pour obtenir l'ARN complet)
+aws acm describe-certificate \
+  --certificate-arn "arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERTIFICATE_ID" \
+  --region us-east-1 \
+  --query 'Certificate.CertificateArn' \
+  --output text
+```
+
+#### 3. Mettre à jour les fichiers tfvars
+
+##### Pour DEV (`envs/dev/terraform.tfvars`)
+
+Décommenter et remplir la variable `cloudfront_certificate_arn` :
+
+```hcl
+# ============================================================================
+# Domaines personnalisés (optionnel pour DEV)
+# ============================================================================
+
+# cloudfront_domain          = "app-dev.kambriq.com"
+# Certificat ACM CloudFront créé manuellement en us-east-1
+# Voir docs/setup/SES_AND_ACM_MANUAL_SETUP.md pour les instructions
+cloudfront_certificate_arn = "arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERTIFICATE_ID"
+```
+
+**Exemple avec ARN réel** :
+```hcl
+cloudfront_certificate_arn = "arn:aws:acm:us-east-1:051551940370:certificate/061b780e-6b44-4535-96e3-e36c537d802f"
+```
+
+##### Pour PROD (`envs/prod/terraform.tfvars`)
+
+Décommenter et remplir la variable `cloudfront_certificate_arn` :
+
+```hcl
+# ============================================================================
+# Domaines personnalisés (recommandé pour PROD)
+# ============================================================================
+
+# cloudfront_domain          = "app.kambriq.com"
+# Certificat ACM CloudFront créé manuellement en us-east-1
+# Voir docs/setup/SES_AND_ACM_MANUAL_SETUP.md pour les instructions
+cloudfront_certificate_arn = "arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERTIFICATE_ID"
+```
+
+**Exemple avec ARN réel** :
+```hcl
+cloudfront_certificate_arn = "arn:aws:acm:us-east-1:051551940370:certificate/78e0e011-48de-4cc5-835c-9f51304f2292"
+```
+
+#### 4. Vérifier la configuration
+
+Avant de lancer `terraform apply`, vérifiez que les ARNs sont corrects :
+
+```bash
+# Pour DEV
+cd envs/dev
+terraform init
+terraform validate
+terraform plan  # Vérifier que le certificat est bien référencé
+
+# Pour PROD
+cd envs/prod
+terraform init
+terraform validate
+terraform plan  # Vérifier que le certificat est bien référencé
+```
+
+#### 5. Déployer
+
+Une fois les ARNs configurés dans les tfvars, vous pouvez déployer :
+
+```bash
+# Pour DEV
+cd envs/dev
+terraform apply
+
+# Pour PROD
+cd envs/prod
+terraform apply
+```
+
+### Notes importantes
+
+- ⚠️ **Les certificats doivent être validés** (statut = "Issued") avant d'être utilisés par Terraform
+- ⚠️ **Les certificats CloudFront DOIVENT être en us-east-1** (même si l'infrastructure est en eu-central-1)
+- ✅ **Les fichiers `terraform.tfvars` ne sont jamais commités** dans Git (déjà dans `.gitignore`)
+- 📝 **Documenter les ARNs** dans un gestionnaire de secrets pour référence future
+- 🔄 **Si vous créez de nouveaux certificats**, mettez à jour les tfvars avant chaque `terraform apply`
+
+### Dépannage
+
+#### Erreur : "Certificate not found"
+
+- Vérifiez que l'ARN est correct et complet
+- Vérifiez que le certificat existe en région **us-east-1**
+- Vérifiez que vous êtes connecté au bon compte AWS
+
+#### Erreur : "Certificate not validated"
+
+- Le certificat doit être dans l'état **"Issued"** (pas "Pending validation")
+- Vérifiez que les enregistrements DNS de validation sont correctement configurés dans Route53
+- Attendez quelques minutes après la création des enregistrements DNS
+
+#### Erreur : "Certificate in wrong region"
+
+- CloudFront nécessite des certificats en **us-east-1**
+- Si vous avez créé le certificat dans une autre région, recréez-le en us-east-1
+
+### Références
+
+- [Guide de configuration manuelle SES/ACM](./ACM_SES_MANUAL_SETUP.md) - Instructions détaillées pour créer les certificats
+- [Guide des variables tfvars](./TERRAFORM_TFVARS_EXAMPLE.md) - Documentation complète des variables tfvars
+
+## 11. Ressources supplémentaires
 
 - [Documentation Terraform AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
 - [README principal](./README.md) - Architecture détaillée et workflows

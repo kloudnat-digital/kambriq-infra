@@ -196,8 +196,11 @@ module "cloudfront" {
   env                            = local.env
   s3_bucket_id                   = module.s3_static.bucket_id
   s3_bucket_regional_domain_name = module.s3_static.bucket_regional_domain_name
-  domain_name                    = var.cloudfront_domain
-  certificate_arn                = var.cloudfront_certificate_arn
+  # ACM certificates are managed manually - Terraform only consumes ARNs passed via tfvars.
+  # CloudFront certificates must be created in us-east-1.
+  # See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions.
+  domain_name     = var.cloudfront_domain
+  certificate_arn = var.cloudfront_certificate_arn
 }
 
 # Bucket policy S3 pour CloudFront OAI
@@ -279,6 +282,9 @@ module "api_gateway" {
   env                  = local.env
   lambda_function_arn  = module.lambda.function_arn
   lambda_function_name = module.lambda.function_name
-  domain_name          = var.api_domain
-  certificate_arn      = var.api_certificate_arn
+  # ACM certificates are managed manually - Terraform only consumes ARNs passed via tfvars.
+  # API Gateway certificates must be created in eu-central-1.
+  # See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions.
+  domain_name     = var.api_domain
+  certificate_arn = var.api_certificate_arn
 }
