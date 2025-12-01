@@ -38,8 +38,10 @@ vpc_cidr = "10.0.0.0/16"
 domain_name = "kambriq.com"
 
 # Route53 hosted zone ID (créé manuellement dans AWS Console)
-# Format: Z035969434MOMAYZATZ1D
-route53_zone_id = "Z035969434MOMAYZATZ1D"
+# Format: Z00411721R2YKO3VFIPU4
+# Pour obtenir le zone_id :
+#   aws route53 list-hosted-zones --query "HostedZones[?Name=='kambriq.com.'].Id" --output text
+route53_zone_id = "Z00411721R2YKO3VFIPU4"
 
 # ============================================================================
 # SES Configuration
