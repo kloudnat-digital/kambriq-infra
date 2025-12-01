@@ -9,8 +9,8 @@ output "api_endpoint" {
 }
 
 output "api_url" {
-  description = "API Gateway full URL"
-  value       = "https://${aws_apigatewayv2_api.main.api_endpoint}"
+  description = "API Gateway full URL (api_endpoint already includes https://)"
+  value       = aws_apigatewayv2_api.main.api_endpoint
 }
 
 output "api_arn" {
