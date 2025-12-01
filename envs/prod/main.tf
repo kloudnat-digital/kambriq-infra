@@ -268,7 +268,7 @@ module "lambda" {
   db_password = data.aws_ssm_parameter.db_password.value
 
   s3_media_bucket = module.s3_media.bucket_id
-  ses_from_email  = data.terraform_remote_state.shared.outputs.ses_from_email
+  ses_from_email  = var.ses_from_email  # Environment-specific SES sender email
   jwt_secret      = data.aws_ssm_parameter.jwt_secret.value
 }
 

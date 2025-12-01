@@ -151,6 +151,14 @@ aws acm describe-certificate \
 aws_region = "eu-central-1"
 
 # ============================================================================
+# SES Configuration
+# ============================================================================
+# SES sender email address for DEV environment
+# SES identities are managed manually in AWS Console, not by Terraform
+# See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions
+ses_from_email = "noreply.dev@kambriq.com"
+
+# ============================================================================
 # Domaines personnalisés (optionnel pour DEV)
 # ============================================================================
 # Par défaut, CloudFront et API Gateway utilisent leurs URLs par défaut.
@@ -197,6 +205,14 @@ aws_region = "eu-central-1"
 
 # Région AWS
 aws_region = "eu-central-1"
+
+# ============================================================================
+# SES Configuration
+# ============================================================================
+# SES sender email address for PROD environment
+# SES identities are managed manually in AWS Console, not by Terraform
+# See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions
+ses_from_email = "noreply@kambriq.com"
 
 # ============================================================================
 # Domaines personnalisés (recommandé pour PROD)

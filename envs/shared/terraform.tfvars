@@ -37,8 +37,10 @@ domain_name = "kambriq.com"
 # ============================================================================
 # SES Configuration
 # ============================================================================
-
-# Adresse email par défaut pour l'envoi d'emails via SES
+# Note: ses_from_email is now environment-specific (configured in dev/prod tfvars)
+# This value is kept for backward compatibility but is not used by dev/prod environments
+# Dev uses: noreply.dev@kambriq.com
+# Prod uses: noreply@kambriq.com
 ses_from_email = "noreply@kambriq.com"
 
 # ============================================================================

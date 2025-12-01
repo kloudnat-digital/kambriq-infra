@@ -63,7 +63,7 @@ output "ses_email_identity_arn" {
 }
 
 output "ses_from_email" {
-  description = "Default sender email address"
+  description = "[DEPRECATED] Default sender email address - Use environment-specific ses_from_email in dev/prod instead"
   value       = module.shared.ses_from_email
 }
 

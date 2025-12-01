@@ -33,8 +33,15 @@ variable "ses_domain" {
   default     = "kambriq.com"
 }
 
+# ============================================================================
+# SES Configuration
+# ============================================================================
+# SES sender email address (environment-specific)
+# SES identities are managed manually in AWS Console, not by Terraform
+# See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions
+
 variable "ses_from_email" {
-  description = "SES sender email address"
+  description = "SES sender email address for this environment (e.g., noreply@kambriq.com for prod)"
   type        = string
   default     = "noreply@kambriq.com"
 }

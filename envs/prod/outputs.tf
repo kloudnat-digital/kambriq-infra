@@ -72,8 +72,8 @@ output "ses_domain_identity_arn" {
 }
 
 output "ses_from_email" {
-  description = "SES sender email address"
-  value       = data.terraform_remote_state.shared.outputs.ses_from_email
+  description = "SES sender email address (environment-specific)"
+  value       = var.ses_from_email
 }
 
 # ============================================================================

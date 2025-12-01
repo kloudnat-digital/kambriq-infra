@@ -79,11 +79,9 @@ aws_region = "eu-central-1"
 # ============================================================================
 # SES Configuration
 # ============================================================================
-
-# Domaine SES (optionnel, par défaut depuis shared)
-ses_domain = "kambriq.com"
-
-# Adresse email par défaut pour l'envoi (optionnel, par défaut depuis shared)
+# SES sender email address for PROD environment
+# SES identities are managed manually in AWS Console, not by Terraform
+# See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions
 ses_from_email = "noreply@kambriq.com"
 
 # ============================================================================

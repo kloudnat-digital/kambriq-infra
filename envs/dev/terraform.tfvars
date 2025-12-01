@@ -68,6 +68,14 @@ aws_region = "eu-central-1"
 #     --value "YOUR_JWT_SECRET" --type SecureString
 
 # ============================================================================
+# SES Configuration
+# ============================================================================
+# SES sender email address for DEV environment
+# SES identities are managed manually in AWS Console, not by Terraform
+# See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions
+ses_from_email = "noreply.dev@kambriq.com"
+
+# ============================================================================
 # Domaines personnalisés (optionnel pour DEV)
 # ============================================================================
 # Par défaut, CloudFront et API Gateway utilisent leurs URLs par défaut.

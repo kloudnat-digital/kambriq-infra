@@ -31,6 +31,14 @@ db_password = "CHANGE_ME_STRONG_PASSWORD"
 jwt_secret = "CHANGE_ME_JWT_SECRET_KEY"
 
 # ============================================================================
+# SES Configuration
+# ============================================================================
+# SES sender email address for DEV environment
+# SES identities are managed manually in AWS Console, not by Terraform
+# See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions
+ses_from_email = "noreply.dev@kambriq.com"
+
+# ============================================================================
 # Domaines personnalisés (optionnel - pour DEV)
 # ============================================================================
 # Par défaut, CloudFront et API Gateway utilisent leurs URLs par défaut.

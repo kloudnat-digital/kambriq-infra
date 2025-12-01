@@ -52,3 +52,16 @@ variable "api_certificate_arn" {
   default     = ""
 }
 
+# ============================================================================
+# SES Configuration
+# ============================================================================
+# SES sender email address (environment-specific)
+# SES identities are managed manually in AWS Console, not by Terraform
+# See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions
+
+variable "ses_from_email" {
+  description = "SES sender email address for this environment (e.g., noreply.dev@kambriq.com for dev)"
+  type        = string
+  default     = "noreply.dev@kambriq.com"
+}
+
