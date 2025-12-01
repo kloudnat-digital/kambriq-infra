@@ -40,20 +40,23 @@ output "internet_gateway_id" {
 # ============================================================================
 # Route53 Outputs
 # ============================================================================
+# Route53 hosted zone is created manually in AWS Console.
+# These outputs reflect the existing zone referenced via data source.
+# See docs/setup/ROUTE53_DNS_SETUP.md for manual setup instructions.
 
 output "route53_zone_id" {
-  description = "Route53 hosted zone ID"
-  value       = aws_route53_zone.main.zone_id
+  description = "Route53 hosted zone ID (provided via variable or data source, created manually in AWS Console)"
+  value       = local.route53_zone.zone_id
 }
 
 output "route53_zone_name" {
   description = "Route53 hosted zone name"
-  value       = aws_route53_zone.main.name
+  value       = local.route53_zone.name
 }
 
 output "route53_name_servers" {
   description = "Route53 name servers"
-  value       = aws_route53_zone.main.name_servers
+  value       = local.route53_zone.name_servers
 }
 
 # ============================================================================

@@ -1,20 +1,45 @@
 # Configuration DNS Route53 – KAMBRIQ
 
-Ce guide explique comment configurer les nameservers Route53 pour que la validation DNS (SES, ACM) fonctionne correctement.
+Ce guide explique comment créer la Route53 hosted zone manuellement et configurer les nameservers pour que la validation DNS (SES, ACM) fonctionne correctement.
 
 ## 1. Prérequis
 
-- Le stack `shared` doit être déployé avec succès
 - Vous devez avoir accès au registraire de domaine (où `kambriq.com` est enregistré)
-- Les outputs Terraform doivent être disponibles
+- Accès à la console AWS Route53
 
-## 2. Récupérer les nameservers Route53
+## 2. Créer la Route53 Hosted Zone manuellement
 
-Après avoir déployé le stack `shared`, récupérez les nameservers Route53 :
+**⚠️ IMPORTANT** : La Route53 hosted zone est créée **manuellement** dans AWS Console, pas par Terraform.
+
+### Étapes
+
+1. **Connectez-vous à la console AWS Route53**
+2. **Allez dans "Hosted zones"** → **"Create hosted zone"**
+3. **Configurez la zone** :
+   - **Domain name** : `kambriq.com`
+   - **Type** : Public hosted zone
+4. **Cliquez sur "Create hosted zone"**
+5. **Notez le Zone ID** (ex: `Z035969434MOMAYZATZ1D`) - vous en aurez besoin pour Terraform
+6. **Notez les 4 nameservers** affichés (ex: `ns-1104.awsdns-10.org`, etc.)
+
+### Ajouter le Zone ID dans Terraform
+
+Après avoir créé la zone manuellement, ajoutez le `zone_id` dans `envs/shared/terraform.tfvars` :
+
+```hcl
+# Route53 hosted zone ID (créé manuellement dans AWS Console)
+route53_zone_id = "Z035969434MOMAYZATZ1D"
+```
+
+## 3. Récupérer les nameservers Route53
+
+Après avoir créé la zone manuellement, récupérez les nameservers depuis la console AWS ou via AWS CLI :
 
 ```bash
-cd envs/shared
-terraform output route53_name_servers
+# Via AWS CLI
+aws route53 get-hosted-zone --id Z035969434MOMAYZATZ1D --query 'DelegationSet.NameServers' --output text
+
+# Ou depuis la console AWS Route53 → Hosted zones → kambriq.com → View details
 ```
 
 Exemple de sortie :
@@ -172,8 +197,8 @@ aws route53 get-hosted-zone --id $(terraform output -raw route53_zone_id)
 
 ## 9. Notes importantes
 
-- ⚠️ **Ne modifiez pas manuellement les enregistrements DNS créés par Terraform** dans la console Route53, ils seront écrasés au prochain `terraform apply`
-- ✅ **Les enregistrements DNS sont gérés par Terraform** via `aws_route53_record`
+- ⚠️ **La Route53 hosted zone est créée manuellement** dans AWS Console, pas par Terraform
+- ✅ **Terraform utilise un data source** pour référencer la zone existante via `route53_zone_id`
 - ✅ **Une fois les nameservers configurés, tous les enregistrements DNS sont automatiques**
 - ⏱️ **La propagation DNS peut prendre du temps** - soyez patient avant de relancer Terraform
 

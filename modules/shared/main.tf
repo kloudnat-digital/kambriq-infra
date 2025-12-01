@@ -156,14 +156,22 @@ resource "aws_route_table_association" "private" {
 # ============================================================================
 # Route53 Hosted Zone
 # ============================================================================
+# Route53 hosted zone is created manually in AWS Console.
+# Terraform uses a data source to reference the existing zone.
+# See docs/setup/ROUTE53_DNS_SETUP.md for manual setup instructions.
 
-resource "aws_route53_zone" "main" {
-  name = var.domain_name
+data "aws_route53_zone" "main" {
+  count = var.route53_zone_id != "" ? 1 : 0
+  zone_id = var.route53_zone_id
+}
 
-  tags = {
-    Name = "${local.name_prefix}-zone"
-    Type = "shared"
-  }
+data "aws_route53_zone" "main_by_name" {
+  count = var.route53_zone_id == "" ? 1 : 0
+  name  = var.domain_name
+}
+
+locals {
+  route53_zone = var.route53_zone_id != "" ? data.aws_route53_zone.main[0] : data.aws_route53_zone.main_by_name[0]
 }
 
 # ============================================================================

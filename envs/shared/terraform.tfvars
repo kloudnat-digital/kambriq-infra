@@ -30,9 +30,16 @@ vpc_cidr = "10.0.0.0/16"
 # ============================================================================
 # DNS Configuration (Route53)
 # ============================================================================
+# Route53 hosted zone is created manually in AWS Console.
+# Provide the zone_id here after manual setup.
+# See docs/setup/ROUTE53_DNS_SETUP.md for manual setup instructions.
 
 # Domaine principal pour Route53 hosted zone
 domain_name = "kambriq.com"
+
+# Route53 hosted zone ID (créé manuellement dans AWS Console)
+# Format: Z035969434MOMAYZATZ1D
+route53_zone_id = "Z035969434MOMAYZATZ1D"
 
 # ============================================================================
 # SES Configuration

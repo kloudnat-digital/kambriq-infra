@@ -4,9 +4,9 @@
 #
 # This stack creates shared resources used by all environments (dev, prod):
 # - VPC with public/private subnets + NAT Gateway
-# - Route53 hosted zone for kambriq.com
-# - SES domain identity
-# - ACM certificates (API Gateway)
+# - Route53 hosted zone reference (created manually in AWS Console)
+# - SES domain identity (created manually in AWS Console)
+# - ACM certificates (created manually in AWS Console)
 # - S3 buckets for logs and artifacts
 #
 # This stack must be deployed BEFORE dev and prod.
@@ -39,7 +39,8 @@ module "shared" {
   aws_region   = var.aws_region
   vpc_cidr     = var.vpc_cidr
 
-  domain_name = var.domain_name
+  domain_name      = var.domain_name
+  route53_zone_id  = var.route53_zone_id
 
   # SES Configuration (created manually in AWS Console)
   # SES identities are managed manually - Terraform only consumes ARNs passed via tfvars.

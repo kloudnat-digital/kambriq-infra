@@ -24,10 +24,20 @@ variable "availability_zones" {
 }
 
 # Route53 Configuration
+# Note: Route53 hosted zone is created manually in AWS Console.
+# Provide the zone_id here after manual setup.
+# See docs/setup/ROUTE53_DNS_SETUP.md for manual setup instructions.
+
 variable "domain_name" {
   description = "Domain name for Route53 hosted zone (e.g., kambriq.com)"
   type        = string
   default     = "kambriq.com"
+}
+
+variable "route53_zone_id" {
+  description = "Route53 hosted zone ID (created manually in AWS Console, e.g., Z035969434MOMAYZATZ1D)"
+  type        = string
+  default     = ""
 }
 
 # SES Configuration
