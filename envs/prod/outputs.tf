@@ -68,7 +68,7 @@ output "rds_username" {
 # SES resources are in the shared infrastructure stack
 output "ses_domain_identity_arn" {
   description = "SES domain identity ARN"
-  value       = data.terraform_remote_state.shared.outputs.ses_domain_identity_arn
+  value       = try(data.terraform_remote_state.shared.outputs.ses_domain_identity_arn, null)
 }
 
 output "ses_from_email" {

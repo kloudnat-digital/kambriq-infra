@@ -234,7 +234,7 @@ module "iam" {
   env                   = local.env
   rds_security_group_id = aws_security_group.rds.id
   s3_media_bucket_arn   = module.s3_media.bucket_arn
-  ses_identity_arn      = data.terraform_remote_state.shared.outputs.ses_email_identity_arn != null ? data.terraform_remote_state.shared.outputs.ses_email_identity_arn : ""
+  ses_identity_arn      = try(data.terraform_remote_state.shared.outputs.ses_email_identity_arn, "")
 }
 
 # ============================================================================
