@@ -34,9 +34,54 @@ domain_name = "kambriq.com"
 #   aws route53 list-hosted-zones --query "HostedZones[?Name=='kambriq.com.'].Id" --output text
 route53_zone_id = "Z035969434MOMAYZATZ1D"
 
-# Adresse email par défaut pour SES
+# ============================================================================
+# SES Configuration (created manually in AWS Console)
+# ============================================================================
+# SES identities are managed manually - Terraform only consumes ARNs passed via tfvars.
+# See docs/setup/ACM_SES_MANUAL_SETUP.md for manual setup instructions.
+
+# SES domain (e.g., kambriq.com)
+ses_domain = "kambriq.com"
+
+# AWS region where SES identities are created
+ses_region = "eu-central-1"
+
+# SES domain identity ARN (created manually in AWS Console)
+# Format: arn:aws:ses:eu-central-1:ACCOUNT_ID:identity/kambriq.com
+# Pour obtenir l'ARN :
+#   aws ses get-identity-verification-attributes --identities kambriq.com --region eu-central-1
+ses_domain_identity_arn = "arn:aws:ses:eu-central-1:ACCOUNT_ID:identity/kambriq.com"
+
+# SES sender email address (e.g., noreply@kambriq.com)
 ses_from_email = "noreply@kambriq.com"
 
+# SES email identity ARN (created manually in AWS Console)
+# Format: arn:aws:ses:eu-central-1:ACCOUNT_ID:identity/noreply@kambriq.com
+# Pour obtenir l'ARN :
+#   aws ses get-identity-verification-attributes --identities noreply@kambriq.com --region eu-central-1
+ses_email_identity_arn = "arn:aws:ses:eu-central-1:ACCOUNT_ID:identity/noreply@kambriq.com"
+
+# ============================================================================
+# ACM Certificate Configuration (created manually in AWS Console)
+# ============================================================================
+# ACM certificates are managed manually - Terraform only consumes ARNs passed via tfvars.
+# See docs/setup/ACM_SES_MANUAL_SETUP.md for manual setup instructions.
+
+# ACM certificate ARN for API Gateway (must be in eu-central-1)
+# Format: arn:aws:acm:eu-central-1:ACCOUNT_ID:certificate/CERTIFICATE_ID
+# Pour obtenir l'ARN :
+#   aws acm list-certificates --region eu-central-1
+api_acm_certificate_arn = "arn:aws:acm:eu-central-1:ACCOUNT_ID:certificate/CERTIFICATE_ID"
+
+# ACM certificate ARN for CloudFront (must be in us-east-1)
+# Format: arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERTIFICATE_ID
+# Pour obtenir l'ARN :
+#   aws acm list-certificates --region us-east-1
+cloudfront_acm_certificate_arn = "arn:aws:acm:us-east-1:ACCOUNT_ID:certificate/CERTIFICATE_ID"
+
+# ============================================================================
+# S3 Configuration
+# ============================================================================
 # Activer les buckets S3 pour logs et artifacts
 enable_s3_logs     = true
 enable_s3_artifacts = true
