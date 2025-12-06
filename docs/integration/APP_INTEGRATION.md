@@ -381,16 +381,22 @@ export NEXT_PUBLIC_ENVIRONMENT=development
 pnpm build
 ```
 
-### Static Export
+### OpenNext Build
 
-For static export (S3 deployment), use:
+For OpenNext deployment (S3 + Lambda SSR), use:
 
 ```bash
-pnpm build
-pnpm export  # or next export
+pnpm build:opennext
 ```
 
-The environment variables are baked into the static files during build.
+This generates the `.open-next/` directory with:
+- Static assets for S3 (`.open-next/assets/`)
+- Lambda functions for SSR (`.open-next/server/`)
+- Image optimization Lambda@Edge (`.open-next/image-optimization/`)
+
+The environment variables are configured via Lambda environment variables (from Terraform outputs).
+
+**Note:** Static export (`pnpm export`) is no longer used. The frontend now uses OpenNext for SSR capabilities.
 
 ## Best Practices
 
@@ -475,15 +481,30 @@ Navigateur → CloudFront → S3 (frontend uniquement)
 
 **Target Architecture** :
 ```
-Navigateur → CloudFront → S3 (frontend)
-           → CloudFront → /api/* → API Gateway → Lambda
+Navigateur → CloudFront → S3 (OpenNext assets)
+           → CloudFront → Lambda SSR (OpenNext)
+           → API Gateway → Lambda (NestJS)
 ```
+
+**Note:** The frontend now uses OpenNext (SSR + Lambda) instead of static export. The `modules/frontend/` module handles S3, CloudFront, and Lambda SSR configuration.
 
 ### Required Changes
 
-#### 1. Update CloudFront Module
+#### 1. Update Frontend Module (OpenNext)
 
-**File** : `modules/cloudfront/main.tf`
+**File** : `modules/frontend/main.tf`
+
+The frontend module already handles:
+- S3 bucket for OpenNext static assets
+- CloudFront distribution with OAC (Origin Access Control)
+- Lambda SSR function (placeholder, updated via CI/CD)
+- Integration with API Gateway via environment variables
+
+**Note:** The `modules/cloudfront/` and `modules/s3-static-site/` modules are now LEGACY and replaced by `modules/frontend/`.
+
+#### 2. Legacy: Update CloudFront Module (if using legacy modules)
+
+**File** : `modules/cloudfront/main.tf` ⚠️ LEGACY
 
 Add API Gateway as an origin and create a cache behavior for `/api/*`:
 
@@ -531,9 +552,27 @@ ordered_cache_behavior {
 }
 ```
 
-#### 2. Update Environment Configurations
+#### 3. Update Environment Configurations
 
 **Files** : `envs/dev/main.tf`, `envs/prod/main.tf`
+
+**For OpenNext (current architecture):**
+
+Pass the API Gateway endpoint to the frontend module:
+
+```hcl
+module "frontend" {
+  source = "../../modules/frontend"
+  
+  env                = local.env
+  api_gateway_url    = module.api_gateway.api_gateway_base_url
+  artifact_bucket_name = var.artifact_bucket_name
+  ssr_bundle_s3_key  = var.ssr_bundle_s3_key
+  # ... other variables
+}
+```
+
+**Legacy: For static export (if using legacy modules):**
 
 Pass the API Gateway endpoint to the CloudFront module:
 

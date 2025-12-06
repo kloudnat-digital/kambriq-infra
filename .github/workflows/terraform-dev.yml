@@ -5,9 +5,26 @@
 # This workflow manages the development infrastructure using Terraform.
 #
 # Purpose:
-#   - Automatically plan and apply Terraform changes for the dev environment
-#   - Runs on push to the 'develop' branch
-#   - Auto-approves applies for faster development iteration
+#   - Plan and apply Terraform changes for the dev environment
+#   - Supports workflow_dispatch for manual triggers with artifact inputs
+#   - Auto-approves applies on push to 'develop' for faster iteration
+#
+# Integration with kambriq repo (build-artifacts.yml):
+# ============================================================================
+# This workflow consumes artifacts built by kambriq repo:
+#   - API bundle: api/api-<sha>.zip (NestJS Lambda bundle)
+#   - Web bundle: web/web-<sha>.zip (OpenNext SSR bundle)
+#
+# Artifacts are uploaded to S3 by kambriq/.github/workflows/build-artifacts.yml
+# and should be passed via workflow_dispatch inputs or environment variables:
+#   - api_bundle_s3_key: S3 key of API bundle (e.g., api/api-abc123.zip)
+#   - ssr_bundle_s3_key: S3 key of OpenNext bundle (e.g., web/web-abc123.zip)
+#   - artifact_bucket_name: S3 bucket name (e.g., kambriq-artifacts-dev)
+#
+# To get artifact S3 keys:
+#   1. Check kambriq repo GitHub Actions → build-artifacts workflow
+#   2. Copy the S3 keys from workflow outputs
+#   3. Pass them as workflow_dispatch inputs or set as environment variables
 #
 # Required GitHub Secrets:
 #   Configure these in GitHub Settings → Secrets and variables → Actions:
@@ -44,7 +61,22 @@ on:
       - 'modules/**'
       - '.github/workflows/terraform-dev.yml'
   workflow_dispatch:
-    # Allow manual triggering
+    inputs:
+      api_bundle_s3_key:
+        description: 'S3 key of API bundle (e.g., api/api-abc123.zip). Leave empty to use dummy placeholder.'
+        required: false
+        type: string
+        default: ''
+      ssr_bundle_s3_key:
+        description: 'S3 key of OpenNext SSR bundle (e.g., web/web-abc123.zip). Leave empty to use dummy placeholder.'
+        required: false
+        type: string
+        default: ''
+      artifact_bucket_name:
+        description: 'S3 bucket name for artifacts (e.g., kambriq-artifacts-dev)'
+        required: false
+        type: string
+        default: ''
 
 env:
   TF_IN_AUTOMATION: true
@@ -89,16 +121,34 @@ jobs:
 
       - name: Terraform Plan
         working-directory: envs/dev
+        env:
+          TF_VAR_api_bundle_s3_key: ${{ github.event.inputs.api_bundle_s3_key || '' }}
+          TF_VAR_ssr_bundle_s3_key: ${{ github.event.inputs.ssr_bundle_s3_key || '' }}
+          TF_VAR_artifact_bucket_name: ${{ github.event.inputs.artifact_bucket_name || '' }}
         run: terraform plan -input=false -out=tfplan
 
       - name: Terraform Apply
         if: github.ref == 'refs/heads/develop'
         working-directory: envs/dev
+        env:
+          TF_VAR_api_bundle_s3_key: ${{ github.event.inputs.api_bundle_s3_key || '' }}
+          TF_VAR_ssr_bundle_s3_key: ${{ github.event.inputs.ssr_bundle_s3_key || '' }}
+          TF_VAR_artifact_bucket_name: ${{ github.event.inputs.artifact_bucket_name || '' }}
         run: terraform apply -input=false -auto-approve tfplan
 
       - name: Terraform Output (non-sensitive)
         working-directory: envs/dev
         run: |
           echo "## Terraform Outputs (Dev)" >> $GITHUB_STEP_SUMMARY
-          terraform output -json | jq -r 'to_entries[] | select(.value.sensitive != true) | "\(.key): \(.value.value)"' >> $GITHUB_STEP_SUMMARY || true
+          echo "" >> $GITHUB_STEP_SUMMARY
+          terraform output -json | jq -r 'to_entries[] | select(.value.sensitive != true) | "**\(.key)**: `\(.value.value)`"' >> $GITHUB_STEP_SUMMARY || true
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 🌐 Key URLs" >> $GITHUB_STEP_SUMMARY
+          terraform output -raw frontend_cloudfront_url >> /dev/null 2>&1 && echo "- **Frontend URL**: \`$(terraform output -raw frontend_cloudfront_url)\`" >> $GITHUB_STEP_SUMMARY || true
+          terraform output -raw api_gateway_base_url >> /dev/null 2>&1 && echo "- **API URL**: \`$(terraform output -raw api_gateway_base_url)\`" >> $GITHUB_STEP_SUMMARY || true
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 📦 Artifacts Used" >> $GITHUB_STEP_SUMMARY
+          echo "- **API Bundle**: \`${{ github.event.inputs.api_bundle_s3_key || 'Not provided (using placeholder)' }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Web Bundle**: \`${{ github.event.inputs.ssr_bundle_s3_key || 'Not provided (using placeholder)' }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Artifact Bucket**: \`${{ github.event.inputs.artifact_bucket_name || 'Not provided' }}\`" >> $GITHUB_STEP_SUMMARY
         continue-on-error: true

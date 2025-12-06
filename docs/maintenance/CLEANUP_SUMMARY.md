@@ -50,12 +50,13 @@ All modules referenced by active environments still exist in `modules/`:
 
 ✅ **`modules/shared/`** - Used by `envs/shared/main.tf`
 ✅ **`modules/rds-postgres/`** - Used by `envs/dev/main.tf` and `envs/prod/main.tf`
-✅ **`modules/s3-static-site/`** - Used by `envs/dev/main.tf` and `envs/prod/main.tf`
+✅ **`modules/frontend/`** ⭐ - Used by `envs/dev/main.tf` and `envs/prod/main.tf` (OpenNext)
 ✅ **`modules/s3-media/`** - Used by `envs/dev/main.tf` and `envs/prod/main.tf`
-✅ **`modules/cloudfront/`** - Used by `envs/dev/main.tf` and `envs/prod/main.tf`
 ✅ **`modules/iam/`** - Used by `envs/dev/main.tf` and `envs/prod/main.tf`
-✅ **`modules/lambda-api/`** - Used by `envs/dev/main.tf` and `envs/prod/main.tf`
+✅ **`modules/lambda-api/`** - Used by `envs/dev/main.tf` and `envs/prod/main.tf` (handler: dist/lambda.handler)
 ✅ **`modules/api-gateway/`** - Used by `envs/dev/main.tf` and `envs/prod/main.tf`
+⚠️ **`modules/s3-static-site/`** - LEGACY - Replaced by `modules/frontend/`
+⚠️ **`modules/cloudfront/`** - LEGACY - Replaced by `modules/frontend/`
 
 ### GitHub Actions Workflows Verified
 

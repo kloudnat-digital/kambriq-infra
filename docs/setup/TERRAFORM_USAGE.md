@@ -14,10 +14,10 @@ Ce dépôt gère l'infrastructure AWS pour la plateforme KAMBRIQ via Terraform (
 
 **Infrastructure applicative** (stacks `dev` et `prod`) :
 - RDS PostgreSQL (base de données)
-- Lambda (API NestJS)
+- Lambda (API NestJS avec handler `dist/lambda.handler`)
 - API Gateway (point d'entrée HTTP API)
-- S3 (buckets pour frontend statique et médias)
-- CloudFront (CDN pour le frontend)
+- Frontend OpenNext (S3 assets + CloudFront + Lambda SSR)
+- S3 (buckets pour médias et artefacts de build)
 - IAM (rôles et politiques)
 
 ## 2. Structure du repo
@@ -26,15 +26,14 @@ Ce dépôt gère l'infrastructure AWS pour la plateforme KAMBRIQ via Terraform (
 kambriq-aws-iac-terraform/
 ├── modules/              # Modules Terraform réutilisables
 │   ├── shared/          # Ressources partagées (VPC, Route53, SES, ACM)
-│   ├── network/         # Réseau (VPC, subnets, NAT Gateway)
 │   ├── rds-postgres/    # Base de données PostgreSQL
-│   ├── s3-static-site/  # Bucket S3 pour frontend Next.js
+│   ├── frontend/        # Frontend OpenNext (S3 + CloudFront + Lambda SSR) ⭐
 │   ├── s3-media/        # Bucket S3 pour médias/documents
-│   ├── cloudfront/      # Distribution CloudFront
-│   ├── lambda-api/      # Fonction Lambda pour API NestJS
+│   ├── lambda-api/      # Fonction Lambda pour API NestJS (handler: dist/lambda.handler)
 │   ├── api-gateway/     # API Gateway HTTP API
-│   ├── ses/             # Simple Email Service
-│   └── iam/             # Rôles et policies IAM
+│   ├── iam/             # Rôles et policies IAM
+│   ├── s3-static-site/  # ⚠️ LEGACY - Remplacé par modules/frontend/
+│   └── cloudfront/      # ⚠️ LEGACY - Remplacé par modules/frontend/
 ├── envs/                # Configurations par environnement
 │   ├── shared/          # Stack shared (VPC, DNS, SES, ACM)
 │   ├── dev/             # Environnement de développement

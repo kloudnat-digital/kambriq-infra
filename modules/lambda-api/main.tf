@@ -21,9 +21,12 @@ resource "aws_lambda_function" "main" {
   timeout       = var.timeout
   memory_size   = var.memory_size
 
-  # Source code (placeholder - à remplacer par le vrai package via CI/CD)
-  filename         = data.archive_file.dummy.output_path
-  source_code_hash = var.source_code_hash != "" ? var.source_code_hash : data.archive_file.dummy.output_base64sha256
+  # Source code: Use S3 artifact if provided, otherwise use dummy placeholder
+  s3_bucket = var.api_bundle_s3_key != "" && var.artifact_bucket_name != "" ? var.artifact_bucket_name : null
+  s3_key    = var.api_bundle_s3_key != "" && var.artifact_bucket_name != "" ? var.api_bundle_s3_key : null
+
+  filename         = var.api_bundle_s3_key == "" || var.artifact_bucket_name == "" ? data.archive_file.dummy.output_path : null
+  source_code_hash = var.source_code_hash != "" ? var.source_code_hash : (var.api_bundle_s3_key != "" ? null : data.archive_file.dummy.output_base64sha256)
 
   vpc_config {
     subnet_ids         = var.subnet_ids

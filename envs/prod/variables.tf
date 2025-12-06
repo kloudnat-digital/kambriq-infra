@@ -70,3 +70,34 @@ variable "api_certificate_arn" {
   default     = ""
 }
 
+# ============================================================================
+# Artifact Configuration
+# ============================================================================
+# These variables specify the S3 artifacts built by the kambriq repo
+# (via .github/workflows/build-artifacts.yml)
+#
+# The artifacts are uploaded to S3 with paths like:
+#   - api/api-<sha>.zip (NestJS Lambda bundle)
+#   - web/web-<sha>.zip (OpenNext SSR bundle)
+#
+# These S3 keys should be passed via workflow inputs or environment variables
+# when running Terraform workflows.
+
+variable "artifact_bucket_name" {
+  description = "S3 bucket name where artifacts are stored (e.g., kambriq-artifacts-prod)"
+  type        = string
+  default     = ""
+}
+
+variable "api_bundle_s3_key" {
+  description = "S3 key of the API bundle ZIP (e.g., api/api-abc123.zip). Leave empty to use dummy placeholder."
+  type        = string
+  default     = ""
+}
+
+variable "ssr_bundle_s3_key" {
+  description = "S3 key of the OpenNext SSR bundle ZIP (e.g., web/web-abc123.zip). Leave empty to use dummy placeholder."
+  type        = string
+  default     = ""
+}
+

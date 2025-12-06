@@ -15,12 +15,13 @@ Infrastructure Terraform modulaire pour l'application KAMBRIQ sur AWS.
 ├── modules/              # Modules Terraform réutilisables
 │   ├── shared/          # Ressources partagées (VPC, Route53, SES, ACM)
 │   ├── rds-postgres/    # Base de données PostgreSQL
-│   ├── s3-static-site/  # Bucket S3 pour frontend Next.js
+│   ├── frontend/         # Frontend OpenNext (S3 + CloudFront + Lambda SSR) ⭐
 │   ├── s3-media/        # Bucket S3 pour médias/documents
-│   ├── cloudfront/      # Distribution CloudFront
-│   ├── lambda-api/      # Fonction Lambda pour API NestJS
+│   ├── lambda-api/      # Fonction Lambda pour API NestJS (handler: dist/lambda.handler)
 │   ├── api-gateway/     # API Gateway HTTP API
-│   └── iam/             # Rôles et policies IAM
+│   ├── iam/             # Rôles et policies IAM
+│   ├── s3-static-site/  # ⚠️ LEGACY - Remplacé par modules/frontend/
+│   └── cloudfront/      # ⚠️ LEGACY - Remplacé par modules/frontend/
 ├── envs/                # Configurations par environnement
 │   ├── shared/          # Stack shared (VPC, DNS, SES, ACM)
 │   ├── dev/             # Environnement de développement
@@ -41,16 +42,21 @@ Infrastructure Terraform modulaire pour l'application KAMBRIQ sur AWS.
 Pour le MVP (v1.0.0), l'architecture retenue est **100 % serverless AWS** pour optimiser les coûts et simplifier l'opérationnel :
 
 **Frontend :**
-- **S3 + CloudFront** : Next.js en export statique (`output: 'export'`)
-  - Bucket S3 pour héberger les fichiers statiques
-  - Distribution CloudFront pour la CDN et le HTTPS
-  - Pas de serveur à gérer, coûts très faibles
+- **OpenNext** : Next.js 16 avec SSR sur AWS (S3 + CloudFront + Lambda)
+  - S3 pour assets statiques (`.open-next/assets/`)
+  - CloudFront CDN pour distribution globale
+  - Lambda SSR pour rendu côté serveur (`.open-next/server/`)
+  - Lambda@Edge pour optimisation d'images
+  - Support ISR (Incremental Static Regeneration)
+  - Coûts optimisés (pay-per-use)
 
 **Backend :**
 - **Lambda + API Gateway** : NestJS déployé comme fonction serverless
   - Lambda Node.js 20.x (512MB, 30s timeout)
-  - API Gateway HTTP API pour le routage
+  - Handler : `dist/lambda.handler` (adaptateur `@vendia/serverless-express`)
+  - API Gateway HTTP API pour le routage (payload v2)
   - Auto-scaling selon la charge, pay-per-use
+  - Optimisation cold start (cache de l'instance NestJS)
 
 **Base de données :**
 - **RDS PostgreSQL** : Instance dédiée t4g.micro
@@ -60,8 +66,9 @@ Pour le MVP (v1.0.0), l'architecture retenue est **100 % serverless AWS** pour o
 
 **Stockage :**
 - **S3** : Buckets séparés pour :
-  - Frontend statique (public via CloudFront)
+  - Frontend OpenNext assets (public via CloudFront)
   - Médias/documents (privé, accès via API)
+  - Artefacts de build (pour consommation par Terraform)
 
 **Email :**
 - **SES** : Amazon Simple Email Service
@@ -95,18 +102,20 @@ L'infrastructure est organisée en **3 stacks Terraform** :
 
 2. **`envs/dev`** : Environnement de développement
    - RDS PostgreSQL (instance dédiée)
-   - Lambda API + API Gateway
-   - S3 static site + CloudFront
+   - Lambda API + API Gateway (handler: `dist/lambda.handler`)
+   - Frontend OpenNext (S3 + CloudFront + Lambda SSR)
    - S3 media bucket
    - IAM roles pour Lambda
+   - Variables d'artefacts S3 : `api_bundle_s3_key`, `ssr_bundle_s3_key`, `artifact_bucket_name`
 
 3. **`envs/prod`** : Environnement de production
    - RDS PostgreSQL (instance dédiée, backups 30 jours)
-   - Lambda API + API Gateway
-   - S3 static site + CloudFront
+   - Lambda API + API Gateway (handler: `dist/lambda.handler`)
+   - Frontend OpenNext (S3 + CloudFront + Lambda SSR)
    - S3 media bucket
    - IAM roles pour Lambda
    - Domaines personnalisés (app.kambriq.com, api.kambriq.com)
+   - Variables d'artefacts S3 : `api_bundle_s3_key`, `ssr_bundle_s3_key`, `artifact_bucket_name`
 
 ### Flux de déploiement
 
@@ -195,13 +204,19 @@ Gère le stack `dev` avec déploiement automatique.
 
 **Triggers :**
 - **Push vers `develop`** : Exécute `terraform fmt`, `validate`, `plan` et `apply` automatiquement
-- **Workflow Dispatch** : Déclenchement manuel possible
+- **Workflow Dispatch** : Déclenchement manuel avec inputs pour artefacts S3
+
+**Inputs (workflow_dispatch) :**
+- `api_bundle_s3_key` : Clé S3 du bundle API (ex: `api/api-abc123.zip`)
+- `ssr_bundle_s3_key` : Clé S3 du bundle OpenNext (ex: `web/web-abc123.zip`)
+- `artifact_bucket_name` : Nom du bucket S3 (ex: `kambriq-artifacts-dev`)
 
 **Comportement :**
 - Format check et validation avant chaque plan
 - Plan généré et sauvegardé
 - Apply automatique avec `-auto-approve` pour accélérer le développement
-- Outputs non-sensibles affichés dans le résumé GitHub Actions
+- Variables d'artefacts S3 passées via `TF_VAR_*` si fournies
+- Outputs non-sensibles affichés dans le résumé GitHub Actions (inclut URLs API et frontend)
 
 **Secrets requis :**
 - `AWS_ACCESS_KEY_ID`
@@ -218,13 +233,21 @@ Gère le stack `prod` avec sécurité renforcée.
 - **Workflow Dispatch** : Déclenchement manuel avec choix `plan` ou `apply`
 - **Push vers tags `v*`** : Déclenchement automatique sur version tags (plan + apply)
 
+**Inputs (workflow_dispatch) :**
+- `action` : `plan` ou `apply`
+- `api_bundle_s3_key` : Clé S3 du bundle API (ex: `api/api-abc123.zip`)
+- `ssr_bundle_s3_key` : Clé S3 du bundle OpenNext (ex: `web/web-abc123.zip`)
+- `artifact_bucket_name` : Nom du bucket S3 (ex: `kambriq-artifacts-prod`)
+
 **Comportement :**
 - **Job 1 (terraform-plan)** : Toujours exécuté, génère un plan et l'upload comme artifact
 - **Job 2 (terraform-apply)** : Exécuté uniquement si :
   - Workflow dispatch avec `action = apply`
   - Push vers un tag `v*`
+- Variables d'artefacts S3 passées via `TF_VAR_*` si fournies
 - Plan sauvegardé comme artifact pour review
 - Protection via GitHub Environments (décommenter pour activer l'approbation manuelle)
+- Outputs non-sensibles affichés dans le résumé (inclut URLs API et frontend)
 
 **Secrets requis :**
 - `AWS_ACCESS_KEY_ID`
@@ -259,12 +282,25 @@ Gère le stack `shared` (VPC, Route53, SES, ACM, S3 logs).
 
 ### Intégration avec le repo applicatif
 
-Les workflows Terraform génèrent des outputs qui sont consommés par les workflows de déploiement applicatif dans le repo `kambriq` :
+**Flux d'artefacts S3 :**
 
-- **`deploy-dev.yml`** : Utilise les outputs Terraform pour configurer les builds
-- **`deploy-prod.yml`** : (À créer) Même principe pour la production
+1. **Repo `kambriq`** : Workflow `build-artifacts.yml` génère et upload les artefacts :
+   - `api/api-<sha>.zip` → Bundle Lambda NestJS
+   - `web/web-<sha>.zip` → Bundle OpenNext
+   - Outputs GitHub Actions : `api_s3_key`, `web_s3_key`, `artifacts_bucket`
 
-Voir [`docs/integration/APP_INTEGRATION.md`](docs/integration/APP_INTEGRATION.md) pour les détails sur l'intégration. Voir aussi [`docs/setup/TERRAFORM_USAGE.md`](docs/setup/TERRAFORM_USAGE.md) pour un guide d'usage complet.
+2. **Repo `kambriq-aws-iac-terraform`** : Workflows Terraform consomment les artefacts :
+   - Variables : `api_bundle_s3_key`, `ssr_bundle_s3_key`, `artifact_bucket_name`
+   - Passées via `workflow_dispatch` inputs ou variables d'environnement
+   - Terraform déploie l'infrastructure avec les artefacts spécifiés
+
+**Workflows applicatifs dans `kambriq` :**
+- **`ci.yml`** : CI global (lint, test, check-types)
+- **`build-artifacts.yml`** : Build et upload artefacts S3 (pour production)
+- **`backend-dev.yml`** : Déploiement auto rapide sur `develop` (API)
+- **`frontend-dev.yml`** : Déploiement auto rapide sur `develop` (Web OpenNext)
+
+Voir [`docs/integration/APP_INTEGRATION.md`](docs/integration/APP_INTEGRATION.md) pour les détails sur l'intégration. Voir aussi [`docs/setup/TERRAFORM_USAGE.md`](docs/setup/TERRAFORM_USAGE.md) pour un guide d'usage complet. Voir [`docs/architecture/CONTEXTE_WORKSPACE.md`](docs/architecture/CONTEXTE_WORKSPACE.md) pour une vue d'ensemble complète.
 
 #### Configuration des secrets GitHub
 
@@ -429,8 +465,9 @@ terraform output
 - `region` : Région AWS (ex: `eu-central-1`)
 
 **Frontend :**
+- `frontend_cloudfront_url` : URL complète CloudFront (https://...)
 - `frontend_cloudfront_domain` : Nom de domaine CloudFront
-- `frontend_s3_bucket_name` : Nom du bucket S3 pour le frontend statique
+- `frontend_s3_bucket_name` : Nom du bucket S3 pour les assets OpenNext
 
 **Media S3 :**
 - `media_s3_public_bucket_name` : Nom du bucket S3 pour les médias publics
@@ -450,7 +487,9 @@ terraform output
 - `ses_from_email` : Adresse email par défaut pour l'envoi (depuis shared)
 
 **Lambda :**
-- `lambda_function_name` : Nom de la fonction Lambda
+- `lambda_function_name` : Nom de la fonction Lambda API
+- `lambda_function_arn` : ARN de la fonction Lambda API
+- `lambda_handler` : Handler Lambda (ex: `dist/lambda.handler`)
 - `cloudfront_distribution_id` : ID de la distribution CloudFront (pour invalidation de cache)
 
 ### Utilisation dans le repo applicatif

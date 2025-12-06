@@ -31,12 +31,17 @@
 Le repo `kambriq-aws-iac-terraform` gère l'infrastructure AWS pour la plateforme KAMBRIQ via **Infrastructure as Code (IaC)** avec Terraform.
 
 **Architecture MVP :** 100% serverless AWS
-- **Frontend :** S3 + CloudFront (Next.js export statique)
-- **Backend :** Lambda + API Gateway (NestJS)
+- **Frontend :** OpenNext (S3 static assets + CloudFront + Lambda SSR)
+- **Backend :** Lambda + API Gateway (NestJS avec adaptateur Lambda)
 - **Base de données :** RDS PostgreSQL (t4g.micro)
-- **Stockage :** S3 (médias/documents)
+- **Stockage :** S3 (médias/documents + artefacts de build)
 - **Email :** SES (Simple Email Service)
 - **Réseau :** VPC avec subnets publics/privés + NAT Gateway
+
+**⚠️ Migration récente (v2.0) :**
+- Frontend : Migration de static export vers **OpenNext** (SSR + Lambda)
+- Backend : Adaptation NestJS pour **Lambda** (handler `dist/lambda.handler`)
+- Déploiement : Nouveau système d'**artefacts S3** pour consommation par Terraform
 
 ### 1.2 Organisation des Stacks
 
@@ -90,12 +95,13 @@ kambriq-aws-iac-terraform/
 ├── modules/                        # Modules Terraform réutilisables
 │   ├── shared/                     # Module infrastructure partagée
 │   ├── rds-postgres/               # Module RDS PostgreSQL
-│   ├── s3-static-site/             # Module S3 frontend statique
+│   ├── frontend/                   # Module Frontend OpenNext ⭐ NOUVEAU
 │   ├── s3-media/                   # Module S3 médias/documents
-│   ├── cloudfront/                 # Module CloudFront CDN
-│   ├── lambda-api/                 # Module Lambda API
+│   ├── lambda-api/                 # Module Lambda API (handler: dist/lambda.handler)
 │   ├── api-gateway/                # Module API Gateway
-│   └── iam/                        # Module IAM (rôles/policies)
+│   ├── iam/                        # Module IAM (rôles/policies)
+│   ├── s3-static-site/             # ⚠️ LEGACY - Remplacé par modules/frontend/
+│   └── cloudfront/                 # ⚠️ LEGACY - Remplacé par modules/frontend/
 ├── legacy/                         # Code legacy (non utilisé)
 │   ├── modules/network/            # Ancien module réseau
 │   ├── modules/ses/                # Ancien module SES
@@ -282,24 +288,48 @@ kambriq-aws-iac-terraform/
 
 ---
 
-### 4.3 Module `s3-static-site`
+### 4.3 Module `frontend` ⭐ NOUVEAU
+
+**Localisation :** `modules/frontend/`
+
+**Ressources créées :**
+- S3 bucket pour assets OpenNext statiques
+- CloudFront distribution avec OAC (Origin Access Control)
+- Lambda SSR function (placeholder, mis à jour via CI/CD)
+- IAM roles et policies pour Lambda
+- Bucket policies pour CloudFront
+
+**Variables :**
+- `env`, `project_name`
+- `artifact_bucket_name` : Bucket S3 contenant les artefacts OpenNext
+- `ssr_bundle_s3_key` : Clé S3 du bundle OpenNext (ex: `web/web-abc123.zip`)
+- `api_gateway_url` : URL de l'API Gateway pour configuration frontend
+
+**Outputs :**
+- `cloudfront_url`, `cloudfront_domain`, `cloudfront_distribution_id`
+- `s3_bucket_id`, `s3_bucket_arn`
+- `lambda_ssr_function_name`, `lambda_ssr_function_arn`
+
+**Note:** Ce module remplace `modules/s3-static-site/` et `modules/cloudfront/` pour une gestion unifiée du frontend OpenNext.
+
+---
+
+### 4.4 Module `s3-static-site` ⚠️ LEGACY
 
 **Localisation :** `modules/s3-static-site/`
+
+**Status:** ⚠️ **LEGACY** - Remplacé par `modules/frontend/`
 
 **Ressources créées :**
 - S3 bucket pour frontend statique
 - Bucket versioning, encryption
 - Public access block
 
-**Variables :**
-- `env`
-
-**Outputs :**
-- `bucket_id`, `bucket_arn`, `bucket_regional_domain_name`
+**Note:** Ce module n'est plus utilisé dans `envs/dev/` ou `envs/prod/`. Voir `modules/frontend/` pour la nouvelle architecture.
 
 ---
 
-### 4.4 Module `s3-media`
+### 4.5 Module `s3-media`
 
 **Localisation :** `modules/s3-media/`
 
@@ -318,9 +348,11 @@ kambriq-aws-iac-terraform/
 
 ---
 
-### 4.5 Module `cloudfront`
+### 4.6 Module `cloudfront` ⚠️ LEGACY
 
 **Localisation :** `modules/cloudfront/`
+
+**Status:** ⚠️ **LEGACY** - Remplacé par `modules/frontend/`
 
 **Ressources créées :**
 - CloudFront distribution
@@ -328,7 +360,9 @@ kambriq-aws-iac-terraform/
 - Custom domain (optionnel)
 - SSL certificate (optionnel)
 
-**Variables :**
+**Note:** Ce module n'est plus utilisé dans `envs/dev/` ou `envs/prod/`. Voir `modules/frontend/` pour la nouvelle architecture OpenNext.
+
+**Variables (legacy):**
 - `env`, `s3_bucket_id`, `s3_bucket_regional_domain_name`
 - `domain_name` (optionnel)
 - `certificate_arn` (optionnel, doit être en us-east-1)

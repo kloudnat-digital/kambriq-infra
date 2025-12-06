@@ -7,16 +7,21 @@ output "region" {
 }
 
 # ============================================================================
-# Frontend (CloudFront + S3 Static)
+# Frontend (OpenNext - CloudFront + S3 Static + Lambda SSR)
 # ============================================================================
 output "frontend_cloudfront_domain" {
   description = "CloudFront distribution domain name"
-  value       = module.cloudfront.distribution_domain_name
+  value       = module.frontend.cloudfront_domain_name
+}
+
+output "frontend_cloudfront_url" {
+  description = "Full CloudFront URL (https://...)"
+  value       = module.frontend.cloudfront_url
 }
 
 output "frontend_s3_bucket_name" {
   description = "S3 bucket name for static frontend site"
-  value       = module.s3_static.bucket_id
+  value       = module.frontend.s3_bucket_id
 }
 
 # ============================================================================
@@ -86,6 +91,6 @@ output "lambda_function_name" {
 
 output "cloudfront_distribution_id" {
   description = "CloudFront distribution ID (for cache invalidation)"
-  value       = module.cloudfront.distribution_id
+  value       = module.frontend.cloudfront_distribution_id
 }
 

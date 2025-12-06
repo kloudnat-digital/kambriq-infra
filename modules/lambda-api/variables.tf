@@ -16,9 +16,9 @@ variable "runtime" {
 }
 
 variable "handler" {
-  description = "Lambda handler"
+  description = "Lambda handler (for NestJS Lambda adapter, use dist/lambda.handler)"
   type        = string
-  default     = "dist/main.handler"
+  default     = "dist/lambda.handler"
 }
 
 variable "timeout" {
@@ -98,6 +98,18 @@ variable "jwt_secret" {
 
 variable "source_code_hash" {
   description = "Source code hash (for updates)"
+  type        = string
+  default     = ""
+}
+
+variable "artifact_bucket_name" {
+  description = "S3 bucket name where API artifacts are stored (e.g., kambriq-artifacts-dev)"
+  type        = string
+  default     = ""
+}
+
+variable "api_bundle_s3_key" {
+  description = "S3 key of the API bundle ZIP (e.g., api/api-abc123.zip). If provided, uses S3 source instead of dummy zip."
   type        = string
   default     = ""
 }
