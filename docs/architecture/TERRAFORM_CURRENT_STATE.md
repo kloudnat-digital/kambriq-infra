@@ -2,7 +2,7 @@
 
 Ce document compare l'architecture Terraform actuellement déployée avec l'architecture cible MVP et identifie les écarts.
 
-**Date de vérification** : 2025-01-XX  
+**Date de vérification** : 2025-12-07  
 **Objectif MVP** : Architecture serverless AWS avec CloudFront en frontal, API Gateway + Lambda, RDS, S3, Route53, SES (hors Terraform), ACM (créé manuellement).
 
 ---
@@ -13,7 +13,7 @@ Ce document compare l'architecture Terraform actuellement déployée avec l'arch
 
 | Ressource | Module | Environnement | État |
 |-----------|-------|---------------|------|
-| `aws_cloudfront_distribution.main` | `modules/cloudfront/main.tf` | dev, prod | ✅ Déployé |
+| `aws_cloudfront_distribution.main` | `modules/frontend/main.tf` | dev, prod | ✅ Déployé (via module frontend) |
 
 **Configuration actuelle** :
 - ✅ Origin S3 pour le frontend
@@ -22,7 +22,7 @@ Ce document compare l'architecture Terraform actuellement déployée avec l'arch
 - ❌ **MANQUE** : Origin pour API Gateway
 - ❌ **MANQUE** : Cache behavior pour router `/api/*` vers API Gateway
 
-**Localisation** : `modules/cloudfront/main.tf` (lignes 11-116)
+**Localisation** : `modules/frontend/main.tf` (CloudFront intégré dans le module frontend OpenNext)
 
 ---
 
@@ -32,9 +32,9 @@ Ce document compare l'architecture Terraform actuellement déployée avec l'arch
 
 | Ressource | Module | Environnement | État |
 |-----------|-------|---------------|------|
-| `aws_s3_bucket.main` | `modules/s3-static-site/main.tf` | dev, prod | ✅ Déployé |
+| `aws_s3_bucket.main` | `modules/frontend/main.tf` | dev, prod | ✅ Déployé (via module frontend OpenNext) |
 
-**Localisation** : `modules/s3-static-site/main.tf`
+**Localisation** : `modules/frontend/main.tf` (S3 intégré dans le module frontend OpenNext)
 
 #### Media
 
@@ -145,7 +145,7 @@ Ce document compare l'architecture Terraform actuellement déployée avec l'arch
 - ✅ CloudFront utilise `certificate_arn` via variable (optionnel)
 - ✅ API Gateway utilise `certificate_arn` via variable (optionnel)
 
-**Localisation** : Variables dans `modules/shared/variables.tf` (lignes 65-75), `modules/cloudfront/variables.tf` (ligne 16), `modules/api-gateway/variables.tf` (ligne 22)
+**Localisation** : Variables dans `modules/shared/variables.tf` (lignes 65-75), `modules/frontend/variables.tf` (certificat CloudFront), `modules/api-gateway/variables.tf` (ligne 22)
 
 ---
 
@@ -236,11 +236,11 @@ Navigateur → CloudFront → S3 (frontend uniquement)
 
 ### 3.1 Priorité HAUTE : Ajouter le routing `/api/*` dans CloudFront
 
-**Fichier à modifier** : `modules/cloudfront/main.tf`
+**Fichier à modifier** : `modules/frontend/main.tf` (module frontend OpenNext)
 
 **Actions** :
-1. Ajouter une variable `api_gateway_endpoint` dans `modules/cloudfront/variables.tf`
-2. Ajouter un origin API Gateway dans `aws_cloudfront_distribution.main` :
+1. Ajouter une variable `api_gateway_endpoint` dans `modules/frontend/variables.tf`
+2. Ajouter un origin API Gateway dans la distribution CloudFront du module frontend :
    ```hcl
    origin {
      domain_name = var.api_gateway_endpoint
@@ -280,17 +280,17 @@ Navigateur → CloudFront → S3 (frontend uniquement)
 4. Passer l'endpoint API Gateway depuis `envs/dev/main.tf` et `envs/prod/main.tf`
 
 **Fichiers à modifier** :
-- `modules/cloudfront/variables.tf` (ajouter variable)
-- `modules/cloudfront/main.tf` (ajouter origin + behavior)
-- `envs/dev/main.tf` (passer `api_gateway_endpoint` au module CloudFront)
-- `envs/prod/main.tf` (passer `api_gateway_endpoint` au module CloudFront)
+- `modules/frontend/variables.tf` (ajouter variable)
+- `modules/frontend/main.tf` (ajouter origin + behavior dans CloudFront)
+- `envs/dev/main.tf` (passer `api_gateway_endpoint` au module frontend)
+- `envs/prod/main.tf` (passer `api_gateway_endpoint` au module frontend)
 
 ---
 
 ### 3.2 Priorité MOYENNE : Ajouter les enregistrements Route53
 
 **Fichiers à créer/modifier** :
-- `modules/cloudfront/outputs.tf` (exposer `distribution_domain_name` si nécessaire)
+- `modules/frontend/outputs.tf` (exposer `distribution_domain_name` si nécessaire)
 - `envs/dev/main.tf` (ajouter `aws_route53_record` pour CloudFront si domaine fourni)
 - `envs/prod/main.tf` (ajouter `aws_route53_record` pour CloudFront si domaine fourni)
 
@@ -305,8 +305,8 @@ Navigateur → CloudFront → S3 (frontend uniquement)
      type    = "A"
      
      alias {
-       name                   = module.cloudfront.distribution_domain_name
-       zone_id                = module.cloudfront.distribution_hosted_zone_id
+       name                   = module.frontend.cloudfront_distribution_domain_name
+       zone_id                = module.frontend.cloudfront_distribution_hosted_zone_id
        evaluate_target_health = false
      }
    }
@@ -314,7 +314,7 @@ Navigateur → CloudFront → S3 (frontend uniquement)
 
 2. Pour API Gateway (si custom domain activé), ajouter un record similaire.
 
-**Note** : Vérifier que le module CloudFront expose `distribution_hosted_zone_id` dans ses outputs.
+**Note** : Vérifier que le module frontend expose `cloudfront_distribution_hosted_zone_id` dans ses outputs.
 
 ---
 
@@ -354,7 +354,7 @@ Navigateur → CloudFront → S3 (frontend uniquement)
 ### 🔴 Priorité CRITIQUE (bloquant pour MVP)
 
 1. **Ajouter le routing `/api/*` dans CloudFront**
-   - Fichiers : `modules/cloudfront/main.tf`, `modules/cloudfront/variables.tf`
+   - Fichiers : `modules/frontend/main.tf`, `modules/frontend/variables.tf`
    - Impact : Sans cela, le frontend ne peut pas appeler l'API via CloudFront
 
 ### 🟡 Priorité MOYENNE (fonctionnel mais incomplet)
@@ -411,6 +411,6 @@ Pour API Gateway (custom domain) :
 
 ---
 
-**Dernière mise à jour** : 2025-01-XX  
+**Dernière mise à jour** : 2025-12-07  
 **Prochaine révision** : Après implémentation du routing `/api/*` dans CloudFront
 

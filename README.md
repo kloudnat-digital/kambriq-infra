@@ -2,6 +2,8 @@
 
 Infrastructure Terraform modulaire pour l'application KAMBRIQ sur AWS.
 
+**⚠️ Important** : Ce repository gère **uniquement l'infrastructure AWS** (Lambda, API Gateway, RDS, S3, CloudFront, SSM, IAM, VPC, etc.). Les déploiements applicatifs (mise à jour du code API + Web) sont gérés par les workflows `deploy-app-dev.yml` et `deploy-app-prod.yml` dans le repository `kambriq`.
+
 ## 📚 Documentation
 
 - **[Guide d'usage Terraform](docs/setup/TERRAFORM_USAGE.md)** - Guide complet pour utiliser ce dépôt
@@ -106,7 +108,7 @@ L'infrastructure est organisée en **3 stacks Terraform** :
    - Frontend OpenNext (S3 + CloudFront + Lambda SSR)
    - S3 media bucket
    - IAM roles pour Lambda
-   - Variables d'artefacts S3 : `api_bundle_s3_key`, `ssr_bundle_s3_key`, `artifact_bucket_name`
+   - SSM Parameter Store pour secrets applicatifs (`/kambriq/dev/api/...`, `/kambriq/dev/web/...`)
 
 3. **`envs/prod`** : Environnement de production
    - RDS PostgreSQL (instance dédiée, backups 30 jours)
@@ -115,7 +117,7 @@ L'infrastructure est organisée en **3 stacks Terraform** :
    - S3 media bucket
    - IAM roles pour Lambda
    - Domaines personnalisés (app.kambriq.com, api.kambriq.com)
-   - Variables d'artefacts S3 : `api_bundle_s3_key`, `ssr_bundle_s3_key`, `artifact_bucket_name`
+   - SSM Parameter Store pour secrets applicatifs (`/kambriq/prod/api/...`, `/kambriq/prod/web/...`)
 
 ### Flux de déploiement
 
@@ -191,68 +193,56 @@ Trois workflows GitHub Actions gèrent le déploiement de l'infrastructure :
 
 #### Vue d'ensemble
 
+**⚠️ Important** : Les workflows Terraform gèrent **uniquement l'infrastructure** (création/modification des ressources AWS). Ils ne déploient **pas** le code applicatif. Les déploiements applicatifs sont effectués par les workflows `deploy-app-dev.yml` et `deploy-app-prod.yml` dans le repository `kambriq`.
+
 Les workflows Terraform sont configurés pour :
-- **Développement** : Déploiement automatique sur push vers `develop`
-- **Production** : Déploiement manuel ou via tags pour sécurité maximale
+- **Développement** : Plan/Apply sur push vers `develop` ou déclenchement manuel
+- **Production** : Déploiement manuel uniquement pour sécurité maximale
 - **Validation** : Format check, validation, et plan avant chaque apply
 
 ### Workflows Terraform
 
 #### 1. Workflow `terraform-dev.yml` - Environnement de développement
 
-Gère le stack `dev` avec déploiement automatique.
+Gère le stack `dev` (infrastructure uniquement).
 
 **Triggers :**
-- **Push vers `develop`** : Exécute `terraform fmt`, `validate`, `plan` et `apply` automatiquement
-- **Workflow Dispatch** : Déclenchement manuel avec inputs pour artefacts S3
-
-**Inputs (workflow_dispatch) :**
-- `api_bundle_s3_key` : Clé S3 du bundle API (ex: `api/api-abc123.zip`)
-- `ssr_bundle_s3_key` : Clé S3 du bundle OpenNext (ex: `web/web-abc123.zip`)
-- `artifact_bucket_name` : Nom du bucket S3 (ex: `kambriq-artifacts-dev`)
+- **Pull Request** vers `develop` : Plan uniquement (pas d'apply)
+- **Push** vers `develop` : Plan + Apply automatique
+- **Workflow Dispatch** : Plan uniquement (manuel)
 
 **Comportement :**
 - Format check et validation avant chaque plan
-- Plan généré et sauvegardé
-- Apply automatique avec `-auto-approve` pour accélérer le développement
-- Variables d'artefacts S3 passées via `TF_VAR_*` si fournies
-- Outputs non-sensibles affichés dans le résumé GitHub Actions (inclut URLs API et frontend)
+- Plan généré et sauvegardé comme artifact
+- Apply automatique uniquement sur push vers `develop`
+- Gère uniquement l'infrastructure (Lambda, API Gateway, RDS, S3, CloudFront, SSM, IAM, VPC, etc.)
+- **Ne déploie pas le code applicatif** (fait par `deploy-app-dev.yml` dans le repo `kambriq`)
 
 **Secrets requis :**
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
-- `AWS_DEFAULT_REGION` (optionnel, défaut: `eu-central-1`)
+- `AWS_ACCESS_KEY_ID_DEV`
+- `AWS_SECRET_ACCESS_KEY_DEV`
+- `AWS_REGION_DEV`
 
 **Note** : Les secrets applicatifs (DB password, JWT secrets) ne sont **pas** passés via GitHub Secrets. Ils sont gérés via SSM Parameter Store / Secrets Manager et configurés directement dans les variables d'environnement Lambda.
 
 #### 2. Workflow `terraform-prod.yml` - Environnement de production
 
-Gère le stack `prod` avec sécurité renforcée.
+Gère le stack `prod` (infrastructure uniquement) avec sécurité renforcée.
 
 **Triggers :**
-- **Workflow Dispatch** : Déclenchement manuel avec choix `plan` ou `apply`
-- **Push vers tags `v*`** : Déclenchement automatique sur version tags (plan + apply)
-
-**Inputs (workflow_dispatch) :**
-- `action` : `plan` ou `apply`
-- `api_bundle_s3_key` : Clé S3 du bundle API (ex: `api/api-abc123.zip`)
-- `ssr_bundle_s3_key` : Clé S3 du bundle OpenNext (ex: `web/web-abc123.zip`)
-- `artifact_bucket_name` : Nom du bucket S3 (ex: `kambriq-artifacts-prod`)
+- **Workflow Dispatch** : Déclenchement manuel uniquement
 
 **Comportement :**
-- **Job 1 (terraform-plan)** : Toujours exécuté, génère un plan et l'upload comme artifact
-- **Job 2 (terraform-apply)** : Exécuté uniquement si :
-  - Workflow dispatch avec `action = apply`
-  - Push vers un tag `v*`
-- Variables d'artefacts S3 passées via `TF_VAR_*` si fournies
-- Plan sauvegardé comme artifact pour review
-- Protection via GitHub Environments (décommenter pour activer l'approbation manuelle)
-- Outputs non-sensibles affichés dans le résumé (inclut URLs API et frontend)
+- Terraform init, validate, plan et apply dans `envs/prod/`
+- Protection via GitHub Environment `production` (approbation manuelle possible)
+- Plan sauvegardé comme artifact (rétention 30 jours)
+- Gère uniquement l'infrastructure (Lambda, API Gateway, RDS, S3, CloudFront, SSM, IAM, VPC, etc.)
+- **Ne déploie pas le code applicatif** (fait par `deploy-app-prod.yml` dans le repo `kambriq`)
 
 **Secrets requis :**
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
-- `AWS_DEFAULT_REGION` (optionnel, défaut: `eu-central-1`)
+- `AWS_ACCESS_KEY_ID_PROD`
+- `AWS_SECRET_ACCESS_KEY_PROD`
+- `AWS_REGION_PROD`
 
 **Note** : Les secrets applicatifs (DB password, JWT secrets) ne sont **pas** passés via GitHub Secrets. Ils sont gérés via SSM Parameter Store / Secrets Manager et configurés directement dans les variables d'environnement Lambda.
 
@@ -273,32 +263,41 @@ Gère le stack `shared` (VPC, Route53, SES, ACM, S3 logs).
 **Pour lancer un apply en production :**
 
 1. Aller dans l'onglet "Actions" du repository
-2. Sélectionner "Terraform - Prod Environment"
+2. Sélectionner "Terraform Prod (infra only)"
 3. Cliquer sur "Run workflow"
-4. Choisir `action = apply` dans le menu déroulant
-5. Cliquer sur "Run workflow"
+4. Choisir la branche
+5. ⚠️ Approbation manuelle requise (si configurée dans GitHub Environment `production`)
+6. Cliquer sur "Run workflow"
 
-⚠️ **Note** : Pour la production, il est recommandé d'activer l'approbation manuelle dans GitHub (Settings → Environments → production) en décommentant la ligne `environment: production` dans le workflow.
+⚠️ **Note** : Pour la production, il est recommandé d'activer l'approbation manuelle dans GitHub (Settings → Environments → production).
 
 ### Intégration avec le repo applicatif
 
-**Flux d'artefacts S3 :**
+**Séparation des responsabilités :**
 
-1. **Repo `kambriq`** : Workflow `build-artifacts.yml` génère et upload les artefacts :
-   - `api/api-<sha>.zip` → Bundle Lambda NestJS
-   - `web/web-<sha>.zip` → Bundle OpenNext
-   - Outputs GitHub Actions : `api_s3_key`, `web_s3_key`, `artifacts_bucket`
+1. **Repository `kambriq-aws-iac-terraform` (ce repo)** :
+   - Gère **uniquement l'infrastructure** via Terraform
+   - Crée et configure les ressources AWS (Lambda, API Gateway, RDS, S3, CloudFront, SSM, IAM, VPC, etc.)
+   - Ne déploie **pas** le code applicatif
 
-2. **Repo `kambriq-aws-iac-terraform`** : Workflows Terraform consomment les artefacts :
-   - Variables : `api_bundle_s3_key`, `ssr_bundle_s3_key`, `artifact_bucket_name`
-   - Passées via `workflow_dispatch` inputs ou variables d'environnement
-   - Terraform déploie l'infrastructure avec les artefacts spécifiés
+2. **Repository `kambriq`** :
+   - **`ci.yml`** : CI global (lint, test, check-types)
+   - **`build-artifacts.yml`** : Build et upload artefacts S3 (optionnel, pour consommation future)
+   - **`deploy-app-dev.yml`** : Déploiement applicatif direct en DEV
+     - Build API + Web, package en ZIP
+     - `aws lambda update-function-code` (API + SSR)
+     - Sync assets S3, invalidation CloudFront
+   - **`deploy-app-prod.yml`** : Déploiement applicatif direct en PROD (même logique, avec protection `production`)
 
-**Workflows applicatifs dans `kambriq` :**
-- **`ci.yml`** : CI global (lint, test, check-types)
-- **`build-artifacts.yml`** : Build et upload artefacts S3 (pour production)
-- **`backend-dev.yml`** : Déploiement auto rapide sur `develop` (API)
-- **`frontend-dev.yml`** : Déploiement auto rapide sur `develop` (Web OpenNext)
+**Flux de déploiement :**
+
+1. **Infrastructure** (ce repo) :
+   - Modifier le code Terraform si nécessaire
+   - Exécuter `terraform-dev.yml` ou `terraform-prod.yml` pour mettre à jour l'infrastructure
+
+2. **Application** (repo `kambriq`) :
+   - Modifier le code API ou Web
+   - Exécuter `deploy-app-dev.yml` ou `deploy-app-prod.yml` pour déployer le nouveau code
 
 Voir [`docs/integration/APP_INTEGRATION.md`](docs/integration/APP_INTEGRATION.md) pour les détails sur l'intégration. Voir aussi [`docs/setup/TERRAFORM_USAGE.md`](docs/setup/TERRAFORM_USAGE.md) pour un guide d'usage complet. Voir [`docs/architecture/CONTEXTE_WORKSPACE.md`](docs/architecture/CONTEXTE_WORKSPACE.md) pour une vue d'ensemble complète.
 
@@ -311,13 +310,18 @@ Configurer les secrets suivants dans GitHub (Settings → Secrets and variables 
 - `AWS_REGION` : `eu-central-1`
 
 **Option 2 : Credentials statiques**
-- `AWS_ACCESS_KEY_ID` : Clé d'accès AWS
-- `AWS_SECRET_ACCESS_KEY` : Clé secrète AWS
-- `AWS_REGION` : `eu-central-1`
+- `AWS_ACCESS_KEY_ID_DEV` / `AWS_ACCESS_KEY_ID_PROD` : Clé d'accès AWS
+- `AWS_SECRET_ACCESS_KEY_DEV` / `AWS_SECRET_ACCESS_KEY_PROD` : Clé secrète AWS
+- `AWS_REGION_DEV` / `AWS_REGION_PROD` : `eu-central-1`
 
 **⚠️ Important** : Les secrets applicatifs (DB password, JWT secrets) ne sont **pas** stockés dans GitHub Secrets. Ils sont gérés via :
-- **SSM Parameter Store** ou **AWS Secrets Manager** pour les secrets de production
-- **Variables d'environnement Lambda** configurées directement (pas via Terraform variables)
+
+- **SSM Parameter Store** : Source de vérité pour les secrets runtime dev/prod
+  - Structure de paths : `/kambriq/dev/api/...`, `/kambriq/dev/web/...`, `/kambriq/prod/api/...`, `/kambriq/prod/web/...`
+  - Secrets stockés : `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`, `SES_FROM_EMAIL`, etc.
+  - L'API et le Web (SSR) lisent depuis SSM au runtime via `@aws-sdk/client-ssm`
+- **Local (.env)** : Utilisé uniquement pour le développement local sur la machine du développeur
+- **GitHub Secrets** : Ne contiennent que des credentials techniques CI/CD (compte IAM, noms de Lambdas, buckets, IDs CloudFront)
 - Les workflows Terraform ne gèrent que l'infrastructure, pas les secrets applicatifs
 
 **⚠️ Bonnes pratiques de sécurité :**

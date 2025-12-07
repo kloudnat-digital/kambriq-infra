@@ -1,6 +1,6 @@
 # État Détaillé du Repo Infrastructure Terraform KAMBRIQ
 
-**Date de génération :** 2025-12-05  
+**Date de génération :** 2025-12-07  
 **Version Terraform :** >= 1.5.0  
 **Provider AWS :** ~> 5.0  
 **Région AWS :** eu-central-1
@@ -38,10 +38,11 @@ Le repo `kambriq-aws-iac-terraform` gère l'infrastructure AWS pour la plateform
 - **Email :** SES (Simple Email Service)
 - **Réseau :** VPC avec subnets publics/privés + NAT Gateway
 
-**⚠️ Migration récente (v2.0) :**
+**⚠️ Migration récente (v3.1 - 2025-12-07) :**
+- **Séparation complète** : Terraform gère uniquement l'infrastructure, déploiements applicatifs via workflows `deploy-app-*` dans le repo `kambriq`
 - Frontend : Migration de static export vers **OpenNext** (SSR + Lambda)
 - Backend : Adaptation NestJS pour **Lambda** (handler `dist/lambda.handler`)
-- Déploiement : Nouveau système d'**artefacts S3** pour consommation par Terraform
+- Secrets : Standardisation sur **SSM Parameter Store** (`/kambriq/{env}/{api|web}/...`)
 
 ### 1.2 Organisation des Stacks
 
@@ -301,9 +302,9 @@ kambriq-aws-iac-terraform/
 
 **Variables :**
 - `env`, `project_name`
-- `artifact_bucket_name` : Bucket S3 contenant les artefacts OpenNext
-- `ssr_bundle_s3_key` : Clé S3 du bundle OpenNext (ex: `web/web-abc123.zip`)
 - `api_gateway_url` : URL de l'API Gateway pour configuration frontend
+
+**Note** : Les variables `artifact_bucket_name` et `ssr_bundle_s3_key` ont été supprimées. Terraform gère uniquement l'infrastructure. Les déploiements applicatifs sont gérés par `deploy-app-dev.yml` et `deploy-app-prod.yml` dans le repo `kambriq`.
 
 **Outputs :**
 - `cloudfront_url`, `cloudfront_domain`, `cloudfront_distribution_id`
@@ -470,11 +471,14 @@ kambriq-aws-iac-terraform/
 
 ---
 
-### 5.2 Workflow `terraform-dev.yml`
+### 5.2 Workflow `terraform-dev.yml` ⭐ SIMPLIFIÉ
+
+**⚠️ Important** : Ce workflow gère **uniquement l'infrastructure**. Il ne déploie **pas** le code applicatif.
 
 **Déclencheurs :**
+- **Pull Request** vers `develop` → `terraform plan` uniquement (pas d'apply)
 - **Push** vers `develop` → `terraform plan` + `apply` automatique
-- **Workflow Dispatch** → Déclenchement manuel
+- **Workflow Dispatch** → `terraform plan` uniquement (manuel)
 
 **Fichiers surveillés :**
 - `envs/dev/**`
@@ -483,58 +487,56 @@ kambriq-aws-iac-terraform/
 
 **Étapes :**
 1. Checkout code
-2. Setup Terraform 1.5.0
-3. Configure AWS credentials (statiques)
-4. Init Terraform
-5. Format check (échoue si non formaté)
-6. Validate Terraform
-7. Plan Terraform
-8. Apply Terraform (auto-approve)
-9. Output Terraform (non-sensitive)
+2. Configure AWS credentials (suffixe `_DEV`)
+3. Setup Terraform 1.5.0
+4. Init Terraform (`-input=false`)
+5. Validate Terraform
+6. Plan Terraform (condition : `if: github.event_name != 'push'`)
+7. Plan Terraform avec output (condition : `if: github.event_name == 'push'`)
+8. Upload Plan Artifact (si push)
+9. Apply Terraform (condition : `if: github.event_name == 'push' && success()`)
 
-**Environnement :** `development` (pas de protection manuelle)
+**Environnement :** Aucun (pas de protection manuelle)
 
 **Caractéristiques :**
-- Apply automatique pour itération rapide
-- Pas de review manuelle requise
+- Gère uniquement l'infrastructure (Lambda functions créées, mais code non mis à jour)
+- Plan sauvegardé comme artifact
+- Apply automatique uniquement sur push `develop`
+- Pas d'inputs nécessaires (simplifié)
 
 ---
 
-### 5.3 Workflow `terraform-prod.yml`
+### 5.3 Workflow `terraform-prod.yml` ⭐ SIMPLIFIÉ
+
+**⚠️ Important** : Ce workflow gère **uniquement l'infrastructure**. Il ne déploie **pas** le code applicatif.
 
 **Déclencheurs :**
-- **Workflow Dispatch** avec choix `plan` ou `apply`
-- **Push** de tag `v*` → `plan` puis `apply` automatique
+- **Workflow Dispatch** uniquement (manuel)
 
 **Fichiers surveillés :**
 - `envs/prod/**`
 - `modules/**`
 - `.github/workflows/terraform-prod.yml`
 
-**Structure en 2 jobs :**
+**Job `terraform-prod` :**
 
-#### Job 1 : `terraform-plan` (toujours exécuté)
-1. Checkout code
-2. Setup Terraform 1.5.0
-3. Configure AWS credentials
-4. Init Terraform
-5. Format check
-6. Validate Terraform
-7. Plan Terraform
-8. Upload plan artifact (7 jours rétention)
-9. Plan summary
+**Environnement :** `production` (protection via GitHub Environment - approbation manuelle possible)
 
-#### Job 2 : `terraform-apply` (conditionnel)
-- S'exécute si :
-  - `workflow_dispatch` avec `action = apply`, OU
-  - Push d'un tag `v*`
+**Étapes :**
 1. Checkout code
-2. Setup Terraform 1.5.0
-3. Configure AWS credentials
-4. Init Terraform
-5. Download plan artifact
-6. Apply Terraform
-7. Output Terraform (non-sensitive)
+2. Configure AWS credentials (suffixe `_PROD`)
+3. Setup Terraform 1.5.0
+4. Init Terraform (`-input=false`)
+5. Validate Terraform
+6. Plan Terraform avec output (`-out=terraform.tfplan`)
+7. Upload Plan Artifact (rétention 30 jours)
+8. Apply Terraform (condition : `if: success()`)
+
+**Caractéristiques :**
+- Gère uniquement l'infrastructure (Lambda functions créées, mais code non mis à jour)
+- Protection via GitHub Environment `production`
+- Plan sauvegardé comme artifact (rétention 30 jours)
+- Pas d'inputs nécessaires (simplifié)
 
 **Environnement :** `production` (approbation manuelle possible mais commentée)
 
@@ -550,9 +552,11 @@ kambriq-aws-iac-terraform/
 **Méthode actuelle :** Credentials statiques (Option 2)
 
 **Secrets GitHub requis :**
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
-- `AWS_DEFAULT_REGION` (optionnel, défaut: eu-central-1)
+- `AWS_ACCESS_KEY_ID_DEV` / `AWS_ACCESS_KEY_ID_PROD`
+- `AWS_SECRET_ACCESS_KEY_DEV` / `AWS_SECRET_ACCESS_KEY_PROD`
+- `AWS_REGION_DEV` / `AWS_REGION_PROD` (optionnel, défaut: eu-central-1)
+
+**Note** : Les secrets liés aux artefacts applicatifs ne sont plus nécessaires. Terraform gère uniquement l'infrastructure. Les déploiements applicatifs sont gérés par les workflows `deploy-app-dev.yml` et `deploy-app-prod.yml` dans le repository `kambriq`.
 
 **Alternative disponible :** OIDC avec IAM Role (commenté dans les workflows)
 
@@ -597,34 +601,46 @@ data "terraform_remote_state" "shared" {
 
 ### 7.1 Secrets Applicatifs
 
-**⚠️ IMPORTANT :** Les secrets applicatifs ne sont **PAS** gérés par Terraform.
+**⚠️ IMPORTANT :** Les secrets applicatifs ne sont **PAS** gérés par Terraform. Ils sont stockés dans SSM Parameter Store et lus au runtime par l'application.
 
-**Secrets stockés dans SSM Parameter Store :**
-
-**Dev :**
-- `/kambriq/dev/db/password` : Mot de passe RDS
-- `/kambriq/dev/api/jwt_secret` : Clé secrète JWT
-
-**Prod :**
-- `/kambriq/prod/db/password` : Mot de passe RDS
-- `/kambriq/prod/api/jwt_secret` : Clé secrète JWT
-
-**Récupération dans Terraform :**
-```hcl
-data "aws_ssm_parameter" "db_password" {
-  name = "/kambriq/dev/db/password"
-}
+**Structure de paths SSM :**
+```
+/kambriq/{dev|prod}/{api|web}/{parameter_name}
 ```
 
-### 7.2 Variables Dépréciées
+**Secrets API (stockés dans SSM) :**
 
-Les variables `db_password` et `jwt_secret` dans `variables.tf` sont **dépréciées** mais conservées pour compatibilité. Elles ne sont plus utilisées.
+**Dev :**
+- `/kambriq/dev/api/DATABASE_URL` : URL de connexion PostgreSQL complète (SecureString)
+- `/kambriq/dev/api/JWT_SECRET` : Clé secrète JWT (SecureString)
+- `/kambriq/dev/api/FRONTEND_URL` : URL du frontend (String)
+- `/kambriq/dev/api/SES_FROM_EMAIL` : Email expéditeur SES (String)
 
-### 7.3 Script de Génération
+**Prod :**
+- `/kambriq/prod/api/DATABASE_URL` : URL de connexion PostgreSQL complète (SecureString)
+- `/kambriq/prod/api/JWT_SECRET` : Clé secrète JWT (SecureString)
+- `/kambriq/prod/api/FRONTEND_URL` : URL du frontend (String)
+- `/kambriq/prod/api/SES_FROM_EMAIL` : Email expéditeur SES (String)
+
+**Secrets Web (optionnel, pour runtime SSR) :**
+- `/kambriq/dev/web/...` (si nécessaire)
+- `/kambriq/prod/web/...` (si nécessaire)
+
+**Chargement au runtime :**
+- **API (Lambda)** : Lit depuis SSM via `@aws-sdk/client-ssm` au démarrage (voir `api/src/infrastructure/config/config-loader.ts`)
+  - Détecte l'environnement via `KAMBRIQ_ENV` (dev/prod)
+  - En local : utilise `.env` (fichier local, non commité)
+- **Web (SSR)** : Optionnel, via `web/src/lib/runtimeConfig.ts` si nécessaire
+
+**GitHub Secrets :**
+- Ne contiennent que des credentials techniques CI/CD (compte IAM, noms de Lambdas, buckets, IDs CloudFront)
+- Ne contiennent **pas** les secrets métier (ceux-ci sont dans SSM)
+
+### 7.2 Script de Génération
 
 **Script disponible :** `scripts/generate-and-store-secrets.sh`
 
-Permet de générer et stocker les secrets dans SSM Parameter Store.
+Permet de générer et stocker les secrets dans SSM Parameter Store avec la nouvelle structure de paths.
 
 ---
 

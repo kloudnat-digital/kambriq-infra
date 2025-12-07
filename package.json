@@ -1,0 +1,13 @@
+{
+  "name": "kambriq-aws-iac-terraform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "KAMBRIQ AWS Infrastructure as Code (Terraform)",
+  "scripts": {
+    "prepare": "husky",
+    "check-markdown": "node scripts/check-markdown.js"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7"
+  }
+}

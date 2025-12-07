@@ -51,11 +51,16 @@ kambriq-aws-iac-terraform/
   - Sur push vers `main` : exécute `terraform plan` + `apply`
 
 - **`terraform-dev.yml`** : Gère l'infrastructure dev (RDS, Lambda, API Gateway, S3, CloudFront)
-  - Sur push vers `develop` : exécute `terraform plan` + `apply` automatiquement
+  - **⚠️ Important** : Gère uniquement l'infrastructure, ne déploie pas le code applicatif
+  - Déclenchement : Pull Request vers `develop` (plan uniquement), Push sur `develop` (plan + apply), Workflow Dispatch (plan uniquement)
+  - Exécute `terraform plan` + `apply` (sur push `develop`) pour créer/modifier les ressources AWS
+  - Le code applicatif est déployé via `deploy-app-dev.yml` dans le repository `kambriq`
 
 - **`terraform-prod.yml`** : Gère l'infrastructure prod (même ressources que dev)
-  - Déclenchement manuel (`workflow_dispatch`) avec choix `plan` ou `apply`
-  - Ou déclenchement automatique sur tags `v*` (plan + apply)
+  - **⚠️ Important** : Gère uniquement l'infrastructure, ne déploie pas le code applicatif
+  - Déclenchement manuel (`workflow_dispatch`) uniquement
+  - Protection via GitHub Environment `production` (approbation manuelle possible)
+  - Le code applicatif est déployé via `deploy-app-prod.yml` dans le repository `kambriq`
 
 ## 3. Ordre de lecture des docs existants
 
@@ -161,13 +166,27 @@ Une fois l'infrastructure shared déployée, vous pouvez déployer l'infrastruct
 
 ### Déploiement via GitHub Actions
 
-1. **Pousser vers la branche `develop`** :
+1. **Pull Request vers `develop`** :
+   - Le workflow `terraform-dev.yml` s'exécute automatiquement
+   - Il fait un `terraform plan` uniquement (pas d'apply)
+   - Le plan est affiché dans les commentaires de la PR
+
+2. **Push vers `develop`** :
    - Le workflow `terraform-dev.yml` s'exécute automatiquement
    - Il fait un `terraform plan` + `apply` automatiquement (auto-approve)
+   - Le plan est sauvegardé comme artifact
 
-2. **Vérifier les outputs** :
+3. **Workflow Dispatch (manuel)** :
+   - Aller dans Actions → "Terraform Dev (infra only)"
+   - Cliquer "Run workflow"
+   - Choisir la branche
+   - Il fait un `terraform plan` uniquement (pas d'apply automatique)
+
+4. **Vérifier les outputs** :
    - Les outputs non-sensibles sont affichés dans le résumé GitHub Actions
    - Pour voir tous les outputs : `terraform output` (localement) ou `terraform output -json` (dans le workflow)
+
+**⚠️ Note** : Le workflow Terraform ne déploie pas le code applicatif. Pour déployer le code API + Web, utiliser les workflows `deploy-app-dev.yml` et `deploy-app-prod.yml` dans le repository `kambriq`.
 
 ### ⚠️ Important : Gestion des secrets
 
@@ -175,11 +194,19 @@ Une fois l'infrastructure shared déployée, vous pouvez déployer l'infrastruct
 
 - ❌ Ne pas passer `DB_PASSWORD_DEV` ou `JWT_SECRET_DEV` comme variables Terraform (`TF_VAR_*`)
 - ❌ Ne pas stocker ces valeurs dans `terraform.tfvars` (ce fichier est ignoré par Git)
-- ✅ Stocker les secrets dans **AWS SSM Parameter Store** ou **AWS Secrets Manager**
-- ✅ Configurer les variables d'environnement Lambda directement (via Terraform ou AWS Console)
-- ✅ Utiliser la convention de nommage : `/kambriq/{environment}/{parameter_name}`
+- ❌ Ne pas stocker les secrets dans GitHub Secrets (seulement les credentials techniques CI/CD)
+- ✅ Stocker les secrets dans **AWS SSM Parameter Store** avec la structure : `/kambriq/{env}/{api|web}/{parameter_name}`
+- ✅ L'application lit les secrets depuis SSM au runtime (voir `api/src/infrastructure/config/config-loader.ts`)
+- ✅ Utiliser la convention de nommage : `/kambriq/{dev|prod}/api/DATABASE_URL`, `/kambriq/{dev|prod}/api/JWT_SECRET`, etc.
 
-Terraform ne gère que les ressources d'infrastructure, pas les secrets applicatifs.
+**Structure SSM recommandée :**
+- `/kambriq/dev/api/DATABASE_URL` - URL de connexion PostgreSQL complète
+- `/kambriq/dev/api/JWT_SECRET` - Clé secrète JWT
+- `/kambriq/dev/api/FRONTEND_URL` - URL du frontend (pour CORS et emails)
+- `/kambriq/dev/api/SES_FROM_EMAIL` - Email expéditeur SES
+- Même structure pour `/kambriq/prod/api/...`
+
+Terraform ne gère que les ressources d'infrastructure, pas les secrets applicatifs. Les secrets sont lus au runtime par l'application depuis SSM.
 
 ## 6. Déployer l'infra de prod (app KAMBRIQ)
 
@@ -213,16 +240,14 @@ L'infrastructure prod suit le même principe que dev, mais avec des garde-fous s
 
 1. **Déclenchement manuel** (`workflow_dispatch`) :
    - Aller dans l'onglet "Actions" du repository
-   - Sélectionner "Terraform - Prod Environment"
+   - Sélectionner "Terraform Prod (infra only)"
    - Cliquer sur "Run workflow"
-   - Choisir `action = plan` pour générer un plan
-   - Réviser le plan dans les artifacts
-   - Relancer avec `action = apply` pour appliquer
+   - Choisir la branche
+   - ⚠️ Approbation manuelle requise (si configurée dans GitHub Environment `production`)
+   - Le workflow fait un `terraform plan` puis `apply` automatiquement
+   - Le plan est sauvegardé comme artifact (rétention 30 jours)
 
-2. **Déclenchement automatique** (tags `v*`) :
-   - Créer un tag : `git tag v1.0.0 && git push origin v1.0.0`
-   - Le workflow `terraform-prod.yml` s'exécute automatiquement
-   - Il fait un `terraform plan` puis `apply` si le tag correspond à `v*`
+**⚠️ Note** : Le workflow Terraform ne déploie pas le code applicatif. Pour déployer le code API + Web, utiliser le workflow `deploy-app-prod.yml` dans le repository `kambriq`.
 
 ### ⚠️ Sécurité production
 
@@ -233,35 +258,47 @@ L'infrastructure prod suit le même principe que dev, mais avec des garde-fous s
 
 ## 7. Relation avec le repo applicatif (kambriq)
 
-Ce dépôt Terraform gère uniquement l'infrastructure. Le code applicatif est dans le dépôt `kambriq`.
+**⚠️ Important** : Ce dépôt Terraform gère **uniquement l'infrastructure** (création/modification des ressources AWS). Le code applicatif est dans le dépôt `kambriq` et est déployé via les workflows `deploy-app-dev.yml` et `deploy-app-prod.yml`.
 
-### Flux de déploiement
+### Séparation des Responsabilités
+
+**Repository `kambriq-aws-iac-terraform` (ce repo) :**
+- Gère l'infrastructure via Terraform
+- Crée et configure les ressources AWS (Lambda functions, API Gateway, RDS, S3, CloudFront, SSM structure, IAM, VPC, etc.)
+- Ne déploie **pas** le code applicatif
+
+**Repository `kambriq` :**
+- Gère le code applicatif (API + Web)
+- Déploie le code via les workflows `deploy-app-dev.yml` et `deploy-app-prod.yml`
+- Effectue directement : build, package, `aws lambda update-function-code`, sync S3, invalidation CloudFront
+
+### Flux de Déploiement
 
 1. **Déployer l'infrastructure** (ce repo) :
    - Déployer `shared` → `dev` → `prod` (dans cet ordre)
-   - Terraform génère des outputs (S3 bucket, CloudFront domain, API Gateway URL, Lambda function name)
+   - Terraform crée les ressources AWS (Lambda functions, API Gateway, RDS, S3, CloudFront, etc.)
+   - Terraform génère des outputs (S3 bucket, CloudFront domain, API Gateway URL, Lambda function names)
 
 2. **Déployer l'application** (repo `kambriq`) :
-   - Le workflow `deploy-dev.yml` dans le repo applicatif :
-     - Checkout ce repo Terraform
-     - Lit les outputs Terraform depuis `envs/dev`
-     - Utilise ces outputs pour configurer le build Next.js (`NEXT_PUBLIC_*` variables)
-     - Déploie le frontend vers S3 + CloudFront
-     - Déploie l'API vers Lambda (nom de fonction depuis Terraform outputs)
+   - Les workflows `deploy-app-dev.yml` et `deploy-app-prod.yml` :
+     - Build API + Web
+     - Package en ZIP
+     - `aws lambda update-function-code` (API + SSR) - utilise les noms de fonctions depuis les secrets GitHub
+     - Sync assets S3 - utilise le nom du bucket depuis les secrets GitHub
+     - Invalidation CloudFront - utilise l'ID de distribution depuis les secrets GitHub
 
-### Outputs Terraform utilisés par l'application
+### Secrets GitHub pour les Workflows Applicatifs
 
-| Output Terraform | Utilisé par | Description |
-|------------------|-------------|-------------|
-| `frontend_cloudfront_domain` | `deploy-dev.yml` | Domaine CloudFront pour le frontend |
-| `frontend_s3_bucket_name` | `deploy-dev.yml` | Bucket S3 pour déployer le frontend |
-| `media_s3_public_bucket_name` | `deploy-dev.yml` | Bucket S3 pour médias publics |
-| `api_gateway_base_url` | `deploy-dev.yml` | URL de l'API Gateway |
-| `lambda_function_name` | `deploy-dev.yml` | Nom de la fonction Lambda |
-| `region` | `deploy-dev.yml` | Région AWS |
-| `ses_from_email` | `deploy-dev.yml` | Email expéditeur SES |
+Les workflows `deploy-app-dev.yml` et `deploy-app-prod.yml` nécessitent les secrets suivants (dans le repository `kambriq`) :
 
-**Note** : Les secrets (DB password, JWT secrets) ne sont PAS dans les outputs Terraform. Ils sont gérés via SSM Parameter Store / Secrets Manager et configurés dans les variables d'environnement Lambda.
+| Secret | Description | Source |
+|--------|-------------|--------|
+| `API_LAMBDA_NAME_DEV` / `API_LAMBDA_NAME_PROD` | Nom de la fonction Lambda API | Terraform output `lambda_function_name` |
+| `WEB_SSR_LAMBDA_NAME_DEV` / `WEB_SSR_LAMBDA_NAME_PROD` | Nom de la fonction Lambda SSR | Terraform output (ou nom conventionnel) |
+| `WEB_ASSETS_BUCKET_DEV` / `WEB_ASSETS_BUCKET_PROD` | Bucket S3 pour assets statiques | Terraform output |
+| `CLOUDFRONT_DISTRIBUTION_ID_DEV` / `CLOUDFRONT_DISTRIBUTION_ID_PROD` | ID de la distribution CloudFront | Terraform output |
+
+**Note** : Les secrets applicatifs (DB password, JWT secrets) ne sont PAS dans les outputs Terraform ni dans GitHub Secrets. Ils sont stockés dans SSM Parameter Store (`/kambriq/{env}/api/...`) et lus au runtime par l'application.
 
 ## 8. Commandes utiles
 

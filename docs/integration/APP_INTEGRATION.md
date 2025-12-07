@@ -1,6 +1,11 @@
 # Application Integration Guide
 
-This document explains how the Terraform infrastructure outputs are consumed by the Kambriq application and how CI/CD pipelines should integrate Terraform outputs with application deployments.
+**⚠️ Important** : Ce document explique comment l'infrastructure Terraform et l'application Kambriq s'intègrent. Depuis 2025-12-07, les déploiements applicatifs (mise à jour du code API + Web) sont gérés par les workflows `deploy-app-dev.yml` et `deploy-app-prod.yml` dans le repository `kambriq`, et non plus par Terraform.
+
+Ce document explique :
+- Comment les outputs Terraform sont utilisés par l'application
+- Comment les secrets sont gérés via SSM Parameter Store
+- Comment les workflows de déploiement applicatif interagissent avec l'infrastructure
 
 ## Table of Contents
 
@@ -122,244 +127,201 @@ postgres://{db_username}:{db_password}@{db_host}:{db_port}/{db_name}
 
 ## SSM Parameter Store Integration
 
+**⚠️ Important** : Les secrets applicatifs sont stockés dans SSM Parameter Store et lus au runtime par l'application. Terraform ne gère que l'infrastructure, pas les secrets applicatifs.
+
+### Structure de Paths SSM
+
+Les secrets sont stockés avec la structure suivante :
+
+```
+/kambriq/{dev|prod}/{api|web}/{parameter_name}
+```
+
 ### Required SSM Parameters
 
-Sensitive values must be stored in SSM Parameter Store using the following naming convention:
-
-```
-/kambriq/{environment}/{parameter_name}
-```
-
-#### Required Parameters
+#### Secrets API
 
 | Parameter Path | Type | Description | Source |
 |---------------|------|-------------|--------|
-| `/kambriq/{env}/DATABASE_PASSWORD` | SecureString | RDS database password | Terraform variable `db_password` |
-| `/kambriq/{env}/JWT_SECRET` | SecureString | JWT signing secret | Terraform variable `jwt_secret` |
-| `/kambriq/{env}/DATABASE_URL` | SecureString | Complete PostgreSQL connection string | **Constructed** from outputs + SSM |
+| `/kambriq/{env}/api/DATABASE_URL` | SecureString | Complete PostgreSQL connection string | Construit manuellement ou via script |
+| `/kambriq/{env}/api/JWT_SECRET` | SecureString | JWT signing secret | Généré manuellement |
+| `/kambriq/{env}/api/FRONTEND_URL` | String | Frontend URL (pour CORS et emails) | Depuis Terraform output `frontend_url` |
+| `/kambriq/{env}/api/SES_FROM_EMAIL` | String | SES sender email | Depuis Terraform output `ses_from_email` |
+
+#### Secrets Web (optionnel, pour runtime SSR)
+
+| Parameter Path | Type | Description | Source |
+|---------------|------|-------------|--------|
+| `/kambriq/{env}/web/...` | String/SecureString | Configuration runtime SSR (si nécessaire) | Selon besoins |
+
+**Note** : Le Web utilise principalement des variables build-time (`NEXT_PUBLIC_*`) fournies par GitHub Actions. SSM est utilisé uniquement pour des valeurs runtime SSR si nécessaire.
 
 ### Creating SSM Parameters
 
-After Terraform apply, create SSM parameters:
+**⚠️ Important** : Les secrets doivent être créés manuellement dans SSM Parameter Store. Terraform ne gère pas les secrets applicatifs.
+
+#### Création manuelle des secrets
 
 ```bash
 # Set environment
 ENV=dev  # or prod
 
-# Get Terraform outputs
+# Get Terraform outputs (pour construire DATABASE_URL)
 cd kambriq-aws-iac-terraform/envs/$ENV
 terraform output -json > tf-outputs.json
 
-# Store database password (if not already stored)
-aws ssm put-parameter \
-  --name "/kambriq/$ENV/DATABASE_PASSWORD" \
-  --value "$(terraform output -raw db_password)" \
-  --type SecureString \
-  --overwrite
-
-# Store JWT secret (if not already stored)
-aws ssm put-parameter \
-  --name "/kambriq/$ENV/JWT_SECRET" \
-  --value "$(terraform output -raw jwt_secret)" \
-  --type SecureString \
-  --overwrite
-
-# Construct and store DATABASE_URL
+# Store DATABASE_URL (construit depuis les outputs Terraform)
 DB_HOST=$(jq -r '.db_host.value' tf-outputs.json)
 DB_PORT=$(jq -r '.db_port.value' tf-outputs.json)
 DB_NAME=$(jq -r '.db_name.value' tf-outputs.json)
 DB_USERNAME=$(jq -r '.db_username.value' tf-outputs.json)
-DB_PASSWORD=$(aws ssm get-parameter --name "/kambriq/$ENV/DATABASE_PASSWORD" --with-decryption --query 'Parameter.Value' --output text)
+# DB_PASSWORD doit être généré/saisi manuellement
+DB_PASSWORD="your-secure-password"
 
 DATABASE_URL="postgres://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
 
 aws ssm put-parameter \
-  --name "/kambriq/$ENV/DATABASE_URL" \
+  --name "/kambriq/$ENV/api/DATABASE_URL" \
   --value "$DATABASE_URL" \
   --type SecureString \
   --overwrite
+
+# Store JWT_SECRET (généré manuellement)
+JWT_SECRET="your-jwt-secret-key"
+aws ssm put-parameter \
+  --name "/kambriq/$ENV/api/JWT_SECRET" \
+  --value "$JWT_SECRET" \
+  --type SecureString \
+  --overwrite
+
+# Store FRONTEND_URL (depuis Terraform output)
+FRONTEND_URL=$(jq -r '.frontend_url.value' tf-outputs.json)
+aws ssm put-parameter \
+  --name "/kambriq/$ENV/api/FRONTEND_URL" \
+  --value "$FRONTEND_URL" \
+  --type String \
+  --overwrite
+
+# Store SES_FROM_EMAIL (depuis Terraform output)
+SES_FROM_EMAIL=$(jq -r '.ses_from_email.value' tf-outputs.json)
+aws ssm put-parameter \
+  --name "/kambriq/$ENV/api/SES_FROM_EMAIL" \
+  --value "$SES_FROM_EMAIL" \
+  --type String \
+  --overwrite
 ```
 
-### Terraform Module for SSM Parameters
+### Chargement au Runtime
 
-Consider creating a Terraform module to manage SSM parameters:
+**API (Lambda)** : L'API lit automatiquement depuis SSM au démarrage via `api/src/infrastructure/config/config-loader.ts` :
+- Détecte l'environnement via `KAMBRIQ_ENV` (dev/prod)
+- Lit depuis `/kambriq/{env}/api/...`
+- Injecte dans `process.env`
+- En local : utilise `.env` (fichier local, non commité)
 
-```hcl
-# modules/ssm-parameters/main.tf
-resource "aws_ssm_parameter" "database_password" {
-  name  = "/kambriq/${var.env}/DATABASE_PASSWORD"
-  type  = "SecureString"
-  value = var.db_password
-}
-
-resource "aws_ssm_parameter" "jwt_secret" {
-  name  = "/kambriq/${var.env}/JWT_SECRET"
-  type  = "SecureString"
-  value = var.jwt_secret
-}
-
-resource "aws_ssm_parameter" "database_url" {
-  name  = "/kambriq/${var.env}/DATABASE_URL"
-  type  = "SecureString"
-  value = "postgres://${var.db_username}:${var.db_password}@${var.db_host}:${var.db_port}/${var.db_name}"
-}
-```
+**Web (SSR)** : Optionnel, via `web/src/lib/runtimeConfig.ts` si nécessaire :
+- Build-time : variables `NEXT_PUBLIC_*` via GitHub Actions (non sensibles)
+- Runtime SSR : peut lire depuis SSM si nécessaire (cache singleton)
 
 ## CI/CD Integration
 
-### GitHub Actions Workflow
+**⚠️ Important** : Depuis 2025-12-07, les déploiements applicatifs sont gérés par les workflows `deploy-app-dev.yml` et `deploy-app-prod.yml` dans le repository `kambriq`. Ces workflows effectuent directement :
+- Build API + Web
+- Update Lambda code (`aws lambda update-function-code`)
+- Sync S3 assets
+- Invalidate CloudFront
 
-#### Step 1: After Terraform Apply
+Les secrets applicatifs sont lus depuis SSM Parameter Store au runtime par l'application (voir sections ci-dessous).
 
-```yaml
-- name: Extract Terraform Outputs
-  id: terraform-outputs
-  run: |
-    cd kambriq-aws-iac-terraform/envs/${{ env.ENVIRONMENT }}
-    terraform output -json > tf-outputs.json
-    
-    # Extract outputs as GitHub Actions outputs
-    echo "api_url=$(jq -r '.api_url.value' tf-outputs.json)" >> $GITHUB_OUTPUT
-    echo "frontend_url=$(jq -r '.frontend_url.value' tf-outputs.json)" >> $GITHUB_OUTPUT
-    echo "frontend_domain=$(jq -r '.frontend_domain.value' tf-outputs.json)" >> $GITHUB_OUTPUT
-    echo "s3_media_bucket=$(jq -r '.s3_media_bucket.value' tf-outputs.json)" >> $GITHUB_OUTPUT
-    echo "ses_from_email=$(jq -r '.ses_from_email.value' tf-outputs.json)" >> $GITHUB_OUTPUT
-    echo "aws_region=$(jq -r '.aws_region.value' tf-outputs.json)" >> $GITHUB_OUTPUT
-```
+### Workflows de Déploiement Applicatif
 
-#### Step 2: Store Secrets in SSM
+#### `deploy-app-dev.yml` et `deploy-app-prod.yml`
 
-```yaml
-- name: Store Secrets in SSM
-  run: |
-    ENV=${{ env.ENVIRONMENT }}
-    
-    # Store DATABASE_URL (constructed)
-    DB_HOST=$(jq -r '.db_host.value' tf-outputs.json)
-    DB_PORT=$(jq -r '.db_port.value' tf-outputs.json)
-    DB_NAME=$(jq -r '.db_name.value' tf-outputs.json)
-    DB_USERNAME=$(jq -r '.db_username.value' tf-outputs.json)
-    DB_PASSWORD=$(aws ssm get-parameter --name "/kambriq/$ENV/DATABASE_PASSWORD" --with-decryption --query 'Parameter.Value' --output text)
-    
-    DATABASE_URL="postgres://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
-    
-    aws ssm put-parameter \
-      --name "/kambriq/$ENV/DATABASE_URL" \
-      --value "$DATABASE_URL" \
-      --type SecureString \
-      --overwrite
-```
+Ces workflows dans le repository `kambriq` effectuent :
 
-#### Step 3: Deploy Backend (Lambda)
+1. **Build API** :
+   - Install dependencies
+   - Generate Prisma client
+   - Build NestJS
+   - Package en ZIP (dist, node_modules, prisma, package.json)
 
-```yaml
-- name: Update Lambda Environment Variables
-  run: |
-    ENV=${{ env.ENVIRONMENT }}
-    FUNCTION_NAME=$(jq -r '.lambda_function_name.value' tf-outputs.json)
-    
-    # Get secrets from SSM
-    DATABASE_URL=$(aws ssm get-parameter --name "/kambriq/$ENV/DATABASE_URL" --with-decryption --query 'Parameter.Value' --output text)
-    JWT_SECRET=$(aws ssm get-parameter --name "/kambriq/$ENV/JWT_SECRET" --with-decryption --query 'Parameter.Value' --output text)
-    
-    # Get non-sensitive values from Terraform
-    S3_MEDIA_BUCKET=$(jq -r '.s3_media_bucket.value' tf-outputs.json)
-    SES_FROM_EMAIL=$(jq -r '.ses_from_email.value' tf-outputs.json)
-    FRONTEND_URL=$(jq -r '.frontend_url.value' tf-outputs.json)
-    AWS_REGION=$(jq -r '.aws_region.value' tf-outputs.json)
-    
-    # Update Lambda environment variables
-    aws lambda update-function-configuration \
-      --function-name "$FUNCTION_NAME" \
-      --environment "Variables={
-        DATABASE_URL=$DATABASE_URL,
-        JWT_SECRET=$JWT_SECRET,
-        AWS_REGION=$AWS_REGION,
-        S3_MEDIA_BUCKET=$S3_MEDIA_BUCKET,
-        SES_FROM_EMAIL=$SES_FROM_EMAIL,
-        AWS_SES_FROM_EMAIL=$SES_FROM_EMAIL,
-        FRONTEND_URL=$FRONTEND_URL,
-        NODE_ENV=$ENV
-      }"
-```
+2. **Build Web** :
+   - Install dependencies
+   - Build OpenNext
+   - Package SSR bundle
 
-#### Step 4: Deploy Frontend (S3 + CloudFront)
+3. **Update Lambda API** :
+   ```bash
+   aws lambda update-function-code \
+     --function-name "$API_LAMBDA_NAME" \
+     --zip-file "fileb://api-bundle.zip"
+   ```
 
-```yaml
-- name: Build Frontend with Environment Variables
-  run: |
-    cd kambriq/web
-    
-    # Create .env.local from Terraform outputs
-    echo "NEXT_PUBLIC_API_BASE_URL=${{ steps.terraform-outputs.outputs.api_url }}" >> .env.local
-    echo "NEXT_PUBLIC_SITE_URL=${{ steps.terraform-outputs.outputs.frontend_url }}" >> .env.local
-    echo "NEXT_PUBLIC_CLOUDFRONT_DOMAIN=${{ steps.terraform-outputs.outputs.frontend_domain }}" >> .env.local
-    echo "NEXT_PUBLIC_S3_BUCKET_NAME=${{ steps.terraform-outputs.outputs.s3_media_bucket }}" >> .env.local
-    echo "NEXT_PUBLIC_ENVIRONMENT=${{ env.ENVIRONMENT }}" >> .env.local
-    
-    # Build Next.js app
-    pnpm build
-    
-    # Export static site
-    pnpm export
-    
-- name: Deploy to S3
-  run: |
-    S3_BUCKET=$(jq -r '.s3_static_bucket.value' tf-outputs.json)
-    aws s3 sync kambriq/web/out s3://$S3_BUCKET --delete
-    
-- name: Invalidate CloudFront Cache
-  run: |
-    DISTRIBUTION_ID=$(jq -r '.distribution_id.value' tf-outputs.json)
-    aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/*"
-```
+4. **Update Lambda SSR** :
+   ```bash
+   aws lambda update-function-code \
+     --function-name "$WEB_SSR_LAMBDA_NAME" \
+     --zip-file "fileb://web-ssr-bundle.zip"
+   ```
+
+5. **Sync S3 Assets** :
+   ```bash
+   aws s3 sync .open-next/assets "s3://$WEB_ASSETS_BUCKET/assets" --delete
+   ```
+
+6. **Invalidate CloudFront** :
+   ```bash
+   aws cloudfront create-invalidation \
+     --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
+     --paths "/*"
+   ```
+
+**Secrets requis** (dans le repository `kambriq`) :
+- `AWS_ACCESS_KEY_ID_DEV` / `AWS_ACCESS_KEY_ID_PROD`
+- `AWS_SECRET_ACCESS_KEY_DEV` / `AWS_SECRET_ACCESS_KEY_PROD`
+- `AWS_REGION_DEV` / `AWS_REGION_PROD`
+- `API_LAMBDA_NAME_DEV` / `API_LAMBDA_NAME_PROD`
+- `WEB_SSR_LAMBDA_NAME_DEV` / `WEB_SSR_LAMBDA_NAME_PROD`
+- `WEB_ASSETS_BUCKET_DEV` / `WEB_ASSETS_BUCKET_PROD`
+- `CLOUDFRONT_DISTRIBUTION_ID_DEV` / `CLOUDFRONT_DISTRIBUTION_ID_PROD`
 
 ## Lambda Environment Variables
 
-### Current Lambda Configuration
+**⚠️ Important** : Les secrets applicatifs ne sont **pas** stockés dans les variables d'environnement Lambda. Ils sont lus depuis SSM Parameter Store au runtime par l'application.
 
-The Lambda function is configured with environment variables in `modules/lambda-api/main.tf`:
+### Configuration Lambda (Terraform)
 
-```hcl
-environment {
-  variables = {
-    NODE_ENV        = var.env
-    DB_HOST         = var.db_host
-    DB_PORT         = tostring(var.db_port)
-    DB_NAME         = var.db_name
-    DB_USERNAME     = var.db_username
-    DB_PASSWORD     = var.db_password
-    S3_MEDIA_BUCKET = var.s3_media_bucket
-    SES_FROM_EMAIL  = var.ses_from_email
-    JWT_SECRET      = var.jwt_secret
-  }
-}
-```
-
-### Recommended Updates
-
-1. **Add `DATABASE_URL`**: Prisma requires `DATABASE_URL`, not individual DB components
-2. **Add `AWS_REGION`**: Required for AWS SDK
-3. **Add `FRONTEND_URL`**: Required for CORS and email links
-4. **Move secrets to SSM**: `DB_PASSWORD` and `JWT_SECRET` should be retrieved from SSM at runtime or during deployment
-
-### Updated Lambda Module
+Les Lambda functions sont créées par Terraform avec des variables d'environnement minimales (non sensibles) :
 
 ```hcl
 # In modules/lambda-api/main.tf
 environment {
   variables = {
     NODE_ENV        = var.env
-    DATABASE_URL    = var.database_url  # Constructed from components
     AWS_REGION      = var.aws_region
-    S3_MEDIA_BUCKET = var.s3_media_bucket
-    SES_FROM_EMAIL  = var.ses_from_email
-    AWS_SES_FROM_EMAIL = var.ses_from_email
-    FRONTEND_URL    = var.frontend_url
-    # JWT_SECRET should be retrieved from SSM at runtime or set during deployment
+    KAMBRIQ_ENV     = var.env  # dev ou prod, pour détecter l'environnement SSM
+    # Les secrets (DATABASE_URL, JWT_SECRET, etc.) sont lus depuis SSM au runtime
   }
 }
 ```
+
+### Chargement des Secrets au Runtime
+
+L'API charge automatiquement les secrets depuis SSM au démarrage via `api/src/infrastructure/config/config-loader.ts` :
+
+1. **Détection de l'environnement** :
+   - Local : `NODE_ENV === 'development'` ou `AWS_EXECUTION_ENV` non défini → utilise `.env`
+   - Lambda : lit `KAMBRIQ_ENV` (dev/prod) → lit depuis SSM
+
+2. **Lecture depuis SSM** :
+   - Path : `/kambriq/{KAMBRIQ_ENV}/api/{parameter_name}`
+   - Paramètres lus : `DATABASE_URL`, `JWT_SECRET`, `FRONTEND_URL`, `SES_FROM_EMAIL`
+   - Injection dans `process.env`
+
+3. **Avantages** :
+   - Secrets non exposés dans les variables d'environnement Lambda
+   - Rotation des secrets possible sans redéployer le code
+   - Séparation claire entre infrastructure (Terraform) et secrets (SSM)
 
 ## Frontend Build Configuration
 
@@ -367,19 +329,14 @@ environment {
 
 Next.js requires environment variables to be prefixed with `NEXT_PUBLIC_` to be accessible in the browser.
 
-### Build-Time Injection
+### Build-Time Injection (GitHub Actions)
 
-Environment variables must be set **before** running `next build`:
+Les variables `NEXT_PUBLIC_*` sont fournies par les workflows GitHub Actions lors du build :
 
-```bash
-export NEXT_PUBLIC_API_BASE_URL=https://api-dev.kambriq.com
-export NEXT_PUBLIC_SITE_URL=https://app-dev.kambriq.com
-export NEXT_PUBLIC_CLOUDFRONT_DOMAIN=d1234567890.cloudfront.net
-export NEXT_PUBLIC_S3_BUCKET_NAME=kambriq-media-dev
-export NEXT_PUBLIC_ENVIRONMENT=development
-
-pnpm build
-```
+**Dans `deploy-app-dev.yml` et `deploy-app-prod.yml`** :
+- Les variables `NEXT_PUBLIC_*` peuvent être définies via les secrets GitHub (si nécessaire)
+- Généralement, ces valeurs sont non sensibles (URLs, domaines, etc.)
+- Le build OpenNext est effectué avec ces variables
 
 ### OpenNext Build
 
@@ -394,7 +351,13 @@ This generates the `.open-next/` directory with:
 - Lambda functions for SSR (`.open-next/server/`)
 - Image optimization Lambda@Edge (`.open-next/image-optimization/`)
 
-The environment variables are configured via Lambda environment variables (from Terraform outputs).
+### Runtime SSR Configuration (Optionnel)
+
+Si des valeurs dynamiques sont nécessaires au runtime SSR, elles peuvent être lues depuis SSM via `web/src/lib/runtimeConfig.ts` :
+
+- Cache singleton pour éviter les appels SSM multiples
+- Import dynamique de `@aws-sdk/client-ssm` pour éviter le bundling côté client
+- Path SSM : `/kambriq/{env}/web/...`
 
 **Note:** Static export (`pnpm export`) is no longer used. The frontend now uses OpenNext for SSR capabilities.
 
@@ -408,17 +371,21 @@ The environment variables are configured via Lambda environment variables (from 
 
 ### 2. Use SSM Parameter Store for Secrets
 
-- Store `DATABASE_PASSWORD` in SSM (SecureString)
-- Store `JWT_SECRET` in SSM (SecureString)
-- Store `DATABASE_URL` in SSM (SecureString) after construction
+- Store `DATABASE_URL` in SSM (SecureString) : `/kambriq/{env}/api/DATABASE_URL`
+- Store `JWT_SECRET` in SSM (SecureString) : `/kambriq/{env}/api/JWT_SECRET`
+- Store `FRONTEND_URL` in SSM (String) : `/kambriq/{env}/api/FRONTEND_URL`
+- Store `SES_FROM_EMAIL` in SSM (String) : `/kambriq/{env}/api/SES_FROM_EMAIL`
 
-### 3. Construct DATABASE_URL in CI/CD
+### 3. Construct DATABASE_URL Manually
 
-The `DATABASE_URL` should be constructed in the CI/CD pipeline, not in Terraform, to avoid exposing the password in Terraform state.
+The `DATABASE_URL` should be constructed manually (ou via script) et stocké dans SSM, pas dans Terraform, pour éviter d'exposer le mot de passe dans le state Terraform.
 
-### 4. Update Lambda Environment Variables After Deployment
+### 4. Secrets Loaded at Runtime
 
-After deploying new Lambda code, update environment variables to ensure they match the latest Terraform outputs.
+Les secrets sont lus depuis SSM au runtime par l'application, pas injectés dans les variables d'environnement Lambda. Cela permet :
+- Rotation des secrets sans redéployer le code
+- Séparation claire entre infrastructure et secrets
+- Pas d'exposition des secrets dans les variables d'environnement Lambda
 
 ### 5. Version Control for Environment Files
 
@@ -428,11 +395,15 @@ After deploying new Lambda code, update environment variables to ensure they mat
 
 ### 6. IAM Permissions
 
-Ensure the CI/CD pipeline has permissions to:
-- Read Terraform outputs (if stored in S3 backend)
-- Read/write SSM parameters: `/kambriq/{env}/*`
-- Update Lambda function configuration
-- Deploy to S3 and invalidate CloudFront
+**Pour les workflows Terraform** (`terraform-dev.yml`, `terraform-prod.yml`) :
+- Permissions pour créer/modifier les ressources AWS (Lambda, API Gateway, RDS, S3, CloudFront, SSM structure, IAM, VPC, etc.)
+- Pas besoin de permissions pour lire/écrire les secrets applicatifs dans SSM (gérés manuellement)
+
+**Pour les workflows de déploiement applicatif** (`deploy-app-dev.yml`, `deploy-app-prod.yml`) :
+- Permissions pour `lambda:UpdateFunctionCode` (mise à jour du code Lambda)
+- Permissions pour `s3:PutObject`, `s3:DeleteObject` (sync assets)
+- Permissions pour `cloudfront:CreateInvalidation` (invalidation cache)
+- **Pas besoin** de permissions pour lire/écrire SSM (l'application lit depuis SSM au runtime avec son propre rôle IAM)
 
 ### 7. Environment-Specific Configuration
 
@@ -566,13 +537,13 @@ module "frontend" {
   
   env                = local.env
   api_gateway_url    = module.api_gateway.api_gateway_base_url
-  artifact_bucket_name = var.artifact_bucket_name
-  ssr_bundle_s3_key  = var.ssr_bundle_s3_key
+  # Les variables artifact_bucket_name et ssr_bundle_s3_key ne sont plus utilisées
+  # Le code applicatif est déployé via deploy-app-dev.yml / deploy-app-prod.yml
   # ... other variables
 }
 ```
 
-**Legacy: For static export (if using legacy modules):**
+**⚠️ Legacy: Les modules s3-static-site et cloudfront sont obsolètes. Utiliser le module frontend/ avec OpenNext.**
 
 Pass the API Gateway endpoint to the CloudFront module:
 

@@ -19,7 +19,7 @@
 #    - S3 bucket pour assets statiques OpenNext
 #    - CloudFront distribution
 #    - Lambda functions pour SSR (OpenNext)
-#    - Utilise les artefacts OpenNext depuis S3 (var.ssr_bundle_s3_key)
+#    - Lambda SSR code deployed via deploy-app-prod.yml
 #
 # 4. s3-media (modules/s3-media)
 #    - Bucket S3 pour les médias et documents
@@ -29,7 +29,7 @@
 #
 # 6. lambda-api (modules/lambda-api)
 #    - Fonction Lambda pour l'API NestJS
-#    - Utilise les artefacts API depuis S3 (var.api_bundle_s3_key)
+#    - Lambda API code deployed via deploy-app-prod.yml
 #    - Handler: dist/lambda.handler (NestJS Lambda adapter)
 #
 # 7. api-gateway (modules/api-gateway)
@@ -42,13 +42,11 @@
 # - Domaines personnalisés recommandés pour CloudFront et API Gateway
 #
 # ============================================================================
-# Artifacts S3:
+# Application Code Deployment:
 # ============================================================================
-# Les artefacts sont uploadés par le repo kambriq via .github/workflows/build-artifacts.yml
-# et doivent être passés via variables Terraform :
-#   - var.api_bundle_s3_key: S3 key du bundle API (ex: api/api-abc123.zip)
-#   - var.ssr_bundle_s3_key: S3 key du bundle OpenNext (ex: web/web-abc123.zip)
-#   - var.artifact_bucket_name: Nom du bucket S3 (ex: kambriq-artifacts-prod)
+# Application code (API + Web) is deployed via workflows deploy-app-dev.yml and
+# deploy-app-prod.yml in the kambriq repository. Terraform only creates the
+# Lambda function structure with dummy placeholder code.
 #
 # Ces variables peuvent être passées via :
 #   - Workflow GitHub Actions (terraform-dev.yml, terraform-prod.yml)
@@ -190,9 +188,7 @@ module "rds" {
 module "frontend" {
   source = "../../modules/frontend"
 
-  env                 = local.env
-  artifact_bucket_name = var.artifact_bucket_name != "" ? var.artifact_bucket_name : ""
-  ssr_bundle_s3_key   = var.ssr_bundle_s3_key != "" ? var.ssr_bundle_s3_key : ""
+  env = local.env
 
   vpc_id            = data.terraform_remote_state.shared.outputs.vpc_id
   subnet_ids        = data.terraform_remote_state.shared.outputs.private_subnet_ids
@@ -231,7 +227,7 @@ module "iam" {
 # ============================================================================
 # API (Lambda NestJS + API Gateway)
 # ============================================================================
-# Module lambda-api utilise les artefacts API uploadés depuis le repo kambriq
+# Lambda code is deployed via deploy-app-prod.yml in the kambriq repository
 
 module "lambda" {
   source = "../../modules/lambda-api"
@@ -256,10 +252,6 @@ module "lambda" {
   s3_media_bucket = module.s3_media.bucket_id
   ses_from_email  = var.ses_from_email
   jwt_secret      = data.aws_ssm_parameter.jwt_secret.value
-
-  # Use S3 artifacts if provided
-  artifact_bucket_name = var.artifact_bucket_name != "" ? var.artifact_bucket_name : ""
-  api_bundle_s3_key    = var.api_bundle_s3_key != "" ? var.api_bundle_s3_key : ""
 }
 
 # ============================================================================

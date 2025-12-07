@@ -1,154 +1,72 @@
-# ============================================================================
-# Terraform - Development Environment
-# ============================================================================
-# Manages app infrastructure for dev (RDS, Lambda, API Gateway, S3, CloudFront).
-# This workflow manages the development infrastructure using Terraform.
-#
-# Purpose:
-#   - Plan and apply Terraform changes for the dev environment
-#   - Supports workflow_dispatch for manual triggers with artifact inputs
-#   - Auto-approves applies on push to 'develop' for faster iteration
-#
-# Integration with kambriq repo (build-artifacts.yml):
-# ============================================================================
-# This workflow consumes artifacts built by kambriq repo:
-#   - API bundle: api/api-<sha>.zip (NestJS Lambda bundle)
-#   - Web bundle: web/web-<sha>.zip (OpenNext SSR bundle)
-#
-# Artifacts are uploaded to S3 by kambriq/.github/workflows/build-artifacts.yml
-# and should be passed via workflow_dispatch inputs or environment variables:
-#   - api_bundle_s3_key: S3 key of API bundle (e.g., api/api-abc123.zip)
-#   - ssr_bundle_s3_key: S3 key of OpenNext bundle (e.g., web/web-abc123.zip)
-#   - artifact_bucket_name: S3 bucket name (e.g., kambriq-artifacts-dev)
-#
-# To get artifact S3 keys:
-#   1. Check kambriq repo GitHub Actions → build-artifacts workflow
-#   2. Copy the S3 keys from workflow outputs
-#   3. Pass them as workflow_dispatch inputs or set as environment variables
-#
-# Required GitHub Secrets:
-#   Configure these in GitHub Settings → Secrets and variables → Actions:
-#   - AWS_ACCESS_KEY_ID: AWS access key for Terraform operations
-#   - AWS_SECRET_ACCESS_KEY: AWS secret key for Terraform operations
-#   - AWS_DEFAULT_REGION: AWS region (optional, defaults to eu-central-1)
-#
-#   Note: Application secrets (DB password, JWT secrets) are NOT stored in GitHub Secrets.
-#   They are managed via AWS SSM Parameter Store:
-#   - /kambriq/dev/db/password
-#   - /kambriq/dev/api/jwt_secret
-#
-# Secrets Management:
-#   - Application secrets (DB password, JWT secrets) are NOT passed as Terraform variables
-#   - Secrets are managed via:
-#     - SSM Parameter Store / Secrets Manager (for Lambda environment variables)
-#     - Lambda environment variables configured directly (not via Terraform variables)
-#   - Terraform only manages infrastructure resources, not application secrets
-#
-# Terraform State:
-#   - Backend: S3 bucket 'kloudnat-infra-shared-store'
-#   - State file: kambriq/dev/terraform.tfstate
-#   - Region: eu-central-1
-# ============================================================================
-
-name: Terraform - Dev Environment
+name: Terraform Dev (infra only)
 
 on:
-  push:
-    branches:
-      - develop
+  pull_request:
+    branches: [ develop ]
     paths:
-      - 'envs/dev/**'
-      - 'modules/**'
-      - '.github/workflows/terraform-dev.yml'
+      - "envs/dev/**"
+      - "modules/**"
+      - ".github/workflows/terraform-dev.yml"
+  push:
+    branches: [ develop ]
+    paths:
+      - "envs/dev/**"
+      - "modules/**"
+      - ".github/workflows/terraform-dev.yml"
   workflow_dispatch:
-    inputs:
-      api_bundle_s3_key:
-        description: 'S3 key of API bundle (e.g., api/api-abc123.zip). Leave empty to use dummy placeholder.'
-        required: false
-        type: string
-        default: ''
-      ssr_bundle_s3_key:
-        description: 'S3 key of OpenNext SSR bundle (e.g., web/web-abc123.zip). Leave empty to use dummy placeholder.'
-        required: false
-        type: string
-        default: ''
-      artifact_bucket_name:
-        description: 'S3 bucket name for artifacts (e.g., kambriq-artifacts-dev)'
-        required: false
-        type: string
-        default: ''
-
-env:
-  TF_IN_AUTOMATION: true
-  TF_INPUT: false
-  AWS_DEFAULT_REGION: eu-central-1
 
 jobs:
-  terraform:
-    name: Terraform Plan & Apply (Dev)
+  terraform-dev:
     runs-on: ubuntu-latest
-    environment:
-      name: development
+
+    env:
+      AWS_REGION: eu-central-1
+      TF_VERSION: 1.5.0
+      WORKING_DIR: envs/dev
 
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: '1.5.0'
-          terraform_wrapper: false
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_DEFAULT_REGION || env.AWS_DEFAULT_REGION }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_DEV }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_DEV }}
+          aws-region: ${{ secrets.AWS_REGION_DEV }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
 
       - name: Terraform Init
-        working-directory: envs/dev
+        working-directory: ${{ env.WORKING_DIR }}
         run: terraform init -input=false
 
-      - name: Terraform Format Check
-        working-directory: envs/dev
-        run: terraform fmt -check -recursive || (echo "❌ Terraform files are not formatted. Run 'terraform fmt' to fix." && exit 1)
-
       - name: Terraform Validate
-        working-directory: envs/dev
+        working-directory: ${{ env.WORKING_DIR }}
         run: terraform validate
 
       - name: Terraform Plan
-        working-directory: envs/dev
-        env:
-          TF_VAR_api_bundle_s3_key: ${{ github.event.inputs.api_bundle_s3_key || '' }}
-          TF_VAR_ssr_bundle_s3_key: ${{ github.event.inputs.ssr_bundle_s3_key || '' }}
-          TF_VAR_artifact_bucket_name: ${{ github.event.inputs.artifact_bucket_name || '' }}
-        run: terraform plan -input=false -out=tfplan
+        if: github.event_name != 'push'
+        working-directory: ${{ env.WORKING_DIR }}
+        run: terraform plan -input=false
 
-      - name: Terraform Apply
-        if: github.ref == 'refs/heads/develop'
-        working-directory: envs/dev
-        env:
-          TF_VAR_api_bundle_s3_key: ${{ github.event.inputs.api_bundle_s3_key || '' }}
-          TF_VAR_ssr_bundle_s3_key: ${{ github.event.inputs.ssr_bundle_s3_key || '' }}
-          TF_VAR_artifact_bucket_name: ${{ github.event.inputs.artifact_bucket_name || '' }}
-        run: terraform apply -input=false -auto-approve tfplan
+      - name: Terraform Plan (push develop)
+        if: github.event_name == 'push'
+        working-directory: ${{ env.WORKING_DIR }}
+        run: terraform plan -input=false -out=terraform.tfplan
 
-      - name: Terraform Output (non-sensitive)
-        working-directory: envs/dev
-        run: |
-          echo "## Terraform Outputs (Dev)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          terraform output -json | jq -r 'to_entries[] | select(.value.sensitive != true) | "**\(.key)**: `\(.value.value)`"' >> $GITHUB_STEP_SUMMARY || true
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 🌐 Key URLs" >> $GITHUB_STEP_SUMMARY
-          terraform output -raw frontend_cloudfront_url >> /dev/null 2>&1 && echo "- **Frontend URL**: \`$(terraform output -raw frontend_cloudfront_url)\`" >> $GITHUB_STEP_SUMMARY || true
-          terraform output -raw api_gateway_base_url >> /dev/null 2>&1 && echo "- **API URL**: \`$(terraform output -raw api_gateway_base_url)\`" >> $GITHUB_STEP_SUMMARY || true
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📦 Artifacts Used" >> $GITHUB_STEP_SUMMARY
-          echo "- **API Bundle**: \`${{ github.event.inputs.api_bundle_s3_key || 'Not provided (using placeholder)' }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Web Bundle**: \`${{ github.event.inputs.ssr_bundle_s3_key || 'Not provided (using placeholder)' }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Artifact Bucket**: \`${{ github.event.inputs.artifact_bucket_name || 'Not provided' }}\`" >> $GITHUB_STEP_SUMMARY
-        continue-on-error: true
+      - name: Upload Terraform plan (dev)
+        if: github.event_name == 'push' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-dev
+          path: ${{ env.WORKING_DIR }}/terraform.tfplan
+          retention-days: 7
+
+      - name: Terraform Apply (push develop)
+        if: github.event_name == 'push' && success()
+        working-directory: ${{ env.WORKING_DIR }}
+        run: terraform apply -input=false -auto-approve terraform.tfplan

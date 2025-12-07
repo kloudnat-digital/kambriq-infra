@@ -102,15 +102,11 @@ variable "source_code_hash" {
   default     = ""
 }
 
-variable "artifact_bucket_name" {
-  description = "S3 bucket name where API artifacts are stored (e.g., kambriq-artifacts-dev)"
-  type        = string
-  default     = ""
-}
-
-variable "api_bundle_s3_key" {
-  description = "S3 key of the API bundle ZIP (e.g., api/api-abc123.zip). If provided, uses S3 source instead of dummy zip."
-  type        = string
-  default     = ""
-}
+# ============================================================================
+# Artifact Configuration - REMOVED
+# ============================================================================
+# Variables artifact_bucket_name and api_bundle_s3_key have been removed.
+# Terraform only creates the Lambda function structure with dummy placeholder code.
+# Application code is deployed via workflows deploy-app-dev.yml and deploy-app-prod.yml
+# in the kambriq repository using aws lambda update-function-code.
 

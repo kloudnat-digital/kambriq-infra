@@ -1,8 +1,8 @@
 # Contexte du Workspace KAMBRIQ
 
 **Date de création :** 2025-01-27  
-**Dernière mise à jour :** 2025-01-27  
-**Version :** 2.0 (OpenNext + Lambda NestJS + Artefacts S3)
+**Dernière mise à jour :** 2025-12-07  
+**Version :** 3.1 (Séparation infrastructure/applicatif - SSM Parameter Store - Déploiements directs - Outils CLI)
 
 ---
 
@@ -29,10 +29,11 @@ Infrastructure AWS gérée via Terraform pour la plateforme KAMBRIQ.
 - **Email** : SES (Simple Email Service)
 - **Réseau** : VPC avec subnets publics/privés + NAT Gateway
 
-**⚠️ Migration récente :**
+**⚠️ Migration récente (2025-12-07) :**
+- **Séparation complète** : Terraform gère uniquement l'infrastructure, déploiements applicatifs via workflows `deploy-app-*` dans le repo `kambriq`
 - Frontend : Migration de static export vers **OpenNext** (SSR + Lambda)
 - Backend : Adaptation NestJS pour **Lambda** (handler `dist/lambda.handler`)
-- Déploiement : Nouveau système d'**artefacts S3** pour consommation par Terraform
+- Secrets : Standardisation sur **SSM Parameter Store** (`/kambriq/{env}/{api|web}/...`)
 
 ### Structure des Stacks (3 stacks indépendants)
 
@@ -68,10 +69,7 @@ Infrastructure AWS gérée via Terraform pour la plateforme KAMBRIQ.
 - ✅ IAM : Rôles et policies Lambda
 - ✅ Security Groups : RDS + Lambda
 
-**Variables d'artefacts S3 :**
-- `artifact_bucket_name` : Bucket S3 des artefacts (ex: `kambriq-artifacts-dev`)
-- `api_bundle_s3_key` : Clé S3 du bundle API (ex: `api/api-abc123.zip`)
-- `ssr_bundle_s3_key` : Clé S3 du bundle OpenNext (ex: `web/web-abc123.zip`)
+**Note** : Les variables d'artefacts S3 applicatifs (`api_bundle_s3_key`, `ssr_bundle_s3_key`) ne sont plus utilisées. Terraform gère uniquement l'infrastructure. Les déploiements applicatifs sont effectués via les workflows `deploy-app-dev.yml` et `deploy-app-prod.yml` dans le repository `kambriq`.
 
 **Backend :**
 - Bucket S3 : `kloudnat-infra-shared-store`
@@ -83,8 +81,11 @@ Infrastructure AWS gérée via Terraform pour la plateforme KAMBRIQ.
 - Domaines personnalisés : **Optionnels**
 
 **Secrets (SSM Parameter Store) :**
-- `/kambriq/dev/db/password`
-- `/kambriq/dev/api/jwt_secret`
+- `/kambriq/dev/api/DATABASE_URL`
+- `/kambriq/dev/api/JWT_SECRET`
+- `/kambriq/dev/api/FRONTEND_URL`
+- `/kambriq/dev/api/SES_FROM_EMAIL`
+- `/kambriq/dev/web/...` (optionnel, pour runtime SSR)
 
 #### 3. `envs/prod/` - Environnement Production
 **Ressources gérées :**
@@ -96,8 +97,11 @@ Infrastructure AWS gérée via Terraform pour la plateforme KAMBRIQ.
 - Domaines personnalisés : **Recommandés** (app.kambriq.com, api.kambriq.com)
 
 **Secrets (SSM Parameter Store) :**
-- `/kambriq/prod/db/password`
-- `/kambriq/prod/api/jwt_secret`
+- `/kambriq/prod/api/DATABASE_URL`
+- `/kambriq/prod/api/JWT_SECRET`
+- `/kambriq/prod/api/FRONTEND_URL`
+- `/kambriq/prod/api/SES_FROM_EMAIL`
+- `/kambriq/prod/web/...` (optionnel, pour runtime SSR)
 
 ### Modules Terraform (9 modules réutilisables)
 
@@ -119,9 +123,8 @@ Infrastructure AWS gérée via Terraform pour la plateforme KAMBRIQ.
 **Module Frontend (`modules/frontend/`) :**
 - Gère S3 bucket pour assets statiques OpenNext
 - CloudFront distribution avec OAC
-- Lambda SSR (placeholder, mis à jour via CI/CD)
-- Support des artefacts OpenNext depuis S3 (`ssr_bundle_s3_key`)
-- Variables : `artifact_bucket_name`, `ssr_bundle_s3_key`, `api_gateway_url`
+- Lambda SSR (fonction créée, code mis à jour via `deploy-app-dev.yml` / `deploy-app-prod.yml`)
+- Variables Terraform : `api_gateway_url` (pour configuration frontend)
 
 ### CI/CD - GitHub Actions (3 workflows)
 
@@ -132,35 +135,26 @@ Infrastructure AWS gérée via Terraform pour la plateforme KAMBRIQ.
 - **Fichiers surveillés :** `envs/shared/**`, `modules/shared/**`, `modules/**`
 - **Rôle :** Infrastructure de base (VPC, Route53, SES, ACM)
 
-#### `terraform-dev.yml` ⭐ AMÉLIORÉ
+#### `terraform-dev.yml` ⭐ SIMPLIFIÉ (Infra only)
 - **Déclencheurs :**
-  - Push vers `develop` → `terraform plan` + `apply` automatique
-  - Workflow Dispatch → Déclenchement manuel avec inputs
-- **Fichiers surveillés :** `envs/dev/**`, `modules/**`
-- **Inputs (workflow_dispatch) :**
-  - `api_bundle_s3_key` : Clé S3 du bundle API (ex: `api/api-abc123.zip`)
-  - `ssr_bundle_s3_key` : Clé S3 du bundle OpenNext (ex: `web/web-abc123.zip`)
-  - `artifact_bucket_name` : Nom du bucket S3 (ex: `kambriq-artifacts-dev`)
+  - Pull Request vers `develop` : Plan uniquement (pas d'apply)
+  - Push vers `develop` : Plan + Apply automatique
+  - Workflow Dispatch : Plan uniquement (manuel)
+- **Fichiers surveillés :** `envs/dev/**`, `modules/**`, `.github/workflows/terraform-dev.yml`
 - **Caractéristiques :** 
-  - Apply automatique pour itération rapide
-  - Consomme les artefacts S3 uploadés par le repo `kambriq`
-  - Documentation intégration avec `kambriq` dans les commentaires
+  - Gère **uniquement l'infrastructure** (Lambda, API Gateway, RDS, S3, CloudFront, SSM, IAM, VPC, etc.)
+  - **Ne déploie pas le code applicatif** (fait par `deploy-app-dev.yml` dans le repo `kambriq`)
+  - Plan sauvegardé comme artifact
 
-#### `terraform-prod.yml` ⭐ AMÉLIORÉ
+#### `terraform-prod.yml` ⭐ SIMPLIFIÉ (Infra only)
 - **Déclencheurs :**
-  - Workflow Dispatch avec choix `plan` ou `apply`
-  - Push de tag `v*` → `plan` puis `apply` automatique
+  - Workflow Dispatch uniquement (manuel)
 - **Fichiers surveillés :** `envs/prod/**`, `modules/**`
-- **Inputs (workflow_dispatch) :**
-  - `action` : `plan` ou `apply`
-  - `api_bundle_s3_key` : Clé S3 du bundle API
-  - `ssr_bundle_s3_key` : Clé S3 du bundle OpenNext
-  - `artifact_bucket_name` : Nom du bucket S3
-- **Structure :** 2 jobs (terraform-plan toujours, terraform-apply conditionnel)
 - **Sécurité :** 
-  - Plan toujours généré avant apply, sauvegardé comme artifact
-  - Protection via GitHub Environment `production` (approbation manuelle commentée)
-  - Documentation intégration avec `kambriq` dans les commentaires
+  - Protection via GitHub Environment `production` (approbation manuelle possible)
+  - Plan sauvegardé comme artifact (rétention 30 jours)
+  - Gère **uniquement l'infrastructure** (Lambda, API Gateway, RDS, S3, CloudFront, SSM, IAM, VPC, etc.)
+  - **Ne déploie pas le code applicatif** (fait par `deploy-app-prod.yml` dans le repo `kambriq`)
 
 ### Backend Terraform
 - **Type :** S3 backend
@@ -292,80 +286,65 @@ api/
 
 ### CI/CD - GitHub Actions (4 workflows)
 
-#### `ci.yml` ⭐ NOUVEAU
+#### `ci.yml` - CI Global
 **Déclencheurs :**
 - `push` et `pull_request` sur `develop` et `main`
 
 **Actions :**
-- **Job `api-ci`** : Install, generate Prisma, lint, test
-- **Job `web-ci`** : Install, lint, check-types
+- **Job `api`** : Install, generate Prisma, lint, test
+- **Job `web`** : Install, lint, check-types
 
 **Rôle :** CI global pour validation du code avant merge
 
-#### `build-artifacts.yml` ⭐ NOUVEAU
+#### `build-artifacts.yml` - Build Artefacts (Optionnel)
 **Déclencheurs :**
 - `push` sur `main`
 - `workflow_dispatch` (manuel)
 
 **Actions :**
-1. Build API → `api-bundle.zip` (dist/ + node_modules/ + prisma/)
+1. Build API → `api-bundle.zip` (dist/ + node_modules/ + prisma/ + package.json)
 2. Build Web OpenNext → `web-ssr.zip` (.open-next/)
 3. Upload vers S3 : `api/api-<sha>.zip` et `web/web-<sha>.zip`
 4. Expose les clés S3 en outputs GitHub Actions
 
-**Rôle :** Génération des artefacts pour consommation par Terraform
+**Rôle :** Génération optionnelle des artefacts pour consommation future
 
 **Outputs :**
 - `api_s3_key` : Clé S3 de l'artefact API
 - `web_s3_key` : Clé S3 de l'artefact Web
 - `artifacts_bucket` : Nom du bucket S3
 
-#### `backend-dev.yml`
+#### `deploy-app-dev.yml` ⭐ NOUVEAU - Déploiement Applicatif DEV
 **Déclencheurs :**
-- Push sur `develop` avec changements dans `api/**`
-- Workflow Dispatch
+- `workflow_dispatch` (manuel)
 
 **Actions :**
-1. Setup pnpm + Node.js 22
-2. Install dependencies
-3. Generate Prisma client
-4. Lint
-5. Test
-6. Build & package Lambda (`pnpm package:lambda`)
-7. Upload Lambda artifact to S3 (`AWS_ARTIFACTS_BUCKET_DEV`)
-8. Deploy Lambda from S3 (update function code)
+1. Build API (NestJS) → package en ZIP
+2. Build Web (OpenNext) → package bundle SSR
+3. Update Lambda API : `aws lambda update-function-code`
+4. Update Lambda SSR : `aws lambda update-function-code`
+5. Sync assets statiques vers S3
+6. Invalidation CloudFront cache
 
-**Rôle :** Déploiement automatique rapide pour développement
+**Rôle :** Déploiement direct du code applicatif en DEV (sans passer par Terraform)
 
 **Secrets requis :**
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
-- `AWS_DEFAULT_REGION` (optionnel, défaut: eu-central-1)
-- `AWS_ARTIFACTS_BUCKET_DEV`
+- `AWS_ACCESS_KEY_ID_DEV`, `AWS_SECRET_ACCESS_KEY_DEV`, `AWS_REGION_DEV`
+- `API_LAMBDA_NAME_DEV`, `WEB_SSR_LAMBDA_NAME_DEV`
+- `WEB_ASSETS_BUCKET_DEV`, `CLOUDFRONT_DISTRIBUTION_ID_DEV`
 
-#### `frontend-dev.yml` ⭐ AMÉLIORÉ
+#### `deploy-app-prod.yml` ⭐ NOUVEAU - Déploiement Applicatif PROD
 **Déclencheurs :**
-- Push sur `develop` avec changements dans `web/**`
-- Workflow Dispatch
+- `workflow_dispatch` (manuel)
 
-**Actions :**
-1. Setup pnpm + Node.js 22
-2. Install dependencies
-3. Lint
-4. Check types ⭐ AJOUTÉ
-5. Test
-6. Build OpenNext (`pnpm build:opennext`) ⭐ MIGRÉ
-7. Archive OpenNext artifacts to S3
-8. Deploy static assets to S3 (`.open-next/assets/`)
-9. Invalidate CloudFront
+**Protection :**
+- Environment `production` (approbation manuelle possible)
 
-**Rôle :** Déploiement automatique rapide pour développement
+**Actions :** Identiques à `deploy-app-dev.yml` mais pour l'environnement production
 
-**Secrets requis :**
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
-- `AWS_DEFAULT_REGION` (optionnel, défaut: eu-central-1)
-- `AWS_ARTIFACTS_BUCKET_DEV` (optionnel)
+**Secrets requis :** Même structure avec suffixe `_PROD`
+
+**⚠️ Note :** Les workflows `backend-dev.yml` et `frontend-dev.yml` ont été supprimés. Le déploiement se fait maintenant directement via `deploy-app-dev.yml` et `deploy-app-prod.yml`.
 
 ### Scripts Utilitaires
 
@@ -385,23 +364,34 @@ Génère `web/.env.dev.terraform` avec les variables d'environnement depuis les 
 
 ## 🔗 Intégration entre les Repos
 
-### 1. Artefacts S3 → Infrastructure Terraform ⭐ NOUVEAU
+### 1. Séparation des Responsabilités ⭐ NOUVEAU (2025-12-07)
 
-**Flux principal :**
-1. **Repo `kambriq`** : Workflow `build-artifacts.yml` build et upload vers S3
-   - `api/api-<sha>.zip` → Bundle Lambda NestJS
-   - `web/web-<sha>.zip` → Bundle OpenNext
-   - Outputs : `api_s3_key`, `web_s3_key`, `artifacts_bucket`
+**Repository `kambriq-aws-iac-terraform` (ce repo) :**
+- Gère **uniquement l'infrastructure** via Terraform
+- Crée et configure les ressources AWS (Lambda, API Gateway, RDS, S3, CloudFront, SSM, IAM, VPC, etc.)
+- Ne déploie **pas** le code applicatif
 
-2. **Repo `kambriq-aws-iac-terraform`** : Workflows Terraform consomment les artefacts
-   - Variables : `api_bundle_s3_key`, `ssr_bundle_s3_key`, `artifact_bucket_name`
-   - Passées via `workflow_dispatch` inputs ou variables d'environnement
-   - Terraform utilise les artefacts S3 pour déployer Lambda et OpenNext
+**Repository `kambriq` :**
+- Gère le code applicatif (API + Web)
+- Déploie le code via les workflows `deploy-app-dev.yml` et `deploy-app-prod.yml`
+- Effectue directement : build, package, `aws lambda update-function-code`, sync S3, invalidation CloudFront
 
-**Récupération des clés S3 :**
-1. Aller dans `kambriq` → Actions → `build-artifacts` workflow
-2. Copier les S3 keys depuis les outputs
-3. Utiliser dans `terraform-dev.yml` ou `terraform-prod.yml`
+### 2. Flux de Déploiement
+
+**Infrastructure (ce repo) :**
+1. Modifier le code Terraform si nécessaire
+2. Exécuter `terraform-dev.yml` ou `terraform-prod.yml` pour mettre à jour l'infrastructure
+3. Terraform crée/modifie les ressources AWS (Lambda functions, API Gateway, RDS, S3, CloudFront, etc.)
+
+**Application (repo `kambriq`) :**
+1. Modifier le code API ou Web
+2. Exécuter `deploy-app-dev.yml` ou `deploy-app-prod.yml` pour déployer le nouveau code
+3. Les workflows effectuent directement :
+   - Build API + Web
+   - Package en ZIP
+   - `aws lambda update-function-code` (API + SSR)
+   - Sync assets S3
+   - Invalidation CloudFront
 
 ### 2. Terraform Outputs → Variables d'environnement applicatif
 
@@ -417,32 +407,45 @@ Génère `web/.env.dev.terraform` avec les variables d'environnement depuis les 
 | `frontend_cloudfront_url` | `NEXT_PUBLIC_SITE_URL` | Site URL pour metadata |
 | `media_s3_public_bucket_name` | `NEXT_PUBLIC_S3_BUCKET_NAME` | S3 bucket pour uploads |
 
-### 3. Secrets Management
+### 3. Secrets Management ⭐ NOUVEAU (2025-12-07)
 
-**Backend (Lambda) :**
-- Secrets récupérés depuis SSM Parameter Store
-- Variables d'environnement Lambda configurées par Terraform :
-  - `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`
-  - `S3_MEDIA_BUCKET`
-  - `SES_FROM_EMAIL`
-  - `JWT_SECRET`
+**Structure SSM Parameter Store :**
+```
+/kambriq/{dev|prod}/{api|web}/{parameter_name}
+```
 
-**Frontend (Next.js) :**
-- Variables d'environnement publiques (préfixe `NEXT_PUBLIC_`)
-- Générées depuis les outputs Terraform
+**Secrets API (stockés dans SSM) :**
+- `/kambriq/dev/api/DATABASE_URL`
+- `/kambriq/dev/api/JWT_SECRET`
+- `/kambriq/dev/api/FRONTEND_URL`
+- `/kambriq/dev/api/SES_FROM_EMAIL`
+- Même structure pour `/kambriq/prod/api/...`
+
+**Secrets Web (optionnel, pour runtime SSR) :**
+- `/kambriq/dev/web/...` (si nécessaire)
+- `/kambriq/prod/web/...` (si nécessaire)
+
+**Chargement au runtime :**
+- **API (Lambda)** : Lit depuis SSM via `@aws-sdk/client-ssm` au démarrage (voir `api/src/infrastructure/config/config-loader.ts`)
+- **Web (SSR)** : Optionnel, via `web/src/lib/runtimeConfig.ts` si nécessaire
+- **Local** : Utilise `.env` (fichier local, non commité)
+
+**GitHub Secrets :**
+- Ne contiennent que des credentials techniques CI/CD (compte IAM, noms de Lambdas, buckets, IDs CloudFront)
+- Ne contiennent **pas** les secrets métier (ceux-ci sont dans SSM)
 
 ### 4. CI/CD Coordination
 
 **Flux de déploiement :**
 
 1. **Application (repo `kambriq`) :**
-   - Workflow `build-artifacts.yml` : Build et upload artefacts S3
-   - Workflows `backend-dev.yml` / `frontend-dev.yml` : Déploiement auto sur `develop`
+   - Workflow `build-artifacts.yml` : Build et upload artefacts S3 (optionnel)
+   - Workflows `deploy-app-dev.yml` et `deploy-app-prod.yml` : Déploiement direct du code applicatif (API + Web)
 
 2. **Infrastructure (repo `kambriq-aws-iac-terraform`) :**
-   - Workflows Terraform consomment les artefacts S3
-   - Déploient l'infrastructure avec les nouveaux artefacts
-   - Génèrent les outputs nécessaires
+   - Workflows Terraform (`terraform-dev.yml`, `terraform-prod.yml`) : Gestion de l'infrastructure uniquement (ne déploie pas le code applicatif)
+   - Créent/modifient les ressources AWS (Lambda, API Gateway, RDS, S3, CloudFront, SSM, IAM, VPC, etc.)
+   - Génèrent les outputs nécessaires (noms de Lambdas, buckets, IDs CloudFront, etc.)
 
 **Ordre recommandé :**
 1. Déployer infrastructure `shared` → `dev` → `prod`
@@ -585,11 +588,11 @@ pnpm package:lambda
 
 **Frontend :**
 ```bash
-# Déploiement automatique via GitHub Actions sur push vers develop
+# Déploiement automatique via GitHub Actions (workflow build-artifacts.yml)
 # Ou manuellement :
 cd kambriq/web
-pnpm build:static
-# Sync vers S3 et invalidation CloudFront
+pnpm build:opennext  # Build OpenNext (génère .open-next/)
+# Upload artefacts vers S3 et déploiement via Terraform
 ```
 
 ---
@@ -707,19 +710,17 @@ pnpm build:static
 |----------|-------------|---------|
 | `terraform-shared.yml` | PR vers `main` | `terraform plan` (commentaire PR) |
 | `terraform-shared.yml` | Push vers `main` | `terraform plan` + `apply` |
-| `terraform-dev.yml` | Push vers `develop` | `terraform plan` + `apply` (auto) |
-| `terraform-dev.yml` | Workflow Dispatch | `terraform plan` + `apply` avec inputs artefacts S3 |
-| `terraform-prod.yml` | Workflow Dispatch | `terraform plan` (toujours) + `apply` (conditionnel, avec inputs) |
-| `terraform-prod.yml` | Tag `v*` | `terraform plan` + `apply` (auto) |
+| `terraform-dev.yml` | PR vers `develop` (plan), Push `develop` (plan+apply), Workflow Dispatch (plan) | Infrastructure DEV uniquement (ne déploie pas le code applicatif) |
+| `terraform-prod.yml` | Workflow Dispatch | Infrastructure PROD uniquement (ne déploie pas le code applicatif) + protection environnement `production` |
 
 ### Application (`kambriq`)
 
 | Workflow | Déclencheur | Actions |
 |----------|-------------|---------|
 | `ci.yml` | Push/PR sur `develop`, `main` | Lint, test, check-types (API + Web) |
-| `build-artifacts.yml` | Push sur `main`, `workflow_dispatch` | Build API + Web OpenNext, upload S3 artefacts |
-| `backend-dev.yml` | Push vers `develop` (api/**) | Build, test, package Lambda, deploy (auto) |
-| `frontend-dev.yml` | Push vers `develop` (web/**) | Build OpenNext, deploy S3, invalidate CloudFront (auto) |
+| `build-artifacts.yml` | Push sur `main`, `workflow_dispatch` | Build API + Web OpenNext, upload S3 artefacts, expose `api_s3_key` et `web_s3_key` (optionnel) |
+| `deploy-app-dev.yml` ⭐ NOUVEAU | Workflow Dispatch | Déploiement applicatif DEV : build, update Lambda API + SSR, sync S3, invalidation CloudFront |
+| `deploy-app-prod.yml` ⭐ NOUVEAU | Workflow Dispatch | Déploiement applicatif PROD : même logique que dev, avec protection `production` |
 
 ---
 
@@ -739,79 +740,62 @@ pnpm build:static
 - [ ] Vérifier que les secrets sont dans SSM Parameter Store
 
 ### Application
-- [ ] Configurer secrets GitHub Actions (AWS credentials)
+- [ ] Configurer secrets GitHub Actions (AWS credentials pour workflows applicatifs)
 - [ ] Tester workflow `ci.yml` (lint, test, check-types)
-- [ ] Tester workflow `build-artifacts.yml` (build et upload S3)
-- [ ] Tester déploiement backend (push vers `develop` → `backend-dev.yml`)
-- [ ] Tester déploiement frontend (push vers `develop` → `frontend-dev.yml`)
+- [ ] Tester workflow `build-artifacts.yml` (build et upload S3 - optionnel)
+- [ ] Tester déploiement applicatif DEV (workflow `deploy-app-dev.yml`)
+- [ ] Tester déploiement applicatif PROD (workflow `deploy-app-prod.yml`)
 - [ ] Vérifier que l'application fonctionne avec l'infrastructure
 
-### Intégration Artefacts S3
-- [ ] Vérifier que `build-artifacts.yml` upload correctement vers S3
-- [ ] Tester déploiement Terraform avec artefacts S3 (workflow_dispatch avec inputs)
-- [ ] Vérifier que Lambda utilise le bon bundle API
-- [ ] Vérifier que OpenNext utilise le bon bundle Web
+### Intégration Infrastructure/Application
+- [ ] Vérifier que l'infrastructure est déployée (via `terraform-dev.yml` / `terraform-prod.yml`)
+- [ ] Vérifier que les Lambda functions existent (créées par Terraform)
+- [ ] Tester déploiement du code applicatif (via `deploy-app-dev.yml` / `deploy-app-prod.yml`)
+- [ ] Vérifier que Lambda API utilise le nouveau code
+- [ ] Vérifier que Lambda SSR utilise le nouveau code
+- [ ] Vérifier que les assets S3 sont synchronisés
 
 ---
 
 ---
 
-## 📦 Système d'Artefacts S3
+## 📦 Déploiements Applicatifs
 
-### Structure des Artefacts
+**⚠️ Important** : Depuis 2025-12-07, les déploiements applicatifs (mise à jour du code API + Web) sont gérés par les workflows `deploy-app-dev.yml` et `deploy-app-prod.yml` dans le repository `kambriq`. Terraform ne gère plus les artefacts applicatifs.
 
-Les artefacts sont générés par le repo `kambriq` et uploadés dans un bucket S3 dédié :
+### Workflows de Déploiement Applicatif
 
-**Bucket S3 :** `kambriq-artifacts-{env}` (ex: `kambriq-artifacts-dev`, `kambriq-artifacts-prod`)
+**Repository `kambriq` :**
 
-**Structure :**
-```
-kambriq-artifacts-{env}/
-├── api/
-│   └── api-<sha>.zip          # Bundle Lambda NestJS
-└── web/
-    └── web-<sha>.zip          # Bundle OpenNext
-```
+**`deploy-app-dev.yml`** :
+- Build API + Web
+- Package en ZIP
+- `aws lambda update-function-code` (API + SSR)
+- Sync assets S3
+- Invalidation CloudFront
 
-**Contenu des artefacts :**
+**`deploy-app-prod.yml`** :
+- Même logique que dev
+- Protection via GitHub Environment `production`
 
-**API Bundle (`api/api-<sha>.zip`) :**
+### Structure des Bundles
+
+**API Bundle** :
 - `dist/` - Code compilé NestJS (inclut `dist/lambda.js`)
 - `node_modules/` - Dépendances runtime
 - `prisma/` - Schema et migrations
 - `package.json` - Métadonnées
 
-**Web Bundle (`web/web-<sha>.zip`) :**
+**Web Bundle** :
 - `.open-next/` - Structure complète OpenNext
   - `.open-next/assets/` - Assets statiques pour S3
   - `.open-next/server/` - Lambda functions pour SSR
   - `.open-next/cache/` - Configuration ISR
   - `.open-next/image-optimization/` - Lambda@Edge pour images
 
-### Utilisation dans Terraform
+**Note** : Le workflow `build-artifacts.yml` peut toujours générer et uploader des artefacts S3 (optionnel), mais ils ne sont plus consommés par Terraform.
 
-Les workflows Terraform consomment ces artefacts via variables :
-- `artifact_bucket_name` : Nom du bucket S3
-- `api_bundle_s3_key` : Clé S3 du bundle API
-- `ssr_bundle_s3_key` : Clé S3 du bundle OpenNext
-
-**Exemple :**
-```hcl
-# envs/dev/main.tf
-module "lambda" {
-  source = "../../modules/lambda-api"
-  # ...
-  artifact_bucket_name = var.artifact_bucket_name
-  api_bundle_s3_key    = var.api_bundle_s3_key
-}
-
-module "frontend" {
-  source = "../../modules/frontend"
-  # ...
-  artifact_bucket_name = var.artifact_bucket_name
-  ssr_bundle_s3_key   = var.ssr_bundle_s3_key
-}
-```
+**Note** : Les variables Terraform `artifact_bucket_name`, `api_bundle_s3_key` et `ssr_bundle_s3_key` ne sont plus utilisées. Terraform crée uniquement les Lambda functions (structure), le code est mis à jour via les workflows `deploy-app-dev.yml` et `deploy-app-prod.yml` dans le repository `kambriq`.
 
 ---
 
@@ -820,7 +804,7 @@ module "frontend" {
 ### Migration Frontend (Next.js → OpenNext)
 
 **Avant :**
-- Export statique Next.js (`output: 'export'`)
+- OpenNext build (`pnpm build:opennext` génère `.open-next/`)
 - Déploiement S3 + CloudFront uniquement
 - Pas de SSR
 
@@ -842,20 +826,22 @@ module "frontend" {
 - Cold start optimization (cache de l'instance NestJS)
 - Compatible HTTP API Gateway (payload v2)
 
-### Nouveau Système d'Artefacts
+### Séparation Infrastructure/Applicatif (2025-12-07)
 
-**Avant :**
-- Déploiement direct depuis workflows applicatifs
-- Pas de séparation claire entre build et déploiement infra
+**Avant (modèle obsolète) :**
+- Terraform déployait aussi le code applicatif via artefacts S3
+- Workflows Terraform avec inputs `api_s3_key` et `web_s3_key`
+- Variables Terraform `api_bundle_s3_key` et `ssr_bundle_s3_key` (supprimées)
 
 **Après :**
-- Workflow `build-artifacts.yml` : Build et upload artefacts S3
-- Workflows Terraform : Consomment les artefacts S3
-- Traçabilité : Artefacts versionnés avec SHA
-- Rollback facilité : Utiliser un artefact précédent
+- Terraform gère uniquement l'infrastructure (création/modification des ressources AWS)
+- Déploiements applicatifs via workflows `deploy-app-dev.yml` et `deploy-app-prod.yml` dans le repo `kambriq`
+- Workflows Terraform simplifiés (pas d'inputs pour artefacts)
+- Secrets gérés via SSM Parameter Store (`/kambriq/{env}/{api|web}/...`)
+- Chargement des secrets au runtime par l'application
 
 ---
 
-**Dernière mise à jour :** 2025-01-27  
-**Version :** 2.0 (OpenNext + Lambda NestJS + Artefacts S3)  
+**Dernière mise à jour :** 2025-12-07  
+**Version :** 3.1 (Séparation infrastructure/applicatif - SSM Parameter Store - Déploiements directs - Outils CLI)  
 **Maintenu par :** Équipe Infrastructure KAMBRIQ

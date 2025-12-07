@@ -75,14 +75,12 @@ resource "aws_s3_bucket_public_access_block" "static" {
 #
 # ============================================================================
 
-# Dummy zip for initial Lambda SSR (will be replaced by OpenNext bundle extraction)
-# Only create dummy if S3 artifact is not provided
+# Dummy zip for initial Lambda SSR (code deployed via deploy-app-dev.yml / deploy-app-prod.yml)
 data "archive_file" "dummy_ssr" {
-  count       = var.ssr_bundle_s3_key == "" || var.artifact_bucket_name == "" ? 1 : 0
   type        = "zip"
   output_path = "${path.module}/dummy-ssr.zip"
   source {
-    content  = "exports.handler = async (event) => { return { statusCode: 200, body: JSON.stringify({ message: 'OpenNext SSR Lambda - extract .open-next/server/ from bundle and deploy via CI/CD' }) }; };"
+    content  = "exports.handler = async (event) => { return { statusCode: 200, body: JSON.stringify({ message: 'OpenNext SSR Lambda - code deployed via deploy-app-dev.yml / deploy-app-prod.yml' }) }; };"
     filename = "index.js"
   }
 }
@@ -100,11 +98,9 @@ resource "aws_lambda_function" "ssr" {
   timeout       = 30
   memory_size   = 1024
 
-  # Note: Cannot use OpenNext bundle ZIP directly as Lambda source
-  # The bundle must be extracted and individual functions deployed
-  # For now, use dummy placeholder
-  filename         = data.archive_file.dummy_ssr[0].output_path
-  source_code_hash = data.archive_file.dummy_ssr[0].output_base64sha256
+  # Source code: Always use dummy placeholder (code deployed via deploy-app-dev.yml / deploy-app-prod.yml)
+  filename         = data.archive_file.dummy_ssr.output_path
+  source_code_hash = data.archive_file.dummy_ssr.output_base64sha256
 
   vpc_config {
     subnet_ids         = var.subnet_ids

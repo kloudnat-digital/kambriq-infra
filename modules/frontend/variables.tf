@@ -9,17 +9,13 @@ variable "project_name" {
   default     = "kambriq"
 }
 
-variable "artifact_bucket_name" {
-  description = "S3 bucket name where OpenNext artifacts are stored (e.g., kambriq-artifacts-dev). Note: OpenNext bundle must be extracted before use."
-  type        = string
-  default     = ""
-}
-
-variable "ssr_bundle_s3_key" {
-  description = "S3 key of the OpenNext SSR bundle ZIP (e.g., web/web-abc123.zip). Note: This bundle contains .open-next/ and must be extracted. Lambda functions are in .open-next/server/."
-  type        = string
-  default     = ""
-}
+# ============================================================================
+# Artifact Configuration - REMOVED
+# ============================================================================
+# Variables artifact_bucket_name and ssr_bundle_s3_key have been removed.
+# Terraform only creates the Lambda SSR function structure with dummy placeholder code.
+# Application code is deployed via workflows deploy-app-dev.yml and deploy-app-prod.yml
+# in the kambriq repository using aws lambda update-function-code.
 
 variable "vpc_id" {
   description = "VPC ID for Lambda functions"
