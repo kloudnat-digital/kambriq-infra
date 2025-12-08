@@ -139,14 +139,29 @@ Les secrets sont stockés avec la structure suivante :
 
 ### Required SSM Parameters
 
-#### Secrets API
+**Paramètres SSM obligatoires (par environnement)** :
+
+Pour chaque environnement (dev, prod), les paramètres suivants sont **obligatoires** :
+
+1. **`/kambriq/{env}/db/password`** – `SecureString` – Mot de passe RDS (requis par Terraform, doit être créé manuellement avant le premier `terraform apply`)
+2. **`/kambriq/{env}/api/DATABASE_URL`** – `SecureString` – URL PostgreSQL complète (créé automatiquement par Terraform)
+3. **`/kambriq/{env}/api/JWT_SECRET`** – `SecureString` – Secret JWT (créé automatiquement par Terraform)
+4. **`/kambriq/{env}/api/FRONTEND_URL`** – `String` – URL frontend (créé automatiquement par Terraform)
+5. **`/kambriq/{env}/api/SES_FROM_EMAIL`** – `String` – Adresse expéditeur SES (créé automatiquement par Terraform)
+
+**Note importante** :
+- Le paramètre `/kambriq/{env}/db/password` doit être créé **manuellement** avant le premier `terraform apply`.
+- Les 4 paramètres `/kambriq/{env}/api/*` sont **créés automatiquement par Terraform** via le module `ssm-app-parameters`.
+- Ces paramètres sont **vérifiés automatiquement** par `check-ssm-params.js` avant un déploiement applicatif.
+
+#### Secrets API (créés automatiquement par Terraform)
 
 | Parameter Path | Type | Description | Source |
 |---------------|------|-------------|--------|
-| `/kambriq/{env}/api/DATABASE_URL` | SecureString | Complete PostgreSQL connection string | Construit manuellement ou via script |
-| `/kambriq/{env}/api/JWT_SECRET` | SecureString | JWT signing secret | Généré manuellement |
-| `/kambriq/{env}/api/FRONTEND_URL` | String | Frontend URL (pour CORS et emails) | Depuis Terraform output `frontend_url` |
-| `/kambriq/{env}/api/SES_FROM_EMAIL` | String | SES sender email | Depuis Terraform output `ses_from_email` |
+| `/kambriq/{env}/api/DATABASE_URL` | SecureString | Complete PostgreSQL connection string | ✅ Créé par Terraform (module `ssm-app-parameters`) depuis RDS outputs |
+| `/kambriq/{env}/api/JWT_SECRET` | SecureString | JWT signing secret | ✅ Créé par Terraform (depuis `/kambriq/{env}/api/jwt_secret` ou placeholder) |
+| `/kambriq/{env}/api/FRONTEND_URL` | String | Frontend URL (pour CORS et emails) | ✅ Créé par Terraform depuis CloudFront output |
+| `/kambriq/{env}/api/SES_FROM_EMAIL` | String | SES sender email | ✅ Créé par Terraform depuis `var.ses_from_email` |
 
 #### Secrets Web (optionnel, pour runtime SSR)
 
@@ -158,49 +173,26 @@ Les secrets sont stockés avec la structure suivante :
 
 ### Creating SSM Parameters
 
-**⚠️ Important** : Les secrets doivent être créés manuellement dans SSM Parameter Store. Terraform ne gère pas les secrets applicatifs.
+**⚠️ Important** : 
+- Le paramètre `/kambriq/{env}/db/password` doit être créé **manuellement** avant le premier `terraform apply`.
+- Les 4 paramètres `/kambriq/{env}/api/*` sont créés **automatiquement par Terraform** via le module `ssm-app-parameters` lors du `terraform apply`.
 
-#### Création manuelle des secrets
+#### Création manuelle du paramètre db/password (requis avant terraform apply)
 
 ```bash
 # Set environment
 ENV=dev  # or prod
 
-# Get Terraform outputs (pour construire DATABASE_URL)
-cd kambriq-aws-iac-terraform/envs/$ENV
-terraform output -json > tf-outputs.json
-
-# Store DATABASE_URL (construit depuis les outputs Terraform)
-DB_HOST=$(jq -r '.db_host.value' tf-outputs.json)
-DB_PORT=$(jq -r '.db_port.value' tf-outputs.json)
-DB_NAME=$(jq -r '.db_name.value' tf-outputs.json)
-DB_USERNAME=$(jq -r '.db_username.value' tf-outputs.json)
-# DB_PASSWORD doit être généré/saisi manuellement
-DB_PASSWORD="your-secure-password"
-
-DATABASE_URL="postgres://${DB_USERNAME}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}"
-
+# Créer le paramètre db/password (requis avant terraform apply)
+DB_PASSWORD="your-secure-password"  # Générer un mot de passe fort
 aws ssm put-parameter \
-  --name "/kambriq/$ENV/api/DATABASE_URL" \
-  --value "$DATABASE_URL" \
+  --name "/kambriq/$ENV/db/password" \
+  --value "$DB_PASSWORD" \
   --type SecureString \
-  --overwrite
+  --region eu-central-1
 
-# Store JWT_SECRET (généré manuellement)
-JWT_SECRET="your-jwt-secret-key"
-aws ssm put-parameter \
-  --name "/kambriq/$ENV/api/JWT_SECRET" \
-  --value "$JWT_SECRET" \
-  --type SecureString \
-  --overwrite
-
-# Store FRONTEND_URL (depuis Terraform output)
-FRONTEND_URL=$(jq -r '.frontend_url.value' tf-outputs.json)
-aws ssm put-parameter \
-  --name "/kambriq/$ENV/api/FRONTEND_URL" \
-  --value "$FRONTEND_URL" \
-  --type String \
-  --overwrite
+# Les 4 paramètres /kambriq/{env}/api/* seront créés automatiquement par Terraform
+# lors du terraform apply via le module ssm-app-parameters
 
 # Store SES_FROM_EMAIL (depuis Terraform output)
 SES_FROM_EMAIL=$(jq -r '.ses_from_email.value' tf-outputs.json)
