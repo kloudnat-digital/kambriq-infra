@@ -39,23 +39,21 @@ resource "aws_ssm_parameter" "database_url" {
 # Note: If jwt_secret is provided, use it. Otherwise, try to read from existing SSM parameter.
 # The existing parameter might be in lowercase (/kambriq/{env}/api/jwt_secret)
 # but we create it in uppercase (/kambriq/{env}/api/JWT_SECRET) as expected by the app.
-# ============================================================================
-# JWT_SECRET - JWT signing secret
-# ============================================================================
-# Note: If jwt_secret is provided, use it. Otherwise, try to read from existing SSM parameter.
-# The existing parameter might be in lowercase (/kambriq/{env}/api/jwt_secret)
-# but we create it in uppercase (/kambriq/{env}/api/JWT_SECRET) as expected by the app.
 #
 # IMPORTANT: If jwt_secret is not provided and the existing SSM parameter doesn't exist,
 # the parameter will be created with a placeholder value. You must update it manually
 # with a secure secret before deploying the application.
+#
+# The lifecycle ignore_changes ensures that manual updates to the secret value
+# won't be overwritten by Terraform.
 resource "aws_ssm_parameter" "jwt_secret" {
   name = "/kambriq/${var.env}/api/JWT_SECRET"
   type = "SecureString"
   # Use provided value, or try to read from existing SSM (lowercase), or placeholder
-  value = var.jwt_secret != "" ? var.jwt_secret : try(
-    data.aws_ssm_parameter.jwt_secret_existing[0].value,
-    "CHANGE-ME-GENERATE-A-SECRET-MIN-32-CHARS"
+  value = var.jwt_secret != "" ? var.jwt_secret : (
+    length(data.aws_ssm_parameter.jwt_secret_existing) > 0
+    ? data.aws_ssm_parameter.jwt_secret_existing[0].value
+    : "CHANGE-ME-GENERATE-A-SECRET-MIN-32-CHARS"
   )
 
   description = "JWT signing secret for ${var.env} environment"
@@ -73,8 +71,9 @@ resource "aws_ssm_parameter" "jwt_secret" {
 
 # Data source to read existing JWT secret if not provided
 # Try lowercase first (legacy naming)
-# Note: This data source will fail if the parameter doesn't exist, but we handle that
-# with try() in the resource value above
+# WARNING: This data source will fail during terraform plan/apply if the parameter
+# doesn't exist. In that case, ensure /kambriq/{env}/api/jwt_secret exists first,
+# or provide jwt_secret as a variable.
 data "aws_ssm_parameter" "jwt_secret_existing" {
   count = var.jwt_secret == "" ? 1 : 0
   name  = "/kambriq/${var.env}/api/jwt_secret" # Try lowercase first (legacy)
