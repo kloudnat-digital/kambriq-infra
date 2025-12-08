@@ -2,25 +2,18 @@ name: Terraform Dev (infra only)
 
 on:
   pull_request:
-    branches:
-      - develop
+    branches: [ develop ]
     paths:
-      - 'envs/dev/**'
-      - 'modules/**'
-      - '.github/workflows/terraform-dev.yml'
+      - "envs/dev/**"
+      - "modules/**"
+      - ".github/workflows/terraform-dev.yml"
   push:
-    branches:
-      - develop
+    branches: [ develop ]
     paths:
-      - 'envs/dev/**'
-      - 'modules/**'
-      - '.github/workflows/terraform-dev.yml'
+      - "envs/dev/**"
+      - "modules/**"
+      - ".github/workflows/terraform-dev.yml"
   workflow_dispatch:
-    inputs:
-      plan_only:
-        description: 'Run plan only (no apply)'
-        type: boolean
-        default: true
 
 jobs:
   terraform-dev:
