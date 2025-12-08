@@ -281,7 +281,8 @@ module "ssm_app_parameters" {
   db_username = module.rds.db_username
   db_password = data.aws_ssm_parameter.db_password.value
 
-  # JWT secret (read from existing SSM or use provided value)
+  # JWT secret (read from existing SSM - will create /kambriq/{env}/api/JWT_SECRET from /kambriq/{env}/api/jwt_secret)
+  # If jwt_secret doesn't exist in SSM, it will be created with a placeholder that you must update manually
   jwt_secret = data.aws_ssm_parameter.jwt_secret.value
 
   # Frontend URL from CloudFront
