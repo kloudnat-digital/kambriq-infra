@@ -184,11 +184,16 @@ Pour chaque environnement (dev, prod), les paramètres suivants sont **obligatoi
 ENV=dev  # or prod
 
 # Créer le paramètre db/password (requis avant terraform apply)
-DB_PASSWORD="your-secure-password"  # Générer un mot de passe fort
+# ⚠️ IMPORTANT : Le mot de passe RDS ne peut contenir que des caractères ASCII imprimables
+# sauf '/', '@', '"' (guillemets doubles) et ' ' (espace)
+# Exemples valides : "KambriqDev2024!Secure", "Prod-DB-Pass-123-ABC"
+# Exemples invalides : "pass@word" (contient @), "pass/word" (contient /), "pass word" (contient espace)
+DB_PASSWORD="your-secure-password"  # Générer un mot de passe fort (sans /, @, ", espace)
 aws ssm put-parameter \
   --name "/kambriq/$ENV/db/password" \
   --value "$DB_PASSWORD" \
   --type SecureString \
+  --overwrite \
   --region eu-central-1
 
 # Les 4 paramètres /kambriq/{env}/api/* seront créés automatiquement par Terraform
