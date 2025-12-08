@@ -72,3 +72,4 @@ variable "ses_from_email" {
 # Application code is deployed via workflows deploy-app-dev.yml and deploy-app-prod.yml in the kambriq repository.
 # Terraform only creates the Lambda function structure (with dummy placeholder code).
 
+
