@@ -71,9 +71,14 @@ resource "aws_ssm_parameter" "jwt_secret" {
 
 # Data source to read existing JWT secret if not provided
 # Try lowercase first (legacy naming)
-# WARNING: This data source will fail during terraform plan/apply if the parameter
-# doesn't exist. In that case, ensure /kambriq/{env}/api/jwt_secret exists first,
-# or provide jwt_secret as a variable.
+# NOTE: This data source will fail during terraform plan/apply if the parameter
+# /kambriq/{env}/api/jwt_secret doesn't exist. In that case:
+# 1. Create /kambriq/{env}/api/jwt_secret manually first with:
+#    aws ssm put-parameter --name "/kambriq/{env}/api/jwt_secret" --value "your-secret" --type SecureString
+#    OR
+# 2. Provide jwt_secret as a variable to the module
+#    OR
+# 3. The parameter will be created with a placeholder that you must update manually
 data "aws_ssm_parameter" "jwt_secret_existing" {
   count = var.jwt_secret == "" ? 1 : 0
   name  = "/kambriq/${var.env}/api/jwt_secret" # Try lowercase first (legacy)
