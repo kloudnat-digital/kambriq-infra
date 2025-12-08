@@ -61,4 +61,3 @@ module "shared" {
   enable_s3_logs      = var.enable_s3_logs
   enable_s3_artifacts = var.enable_s3_artifacts
 }
-

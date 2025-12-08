@@ -88,4 +88,3 @@ output "artifacts_bucket_id" {
   description = "S3 bucket ID for artifacts"
   value       = module.shared.artifacts_bucket_id
 }
-
