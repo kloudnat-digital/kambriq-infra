@@ -141,8 +141,10 @@ data "aws_ssm_parameter" "db_password" {
 }
 
 # JWT secret from SSM Parameter Store
+# Try lowercase first (legacy), fallback handled in module
 data "aws_ssm_parameter" "jwt_secret" {
-  name = "/kambriq/dev/api/jwt_secret"
+  name            = "/kambriq/dev/api/jwt_secret"
+  with_decryption = true
 }
 
 # ============================================================================
@@ -223,7 +225,7 @@ module "lambda" {
 
   env         = local.env
   runtime     = "nodejs20.x"
-  handler     = "dist/lambda.handler"  # Updated: use lambda.handler for NestJS Lambda adapter
+  handler     = "dist/lambda.handler" # Updated: use lambda.handler for NestJS Lambda adapter
   timeout     = 30
   memory_size = 512
 
@@ -259,4 +261,32 @@ module "api_gateway" {
   # See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions.
   domain_name     = var.api_domain != "" ? var.api_domain : ""
   certificate_arn = var.api_certificate_arn != "" ? var.api_certificate_arn : ""
+}
+
+# ============================================================================
+# SSM Application Parameters
+# ============================================================================
+# Create SSM parameters for application runtime configuration
+# These parameters are read by the application at runtime (see check-ssm-params.js)
+
+module "ssm_app_parameters" {
+  source = "../../modules/ssm-app-parameters"
+
+  env = local.env
+
+  # Database connection details
+  db_host     = module.rds.db_host
+  db_port     = module.rds.db_port
+  db_name     = module.rds.db_name
+  db_username = module.rds.db_username
+  db_password = data.aws_ssm_parameter.db_password.value
+
+  # JWT secret (read from existing SSM or use provided value)
+  jwt_secret = data.aws_ssm_parameter.jwt_secret.value
+
+  # Frontend URL from CloudFront
+  frontend_url = module.frontend.cloudfront_url
+
+  # SES sender email
+  ses_from_email = var.ses_from_email
 }
