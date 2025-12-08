@@ -74,6 +74,6 @@ jobs:
           retention-days: 7
 
       - name: Terraform Apply (push develop)
-        if: github.event_name == 'push' && success()
+        if: github.event_name == 'push' && github.ref == 'refs/heads/develop' && success()
         working-directory: ${{ env.WORKING_DIR }}
         run: terraform apply -input=false -auto-approve terraform.tfplan
