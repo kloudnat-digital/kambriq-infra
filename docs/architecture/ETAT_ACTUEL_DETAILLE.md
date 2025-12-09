@@ -672,6 +672,7 @@ Permet de générer et stocker les secrets dans SSM Parameter Store avec la nouv
 | API Gateway | aws_apigatewayv2_api | kambriq-api-dev | ✅ Créé |
 | S3 Static | aws_s3_bucket | kambriq-static-dev-{hash} | ✅ Créé |
 | S3 Media | aws_s3_bucket | kambriq-media-dev-{hash} | ✅ Créé |
+| S3 Verify Store | aws_s3_bucket | kambriq-verify-store-dev | ✅ Créé |
 | CloudFront | aws_cloudfront_distribution | kambriq-frontend-dev | ✅ Créé |
 | IAM Role | aws_iam_role | kambriq-lambda-role-dev | ✅ Créé |
 | Security Group RDS | aws_security_group | kambriq-rds-dev | ✅ Créé |
@@ -686,6 +687,7 @@ Permet de générer et stocker les secrets dans SSM Parameter Store avec la nouv
 | API Gateway | aws_apigatewayv2_api | kambriq-api-prod | ✅ Créé |
 | S3 Static | aws_s3_bucket | kambriq-static-prod-{hash} | ✅ Créé |
 | S3 Media | aws_s3_bucket | kambriq-media-prod-{hash} | ✅ Créé |
+| S3 Verify Store | aws_s3_bucket | kambriq-verify-store-prod | ✅ Créé |
 | CloudFront | aws_cloudfront_distribution | kambriq-frontend-prod | ✅ Créé |
 | IAM Role | aws_iam_role | kambriq-lambda-role-prod | ✅ Créé |
 | Security Group RDS | aws_security_group | kambriq-rds-prod | ✅ Créé |

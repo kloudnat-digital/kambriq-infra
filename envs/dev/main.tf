@@ -203,6 +203,56 @@ module "s3_media" {
 }
 
 # ============================================================================
+# S3 Verify Store (Verification Documents)
+# ============================================================================
+
+resource "aws_s3_bucket" "verify_store" {
+  bucket = "kambriq-verify-store-dev"
+
+  # ⚠️ Protection forte contre la suppression
+  force_destroy = false
+
+  tags = {
+    Name = "kambriq-verify-store-dev"
+    Env  = local.env
+  }
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+# Block all public access
+resource "aws_s3_bucket_public_access_block" "verify_store" {
+  bucket = aws_s3_bucket.verify_store.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Versioning (pour documents de vérification importants)
+resource "aws_s3_bucket_versioning" "verify_store" {
+  bucket = aws_s3_bucket.verify_store.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# Encryption
+resource "aws_s3_bucket_server_side_encryption_configuration" "verify_store" {
+  bucket = aws_s3_bucket.verify_store.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# ============================================================================
 # IAM
 # ============================================================================
 

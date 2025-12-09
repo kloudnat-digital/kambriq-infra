@@ -66,6 +66,7 @@ Infrastructure AWS gérée via Terraform pour la plateforme KAMBRIQ.
 - ✅ API Gateway : HTTP API
 - ✅ Frontend OpenNext : S3 static assets + CloudFront + Lambda SSR
 - ✅ S3 Media : Bucket médias/documents
+- ✅ S3 Verify Store : Bucket documents de vérification (protégé contre la suppression)
 - ✅ IAM : Rôles et policies Lambda
 - ✅ Security Groups : RDS + Lambda
 
@@ -90,6 +91,7 @@ Infrastructure AWS gérée via Terraform pour la plateforme KAMBRIQ.
 #### 3. `envs/prod/` - Environnement Production
 **Ressources gérées :**
 - Identiques à `dev` (même structure)
+- ✅ S3 Verify Store : Bucket documents de vérification (protégé contre la suppression)
 
 **Configuration spécifique :**
 - Backup retention : **30 jours**

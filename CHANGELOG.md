@@ -42,3 +42,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Modules réutilisables (frontend, lambda-api, rds-postgres, api-gateway, iam, etc.)
 - Stacks séparés (shared, dev, prod)
 - Workflows GitHub Actions pour déploiement infrastructure
+
+## [2025-12-XX] - Ajout des buckets Verify (DEV & PROD)
+
+### Added
+- **Buckets S3 Verify Store** : Ajout de deux buckets S3 dédiés au module Verify
+  - DEV : `kambriq-verify-store-dev` (protégé contre la suppression avec `prevent_destroy = true`)
+  - PROD : `kambriq-verify-store-prod` (protégé contre la suppression avec `prevent_destroy = true`)
+  - Configuration : Versioning activé, chiffrement AES256, blocage d'accès public complet
+  - Outputs : `verify_store_bucket_name` ajouté dans `envs/dev/outputs.tf` et `envs/prod/outputs.tf`

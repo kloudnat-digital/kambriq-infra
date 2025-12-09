@@ -66,6 +66,7 @@ Each environment (`dev` and `prod`) exposes the following outputs in `envs/{env}
 |-------------|-------------|---------------|
 | `s3_media_bucket` | S3 bucket for media uploads | `kambriq-media-dev` |
 | `s3_static_bucket` | S3 bucket for static site | `kambriq-static-dev` |
+| `verify_store_bucket_name` | S3 bucket for verification documents | `kambriq-verify-store-dev` |
 
 #### SES Outputs
 

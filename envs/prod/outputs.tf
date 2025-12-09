@@ -94,3 +94,11 @@ output "cloudfront_distribution_id" {
   value       = module.frontend.cloudfront_distribution_id
 }
 
+# ============================================================================
+# Verify Store S3 Bucket
+# ============================================================================
+output "verify_store_bucket_name" {
+  description = "Verify module bucket for Prod"
+  value       = aws_s3_bucket.verify_store.bucket
+}
+
