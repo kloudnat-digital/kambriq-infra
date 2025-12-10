@@ -47,6 +47,7 @@ Infrastructure AWS gérée via Terraform pour la plateforme KAMBRIQ.
 - ✅ Route53 : Hosted zone (référence manuelle)
 - ✅ SES : Domain identity + email identity (référence manuelle)
 - ✅ ACM : Certificats API Gateway + CloudFront (référence manuelle)
+- ✅ CloudFront : Distributions avec alias gérés par Terraform (`dev.kambriq.com` en dev, `kambriq.com` en prod)
 - ✅ S3 : Buckets logs + artifacts
 
 **Backend :**
@@ -111,6 +112,7 @@ Infrastructure AWS gérée via Terraform pour la plateforme KAMBRIQ.
 1. **`modules/shared/`** - Infrastructure partagée (VPC, networking)
 2. **`modules/rds-postgres/`** - Base de données PostgreSQL
 3. **`modules/frontend/`** - Frontend OpenNext (S3 + CloudFront + Lambda SSR) ⭐ NOUVEAU
+   - CloudFront aliases gérés par Terraform : `dev.kambriq.com` (dev) et `kambriq.com` (prod)
 4. **`modules/s3-media/`** - Bucket S3 médias/documents
 5. **`modules/lambda-api/`** - Fonction Lambda API (handler: `dist/lambda.handler`)
 6. **`modules/api-gateway/`** - API Gateway HTTP API
@@ -125,6 +127,7 @@ Infrastructure AWS gérée via Terraform pour la plateforme KAMBRIQ.
 **Module Frontend (`modules/frontend/`) :**
 - Gère S3 bucket pour assets statiques OpenNext
 - CloudFront distribution avec OAC
+- CloudFront aliases gérés par Terraform : `dev.kambriq.com` (dev) et `kambriq.com` (prod)
 - Lambda SSR (fonction créée, code mis à jour via `deploy-app-dev.yml` / `deploy-app-prod.yml`)
 - Variables Terraform : `api_gateway_url` (pour configuration frontend)
 

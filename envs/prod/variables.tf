@@ -47,9 +47,9 @@ variable "ses_from_email" {
 }
 
 variable "cloudfront_domain" {
-  description = "Custom domain for CloudFront (optional)"
+  description = "Custom domain for CloudFront (e.g., dev.kambriq.com for dev, kambriq.com for prod)"
   type        = string
-  default     = ""
+  default     = "kambriq.com" # Default value for prod environment
 }
 
 variable "cloudfront_certificate_arn" {

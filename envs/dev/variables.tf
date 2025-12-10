@@ -29,9 +29,9 @@ variable "jwt_secret" {
 
 # Optional: Custom domains (leave empty for default CloudFront/API Gateway URLs)
 variable "cloudfront_domain" {
-  description = "Custom domain for CloudFront (optional, e.g., app-dev.kambriq.com)"
+  description = "Custom domain for CloudFront (e.g., dev.kambriq.com for dev, kambriq.com for prod)"
   type        = string
-  default     = ""
+  default     = "dev.kambriq.com" # Default value for dev environment
 }
 
 variable "cloudfront_certificate_arn" {

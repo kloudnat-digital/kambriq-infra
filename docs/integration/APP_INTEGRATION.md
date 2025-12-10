@@ -38,8 +38,10 @@ Each environment (`dev` and `prod`) exposes the following outputs in `envs/{env}
 
 | Output Name | Description | Example Value |
 |-------------|-------------|---------------|
-| `frontend_url` | Full CloudFront URL | `https://d1234567890.cloudfront.net` |
-| `frontend_domain` | CloudFront distribution domain | `d1234567890.cloudfront.net` |
+| `frontend_url` | Full CloudFront URL | `https://d1234567890.cloudfront.net` or `https://dev.kambriq.com` |
+| `frontend_domain` | CloudFront distribution domain | `d1234567890.cloudfront.net` or `dev.kambriq.com` |
+
+**CloudFront Aliases**: Les alias CloudFront (`dev.kambriq.com` en dev, `kambriq.com` en prod) sont gérés par Terraform via la variable `cloudfront_domain` dans `envs/dev/main.tf` et `envs/prod/main.tf`. Toute modification des domaines front doit se faire dans ces fichiers et appliquée via `terraform plan` / `terraform apply`.
 
 #### API Outputs
 

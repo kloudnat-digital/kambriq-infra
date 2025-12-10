@@ -109,9 +109,9 @@ resource "aws_lambda_function" "ssr" {
 
   environment {
     variables = {
-      NODE_ENV              = var.env
-      NEXT_PUBLIC_API_URL   = var.api_gateway_url
-      NEXT_PUBLIC_SITE_URL  = var.domain_name != "" ? "https://${var.domain_name}" : ""
+      NODE_ENV             = var.env
+      NEXT_PUBLIC_API_URL  = var.api_gateway_url
+      NEXT_PUBLIC_SITE_URL = var.domain_name != "" ? "https://${var.domain_name}" : ""
     }
   }
 
@@ -208,6 +208,8 @@ resource "aws_cloudfront_distribution" "main" {
   default_root_object = "index.html"
   price_class         = var.price_class
 
+  # CloudFront alternate domain names (aliases)
+  # Managed via Terraform from envs/dev/main.tf or envs/prod/main.tf
   aliases = var.domain_name != "" ? [var.domain_name] : []
 
   # S3 origin for static assets

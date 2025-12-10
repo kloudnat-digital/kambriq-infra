@@ -51,6 +51,7 @@ kambriq-aws-iac-terraform/
   - Sur push vers `main` : exécute `terraform plan` + `apply`
 
 - **`terraform-dev.yml`** : Gère l'infrastructure dev (RDS, Lambda, API Gateway, S3, CloudFront)
+  - CloudFront alias `dev.kambriq.com` géré par Terraform via `envs/dev/variables.tf`
   - **⚠️ Important** : Gère uniquement l'infrastructure, ne déploie pas le code applicatif
   - Déclenchement : Pull Request vers `develop` (plan uniquement), Push sur `develop` (plan + apply), Workflow Dispatch (plan uniquement)
   - Exécute `terraform plan` + `apply` (sur push `develop`) pour créer/modifier les ressources AWS
@@ -58,6 +59,7 @@ kambriq-aws-iac-terraform/
 
 - **`terraform-prod.yml`** : Gère l'infrastructure prod (même ressources que dev)
   - **⚠️ Important** : Gère uniquement l'infrastructure, ne déploie pas le code applicatif
+  - CloudFront alias `kambriq.com` géré par Terraform via `envs/prod/variables.tf`
   - Déclenchement manuel (`workflow_dispatch`) uniquement
   - Protection via GitHub Environment `production` (approbation manuelle possible)
   - Le code applicatif est déployé via `deploy-app-prod.yml` dans le repository `kambriq`

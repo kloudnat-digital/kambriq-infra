@@ -194,7 +194,8 @@ module "frontend" {
   subnet_ids        = data.terraform_remote_state.shared.outputs.private_subnet_ids
   security_group_id = aws_security_group.lambda.id
 
-  domain_name     = var.cloudfront_domain != "" ? var.cloudfront_domain : ""
+  # CloudFront alias: kambriq.com (managed via Terraform)
+  domain_name     = var.cloudfront_domain
   certificate_arn = var.cloudfront_certificate_arn != "" ? var.cloudfront_certificate_arn : ""
 
   # API Gateway URL for frontend environment variables
