@@ -60,6 +60,8 @@ Each environment (`dev` and `prod`) exposes the following outputs in `envs/{env}
 
 **CloudFront Aliases**: Les alias CloudFront (`dev.kambriq.com` en dev, `kambriq.com` en prod) sont gérés par Terraform via la variable `cloudfront_domain` dans `envs/dev/main.tf` et `envs/prod/main.tf`. Toute modification des domaines front doit se faire dans ces fichiers et appliquée via `terraform plan` / `terraform apply`.
 
+**Bundle SSR OpenNext**: Le zip déployé pour la Lambda SSR contient `.open-next/` à la racine, avec handler `.open-next/server-functions/default/index.handler`.
+
 #### API Outputs
 
 | Output Name | Description | Example Value |
