@@ -28,18 +28,35 @@ The Terraform infrastructure generates outputs that must be consumed by:
 
 The CloudFront distribution uses a **dual-origin architecture** for OpenNext:
 
+**Request Flow for `https://dev.kambriq.com/`:**
+```
+DNS (dev.kambriq.com) 
+  → CloudFront Distribution (E9V3S1IFEYPUP)
+    → Default Cache Behavior
+      → Origin: Lambda Function URL (SSR)
+        → Lambda Function (kambriq-frontend-dev-ssr)
+          → Handler: .open-next/server-functions/default/index.handler
+            → OpenNext index.mjs
+              → Next.js App Router (SSR)
+                → Returns HTML response
+```
+
 1. **Lambda Function URL (SSR Origin)** - Default behavior for all routes:
    - Handles all page requests (including `/`)
    - Handles API routes and dynamic content
-   - Uses Origin Access Control (OAC) for security
+   - **Authorization**: `NONE` (access restricted via Lambda permission with CloudFront source ARN)
+   - **Invoke Mode**: `BUFFERED` (default, compatible with OpenNext `streaming: false`)
    - No caching (dynamic content)
+   - **Handler**: `.open-next/server-functions/default/index.handler` pointing to `index.mjs` in the bundle
 
 2. **S3 Bucket (Static Assets Origin)** - Ordered cache behaviors:
    - `/_next/static/*` - Next.js static assets (cached 1 year)
    - `/assets/*` - Application static assets (cached 1 year)
    - Uses OAC for secure access
 
-**Important**: There is no `default_root_object = "index.html"` because OpenNext SSR handles all routes dynamically via Lambda, including the root path.
+**Important**: 
+- There is no `default_root_object = "index.html"` because OpenNext SSR handles all routes dynamically via Lambda, including the root path.
+- OpenNext is configured with `streaming: false` to match Lambda Function URL's default `BUFFERED` invoke mode. If streaming is enabled, the Function URL must use `invoke_mode = "RESPONSE_STREAM"`.
 
 Outputs are consumed via:
 1. **Direct Terraform outputs**: For non-sensitive values (URLs, bucket names, etc.)
@@ -434,6 +451,39 @@ Use separate Terraform workspaces or directories for each environment:
 - `envs/shared/` - Shared resources (VPC, Route53, SES domain)
 
 ## Troubleshooting
+
+### Issue: `dev.kambriq.com` returns `{"Message": null}` instead of Next.js app
+
+**Root Cause:**
+OpenNext was configured with `streaming: true` in `opennext.config.ts`, which generates a handler using `awslambda.streamifyResponse()`. However, the Lambda Function URL was using the default `BUFFERED` invoke mode (not `RESPONSE_STREAM`). This mismatch causes the handler to fail silently and return a default error response.
+
+**Solution:**
+1. **Disable streaming in OpenNext** (`web/opennext.config.ts`):
+   ```typescript
+   lambda: {
+     streaming: false,  // Must match Function URL invoke_mode
+   }
+   ```
+
+2. **Ensure Lambda Function URL uses BUFFERED mode** (default, no change needed in Terraform):
+   - The Function URL resource uses default `invoke_mode = "BUFFERED"` (implicit)
+   - This matches `streaming: false` in OpenNext
+
+**Alternative Solution (if streaming is required):**
+1. Enable streaming in OpenNext: `streaming: true`
+2. Configure Function URL for streaming in Terraform:
+   ```hcl
+   resource "aws_lambda_function_url" "ssr" {
+     invoke_mode = "RESPONSE_STREAM"  # Required for streaming
+   }
+   ```
+   Note: Streaming is experimental in OpenNext and may not be stable for production.
+
+**Verification:**
+- After fix: `curl https://dev.kambriq.com/` should return HTML (200 OK)
+- Check CloudWatch Logs for Lambda `kambriq-frontend-dev-ssr` to see handler execution
+
+## Troubleshooting (Legacy)
 
 ### Missing Terraform Outputs
 

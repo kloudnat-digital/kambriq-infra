@@ -97,6 +97,11 @@ resource "aws_lambda_function" "ssr" {
   # OpenNext generates handler at .open-next/server-functions/default/index.mjs
   # Lambda with Node.js 20.x supports ESM modules (.mjs)
   # Handler format: path/to/file.handlerFunction (Lambda resolves .mjs automatically)
+  # 
+  # IMPORTANT: The handler path is relative to the Lambda deployment package root.
+  # When the bundle web-ssr-bundle-*.zip is deployed, it contains .open-next/ at the root,
+  # so the handler path .open-next/server-functions/default/index.handler correctly
+  # points to .open-next/server-functions/default/index.mjs in the deployed package.
   handler     = ".open-next/server-functions/default/index.handler"
   timeout     = 30
   memory_size = 1024
@@ -134,11 +139,15 @@ resource "aws_lambda_function" "ssr" {
 }
 
 # Lambda Function URL for SSR (used as CloudFront origin)
+# NOTE: OpenNext is configured with streaming: false, so we use BUFFERED mode (default).
+# If streaming is enabled in OpenNext, set invoke_mode = "RESPONSE_STREAM" here.
 resource "aws_lambda_function_url" "ssr" {
   function_name = aws_lambda_function.ssr.function_name
   # Note: using NONE here to avoid IAM-auth 403 and allow CloudFront requests.
   # Access remains restricted via the Lambda permission below (CloudFront source ARN).
   authorization_type = "NONE"
+  # invoke_mode defaults to "BUFFERED" (required when OpenNext streaming: false)
+  # If OpenNext streaming is enabled, uncomment: invoke_mode = "RESPONSE_STREAM"
 
   cors {
     allow_credentials = false
