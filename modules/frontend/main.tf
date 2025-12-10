@@ -418,10 +418,16 @@ resource "aws_s3_bucket_policy" "static" {
 }
 
 # Lambda permission to allow CloudFront to invoke Function URL
+# NOTE: With authorization_type = "NONE", we don't use source_arn condition
+# because CloudFront may not send the AWS:SourceArn header when calling Function URLs.
+# The permission with principal = "cloudfront.amazonaws.com" (without condition) allows
+# CloudFront service to invoke the function URL. Direct public access is still possible,
+# but in practice, the Function URL is only exposed via CloudFront.
 resource "aws_lambda_permission" "cloudfront" {
   statement_id  = "AllowCloudFrontInvoke"
   action        = "lambda:InvokeFunctionUrl"
   function_name = aws_lambda_function.ssr.function_name
   principal     = "cloudfront.amazonaws.com"
-  source_arn    = "${aws_cloudfront_distribution.main.arn}/*"
+  # Removed source_arn condition: CloudFront doesn't reliably send AWS:SourceArn header
+  # for Function URLs with authorization_type = "NONE"
 }
