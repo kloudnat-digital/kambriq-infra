@@ -432,6 +432,18 @@ resource "aws_lambda_permission" "public_url" {
   function_url_auth_type = "NONE"
 }
 
+# Additional permission: lambda:InvokeFunction (required for Function URLs with AuthType = NONE)
+# AWS requires BOTH permissions for public access:
+# 1. lambda:InvokeFunctionUrl (with function_url_auth_type = "NONE") - already defined above
+# 2. lambda:InvokeFunction (without condition, allows invocation via Function URL)
+resource "aws_lambda_permission" "public_invoke" {
+  statement_id  = "AllowPublicInvokeFunction"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.ssr.function_name
+  principal     = "*"
+  # Note: function_url_auth_type condition is NOT supported for lambda:InvokeFunction action
+}
+
 # Additional permission for CloudFront (without source_arn condition)
 # CloudFront may not send AWS:SourceArn header reliably, so we allow all CloudFront calls
 resource "aws_lambda_permission" "cloudfront" {
