@@ -135,7 +135,7 @@ resource "aws_lambda_function" "ssr" {
 
 # Lambda Function URL for SSR (used as CloudFront origin)
 resource "aws_lambda_function_url" "ssr" {
-  function_name      = aws_lambda_function.ssr.function_name
+  function_name = aws_lambda_function.ssr.function_name
   # Note: using NONE here to avoid IAM-auth 403 and allow CloudFront requests.
   # Access remains restricted via the Lambda permission below (CloudFront source ARN).
   authorization_type = "NONE"
@@ -232,14 +232,15 @@ resource "aws_cloudfront_origin_access_control" "main" {
   signing_protocol                  = "sigv4"
 }
 
-# OAC for Lambda Function URL (SSR)
-resource "aws_cloudfront_origin_access_control" "lambda" {
-  name                              = "${local.name_prefix}-oac-lambda"
-  description                       = "OAC for Lambda SSR Function URL - ${local.name_prefix}"
-  origin_access_control_origin_type = "lambda"
-  signing_behavior                  = "always"
-  signing_protocol                  = "sigv4"
-}
+# OAC for Lambda Function URL (SSR) - NOT USED with authorization_type = "NONE"
+# Kept for potential future use if switching back to AWS_IAM auth
+# resource "aws_cloudfront_origin_access_control" "lambda" {
+#   name                              = "${local.name_prefix}-oac-lambda"
+#   description                       = "OAC for Lambda SSR Function URL - ${local.name_prefix}"
+#   origin_access_control_origin_type = "lambda"
+#   signing_behavior                  = "always"
+#   signing_protocol                  = "sigv4"
+# }
 
 resource "aws_cloudfront_distribution" "main" {
   enabled         = true
@@ -256,11 +257,11 @@ resource "aws_cloudfront_distribution" "main" {
   # CloudFront Origins
   # ============================================================================
   # Origin 1: Lambda Function URL for SSR (default for all routes)
-  # Using OAC for Lambda Function URL (requires custom_origin_config)
+  # With authorization_type = "NONE", we don't use OAC (no signing needed)
+  # Access is restricted via Lambda permission with CloudFront source ARN
   origin {
-    domain_name              = local.lambda_function_url_domain
-    origin_id                = "LambdaSSR-${aws_lambda_function.ssr.function_name}"
-    origin_access_control_id = aws_cloudfront_origin_access_control.lambda.id
+    domain_name = local.lambda_function_url_domain
+    origin_id   = "LambdaSSR-${aws_lambda_function.ssr.function_name}"
     custom_origin_config {
       http_port              = 443
       https_port             = 443
