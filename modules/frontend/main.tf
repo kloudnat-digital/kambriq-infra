@@ -130,6 +130,31 @@ resource "aws_lambda_function" "ssr" {
   }
 }
 
+# Lambda Function URL for SSR (used as CloudFront origin)
+resource "aws_lambda_function_url" "ssr" {
+  function_name      = aws_lambda_function.ssr.function_name
+  authorization_type = "AWS_IAM" # CloudFront will use OAC to sign requests
+
+  cors {
+    allow_credentials = false
+    allow_origins     = ["*"]
+    allow_methods     = ["*"]
+    allow_headers     = ["*"]
+    expose_headers    = ["*"]
+    max_age           = 3600
+  }
+}
+
+# Extract domain from Lambda Function URL for CloudFront origin
+# Function URL format: https://<id>.lambda-url.<region>.on.aws
+# CloudFront needs just the domain without https://
+locals {
+  lambda_function_url_domain = replace(aws_lambda_function_url.ssr.function_url, "https://", "")
+}
+
+# Lambda permission to allow CloudFront to invoke Function URL
+# This will be set after CloudFront distribution is created (see below)
+
 # TODO: Create additional Lambda functions for OpenNext routes
 # OpenNext generates multiple Lambda functions in .open-next/server/:
 #   - default function (main SSR handler)
@@ -193,61 +218,93 @@ resource "aws_iam_role_policy" "lambda_s3" {
 # CloudFront Distribution
 # ============================================================================
 
+# OAC for S3 bucket (static assets)
 resource "aws_cloudfront_origin_access_control" "main" {
-  name                              = "${local.name_prefix}-oac"
-  description                       = "OAC for ${local.name_prefix}"
+  name                              = "${local.name_prefix}-oac-s3"
+  description                       = "OAC for S3 static assets - ${local.name_prefix}"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
   signing_protocol                  = "sigv4"
 }
 
+# OAC for Lambda Function URL (SSR)
+resource "aws_cloudfront_origin_access_control" "lambda" {
+  name                              = "${local.name_prefix}-oac-lambda"
+  description                       = "OAC for Lambda SSR Function URL - ${local.name_prefix}"
+  origin_access_control_origin_type = "lambda"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
 resource "aws_cloudfront_distribution" "main" {
-  enabled             = true
-  is_ipv6_enabled     = true
-  comment             = "KAMBRIQ frontend distribution - ${var.env}"
-  default_root_object = "index.html"
-  price_class         = var.price_class
+  enabled         = true
+  is_ipv6_enabled = true
+  comment         = "KAMBRIQ frontend distribution - ${var.env}"
+  # No default_root_object for OpenNext SSR (Lambda handles all routes including /)
+  price_class = var.price_class
 
   # CloudFront alternate domain names (aliases)
   # Managed via Terraform from envs/dev/main.tf or envs/prod/main.tf
   aliases = var.domain_name != "" ? [var.domain_name] : []
 
-  # S3 origin for static assets
+  # ============================================================================
+  # CloudFront Origins
+  # ============================================================================
+  # Origin 1: Lambda Function URL for SSR (default for all routes)
+  # Using OAC for Lambda Function URL (requires custom_origin_config)
+  origin {
+    domain_name              = local.lambda_function_url_domain
+    origin_id                = "LambdaSSR-${aws_lambda_function.ssr.function_name}"
+    origin_access_control_id = aws_cloudfront_origin_access_control.lambda.id
+    custom_origin_config {
+      http_port              = 443
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  # Origin 2: S3 bucket for static assets only
   origin {
     domain_name              = aws_s3_bucket.static.bucket_regional_domain_name
     origin_id                = "S3-${aws_s3_bucket.static.id}"
     origin_access_control_id = aws_cloudfront_origin_access_control.main.id
   }
 
-  # Lambda@Edge origin for SSR (if needed)
-  # Note: OpenNext can use Lambda@Edge for edge rendering
-  # For now, we use CloudFront Functions or Lambda@Edge for specific routes
-
+  # ============================================================================
+  # CloudFront Cache Behaviors
+  # ============================================================================
+  # Default behavior: Route all requests to Lambda SSR (for pages, API routes, etc.)
   default_cache_behavior {
-    allowed_methods  = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
-    cached_methods   = ["GET", "HEAD"]
-    target_origin_id = "S3-${aws_s3_bucket.static.id}"
+    target_origin_id       = "LambdaSSR-${aws_lambda_function.ssr.function_name}"
+    viewer_protocol_policy = "redirect-to-https"
 
+    allowed_methods = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods  = ["GET", "HEAD"]
+
+    # Forward query strings, headers, and cookies for SSR
     forwarded_values {
-      query_string = false
+      query_string = true
+      headers      = ["*"]
       cookies {
-        forward = "none"
+        forward = "all"
       }
     }
 
-    viewer_protocol_policy = "redirect-to-https"
-    min_ttl                = 0
-    default_ttl            = 3600
-    max_ttl                = 86400
-    compress               = true
+    # Minimal caching for SSR (dynamic content)
+    min_ttl     = 0
+    default_ttl = 0
+    max_ttl     = 0
+    compress    = true
   }
 
-  # Cache behavior for static assets
+  # Cache behavior 1: Static Next.js assets (/_next/static/*)
   ordered_cache_behavior {
     path_pattern     = "/_next/static/*"
-    allowed_methods  = ["GET", "HEAD", "OPTIONS"]
-    cached_methods   = ["GET", "HEAD"]
     target_origin_id = "S3-${aws_s3_bucket.static.id}"
+
+    allowed_methods = ["GET", "HEAD", "OPTIONS"]
+    cached_methods  = ["GET", "HEAD"]
 
     forwarded_values {
       query_string = false
@@ -257,24 +314,37 @@ resource "aws_cloudfront_distribution" "main" {
     }
 
     viewer_protocol_policy = "redirect-to-https"
-    min_ttl                = 31536000 # 1 year
-    default_ttl            = 31536000
-    max_ttl                = 31536000
-    compress               = true
+    # Aggressive caching for static assets (1 year)
+    min_ttl     = 31536000
+    default_ttl = 31536000
+    max_ttl     = 31536000
+    compress    = true
   }
 
-  # Error pages
-  custom_error_response {
-    error_code         = 404
-    response_code      = 200
-    response_page_path = "/index.html"
+  # Cache behavior 2: Other static assets (/assets/*)
+  ordered_cache_behavior {
+    path_pattern     = "/assets/*"
+    target_origin_id = "S3-${aws_s3_bucket.static.id}"
+
+    allowed_methods = ["GET", "HEAD", "OPTIONS"]
+    cached_methods  = ["GET", "HEAD"]
+
+    forwarded_values {
+      query_string = false
+      cookies {
+        forward = "none"
+      }
+    }
+
+    viewer_protocol_policy = "redirect-to-https"
+    # Aggressive caching for static assets (1 year)
+    min_ttl     = 31536000
+    default_ttl = 31536000
+    max_ttl     = 31536000
+    compress    = true
   }
 
-  custom_error_response {
-    error_code         = 403
-    response_code      = 200
-    response_page_path = "/index.html"
-  }
+  # No custom_error_response for 404/403 - let Lambda SSR handle errors
 
   restrictions {
     geo_restriction {
@@ -326,4 +396,13 @@ resource "aws_s3_bucket_policy" "static" {
   })
 
   depends_on = [aws_cloudfront_distribution.main]
+}
+
+# Lambda permission to allow CloudFront to invoke Function URL
+resource "aws_lambda_permission" "cloudfront" {
+  statement_id  = "AllowCloudFrontInvoke"
+  action        = "lambda:InvokeFunctionUrl"
+  function_name = aws_lambda_function.ssr.function_name
+  principal     = "cloudfront.amazonaws.com"
+  source_arn    = "${aws_cloudfront_distribution.main.arn}/*"
 }

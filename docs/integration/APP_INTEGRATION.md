@@ -22,7 +22,24 @@ Ce document explique :
 
 The Terraform infrastructure generates outputs that must be consumed by:
 - **Backend (NestJS API)**: Deployed as AWS Lambda
-- **Frontend (Next.js)**: Deployed to S3 and served via CloudFront
+- **Frontend (Next.js)**: Deployed to S3 (static assets) and Lambda SSR (server-side rendering) via CloudFront
+
+### CloudFront Routing Architecture
+
+The CloudFront distribution uses a **dual-origin architecture** for OpenNext:
+
+1. **Lambda Function URL (SSR Origin)** - Default behavior for all routes:
+   - Handles all page requests (including `/`)
+   - Handles API routes and dynamic content
+   - Uses Origin Access Control (OAC) for security
+   - No caching (dynamic content)
+
+2. **S3 Bucket (Static Assets Origin)** - Ordered cache behaviors:
+   - `/_next/static/*` - Next.js static assets (cached 1 year)
+   - `/assets/*` - Application static assets (cached 1 year)
+   - Uses OAC for secure access
+
+**Important**: There is no `default_root_object = "index.html"` because OpenNext SSR handles all routes dynamically via Lambda, including the root path.
 
 Outputs are consumed via:
 1. **Direct Terraform outputs**: For non-sensitive values (URLs, bucket names, etc.)

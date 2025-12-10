@@ -129,6 +129,10 @@ Infrastructure AWS gérée via Terraform pour la plateforme KAMBRIQ.
 - CloudFront distribution avec OAC
 - CloudFront aliases gérés par Terraform : `dev.kambriq.com` (dev) et `kambriq.com` (prod)
 - Lambda SSR (fonction créée, code mis à jour via `deploy-app-dev.yml` / `deploy-app-prod.yml`)
+- **Routing CloudFront / OpenNext** :
+  - **Default behavior** : Toutes les routes (y compris `/`) sont routées vers la Lambda SSR via Lambda Function URL
+  - **Static assets** : Routes `/_next/static/*` et `/assets/*` sont routées vers S3 avec cache agressif (1 an)
+  - **Pas de default_root_object** : OpenNext SSR gère toutes les routes dynamiquement, y compris la racine
 - Variables Terraform : `api_gateway_url` (pour configuration frontend)
 
 ### CI/CD - GitHub Actions (3 workflows)
