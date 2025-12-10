@@ -293,7 +293,7 @@ resource "aws_cloudfront_distribution" "main" {
   }
 }
 
-# S3 bucket policy for CloudFront
+# S3 bucket policy for CloudFront with OAC
 resource "aws_s3_bucket_policy" "static" {
   bucket = aws_s3_bucket.static.id
 
@@ -306,8 +306,14 @@ resource "aws_s3_bucket_policy" "static" {
         Principal = {
           Service = "cloudfront.amazonaws.com"
         }
-        Action   = "s3:GetObject"
-        Resource = "${aws_s3_bucket.static.arn}/*"
+        Action = [
+          "s3:GetObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.static.arn,
+          "${aws_s3_bucket.static.arn}/*"
+        ]
         Condition = {
           StringEquals = {
             "AWS:SourceArn" = aws_cloudfront_distribution.main.arn
