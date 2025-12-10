@@ -62,6 +62,8 @@ Each environment (`dev` and `prod`) exposes the following outputs in `envs/{env}
 
 **Bundle SSR OpenNext**: Le zip déployé pour la Lambda SSR contient `.open-next/` à la racine, avec handler `.open-next/server-functions/default/index.handler`.
 
+**Optimisation d’images**: L’optimisation d’images OpenNext via Lambda est désactivée (`imageOptimization.lambda = false`) pour rester sous la limite Lambda 250MB. Les images sont servies telles quelles depuis S3/CloudFront. Si besoin de réactiver l’optimisation, il faudra remettre `lambda: true` et/ou basculer sur un déploiement Lambda container (ECR) pour absorber la taille.
+
 #### API Outputs
 
 | Output Name | Description | Example Value |
