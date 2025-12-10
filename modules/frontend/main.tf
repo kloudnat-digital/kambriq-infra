@@ -2,6 +2,9 @@ locals {
   name_prefix = "${var.project_name}-frontend-${var.env}"
 }
 
+# Data source for AWS region (used for CACHE_BUCKET_REGION)
+data "aws_region" "current" {}
+
 # ============================================================================
 # S3 Bucket for Static Assets
 # ============================================================================
@@ -117,9 +120,17 @@ resource "aws_lambda_function" "ssr" {
 
   environment {
     variables = {
-      NODE_ENV             = var.env
-      NEXT_PUBLIC_API_URL  = var.api_gateway_url
-      NEXT_PUBLIC_SITE_URL = var.domain_name != "" ? "https://${var.domain_name}" : ""
+      # Force NODE_ENV=production for Lambda runtime
+      # OpenNext bundles are built in production mode, so React expects production files
+      # (react.production.js, not react.development.js)
+      NODE_ENV                  = "production"
+      NEXT_PUBLIC_API_BASE_URL  = var.api_gateway_url  # Used by Next.js app (environment.ts, actions, etc.)
+      NEXT_PUBLIC_SITE_URL      = var.domain_name != "" ? "https://${var.domain_name}" : ""
+      
+      # OpenNext ISR (Incremental Static Regeneration) cache configuration
+      # OpenNext requires these environment variables to use S3 for ISR cache storage
+      CACHE_BUCKET_NAME   = aws_s3_bucket.static.id
+      CACHE_BUCKET_REGION = data.aws_region.current.name
     }
   }
 
@@ -218,10 +229,20 @@ resource "aws_iam_role_policy" "lambda_s3" {
         Effect = "Allow"
         Action = [
           "s3:GetObject",
-          "s3:PutObject"
+          "s3:PutObject",
+          "s3:DeleteObject"  # Required for ISR cache invalidation
         ]
         Resource = [
           "${aws_s3_bucket.static.arn}/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket"  # Required for ISR cache operations
+        ]
+        Resource = [
+          aws_s3_bucket.static.arn
         ]
       }
     ]
@@ -252,6 +273,63 @@ resource "aws_cloudfront_origin_access_control" "lambda" {
 
   lifecycle {
     prevent_destroy = true
+  }
+}
+
+# Cache Policy for Lambda Function URL SSR
+# Minimal caching for dynamic SSR content (TTL = 0)
+# When caching is disabled, all parameters must be set to "none" or false
+resource "aws_cloudfront_cache_policy" "lambda_ssr" {
+  name        = "${local.name_prefix}-lambda-ssr-cache"
+  comment     = "Cache policy for Lambda Function URL SSR - no caching"
+  default_ttl = 0
+  max_ttl     = 0
+  min_ttl     = 0
+
+  parameters_in_cache_key_and_forwarded_to_origin {
+    # When caching is disabled (TTL = 0), compression must be disabled
+    enable_accept_encoding_brotli = false
+    enable_accept_encoding_gzip   = false
+
+    cookies_config {
+      cookie_behavior = "none"
+    }
+
+    headers_config {
+      header_behavior = "none"
+    }
+
+    query_strings_config {
+      query_string_behavior = "none"
+    }
+  }
+}
+
+# Origin Request Policy for Lambda Function URL
+# Excludes Host header to prevent 403 errors (Lambda Function URL expects its own hostname)
+resource "aws_cloudfront_origin_request_policy" "lambda_ssr" {
+  name    = "${local.name_prefix}-lambda-ssr-origin-request"
+  comment = "Origin request policy for Lambda Function URL SSR - excludes Host header"
+
+  cookies_config {
+    cookie_behavior = "all"
+  }
+
+  headers_config {
+    header_behavior = "whitelist"
+    headers {
+      items = [
+        "Accept",
+        "Content-Type",
+        "Origin",
+        "Referer",
+        "User-Agent",
+      ]
+    }
+  }
+
+  query_strings_config {
+    query_string_behavior = "all"
   }
 }
 
@@ -301,20 +379,12 @@ resource "aws_cloudfront_distribution" "main" {
     allowed_methods = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods  = ["GET", "HEAD"]
 
-    # Forward query strings, headers, and cookies for SSR
-    forwarded_values {
-      query_string = true
-      headers      = ["*"]
-      cookies {
-        forward = "all"
-      }
-    }
+    # Use cache policy and origin request policy instead of forwarded_values
+    # This excludes Host header to prevent 403 errors from Lambda Function URL
+    cache_policy_id            = aws_cloudfront_cache_policy.lambda_ssr.id
+    origin_request_policy_id   = aws_cloudfront_origin_request_policy.lambda_ssr.id
 
-    # Minimal caching for SSR (dynamic content)
-    min_ttl     = 0
-    default_ttl = 0
-    max_ttl     = 0
-    compress    = true
+    compress = true
   }
 
   # Cache behavior 1: Static Next.js assets (/_next/static/*)

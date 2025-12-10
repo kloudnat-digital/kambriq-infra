@@ -454,10 +454,21 @@ Use separate Terraform workspaces or directories for each environment:
 
 ### Issue: `dev.kambriq.com` returns `{"Message": null}` instead of Next.js app
 
-**Root Cause:**
-OpenNext was configured with `streaming: true` in `opennext.config.ts`, which generates a handler using `awslambda.streamifyResponse()`. However, the Lambda Function URL was using the default `BUFFERED` invoke mode (not `RESPONSE_STREAM`). This mismatch causes the handler to fail silently and return a default error response.
+**Symptom:** After deployment, accessing `https://dev.kambriq.com/` (or `https://kambriq.com/` in prod) returns `{"Message": null}` instead of the Next.js application HTML.
 
-**Solution:**
+**Root Causes (Multiple Issues Fixed):**
+
+1. **OpenNext Streaming Mismatch:**
+   - OpenNext was configured with `streaming: true` in `opennext.config.ts`, which generates a handler using `awslambda.streamifyResponse()`. However, the Lambda Function URL was using the default `BUFFERED` invoke mode (not `RESPONSE_STREAM`). This mismatch causes the handler to fail silently.
+
+2. **React Development Files Missing:**
+   - Lambda environment variable `NODE_ENV` was set to `var.env` (e.g., "dev"), causing React to look for `react.development.js` files. However, OpenNext bundles are built in production mode and only contain `react.production.js` files, leading to `Runtime.ImportModuleError: Cannot find module './cjs/react.development.js'`.
+
+3. **CloudFront Host Header Issue:**
+   - CloudFront was forwarding the `Host` header from the viewer request (`dev.kambriq.com`) to the Lambda Function URL origin. However, Lambda Function URLs expect their own hostname (`*.lambda-url.region.on.aws`), causing `403 AccessDeniedException` errors.
+
+**Complete Solution (All fixes applied in `modules/frontend/main.tf`):**
+
 1. **Disable streaming in OpenNext** (`web/opennext.config.ts`):
    ```typescript
    lambda: {
@@ -465,23 +476,62 @@ OpenNext was configured with `streaming: true` in `opennext.config.ts`, which ge
    }
    ```
 
-2. **Ensure Lambda Function URL uses BUFFERED mode** (default, no change needed in Terraform):
-   - The Function URL resource uses default `invoke_mode = "BUFFERED"` (implicit)
-   - This matches `streaming: false` in OpenNext
-
-**Alternative Solution (if streaming is required):**
-1. Enable streaming in OpenNext: `streaming: true`
-2. Configure Function URL for streaming in Terraform:
+2. **Force NODE_ENV=production in Lambda** (`modules/frontend/main.tf`):
    ```hcl
-   resource "aws_lambda_function_url" "ssr" {
-     invoke_mode = "RESPONSE_STREAM"  # Required for streaming
+   environment {
+     variables = {
+       # Force NODE_ENV=production for Lambda runtime
+       # OpenNext bundles are built in production mode, so React expects production files
+       NODE_ENV = "production"
+       # ... other variables
+     }
    }
    ```
-   Note: Streaming is experimental in OpenNext and may not be stable for production.
+
+3. **Create CloudFront Origin Request Policy** (excludes Host header):
+   ```hcl
+   resource "aws_cloudfront_origin_request_policy" "lambda_ssr" {
+     name    = "${local.name_prefix}-lambda-ssr-origin-request"
+     comment = "Origin request policy for Lambda Function URL SSR - excludes Host header"
+     
+     headers_config {
+       header_behavior = "whitelist"
+       headers {
+         items = ["Accept", "Content-Type", "Origin", "Referer", "User-Agent"]
+       }
+     }
+     # ... other config
+   }
+   ```
+
+4. **Create CloudFront Cache Policy** (for disabled caching):
+   ```hcl
+   resource "aws_cloudfront_cache_policy" "lambda_ssr" {
+     name        = "${local.name_prefix}-lambda-ssr-cache"
+     comment     = "Cache policy for Lambda Function URL SSR - no caching"
+     default_ttl = 0
+     max_ttl     = 0
+     min_ttl     = 0
+     # ... config with all behaviors set to "none" for disabled caching
+   }
+   ```
+
+5. **Apply policies to default cache behavior**:
+   ```hcl
+   default_cache_behavior {
+     cache_policy_id          = aws_cloudfront_cache_policy.lambda_ssr.id
+     origin_request_policy_id = aws_cloudfront_origin_request_policy.lambda_ssr.id
+     # ... other config
+   }
+   ```
 
 **Verification:**
-- After fix: `curl https://dev.kambriq.com/` should return HTML (200 OK)
+- After fixes: `curl https://dev.kambriq.com/` should return HTML (200 OK)
 - Check CloudWatch Logs for Lambda `kambriq-frontend-dev-ssr` to see handler execution
+- No more `react.development.js` errors in logs
+- No more `403 AccessDeniedException` from CloudFront
+
+**Note:** These fixes are applied in the shared `modules/frontend/main.tf` module, so they automatically apply to both DEV and PROD environments. No separate configuration needed per environment.
 
 ## Troubleshooting (Legacy)
 
