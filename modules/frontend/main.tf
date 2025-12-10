@@ -232,15 +232,19 @@ resource "aws_cloudfront_origin_access_control" "main" {
   signing_protocol                  = "sigv4"
 }
 
-# OAC for Lambda Function URL (SSR) - NOT USED with authorization_type = "NONE"
-# Kept for potential future use if switching back to AWS_IAM auth
-# resource "aws_cloudfront_origin_access_control" "lambda" {
-#   name                              = "${local.name_prefix}-oac-lambda"
-#   description                       = "OAC for Lambda SSR Function URL - ${local.name_prefix}"
-#   origin_access_control_origin_type = "lambda"
-#   signing_behavior                  = "always"
-#   signing_protocol                  = "sigv4"
-# }
+# OAC for Lambda Function URL (SSR) - kept but not referenced when auth = "NONE"
+# Keep in place to avoid destroy-in-use errors; not used by any origin.
+resource "aws_cloudfront_origin_access_control" "lambda" {
+  name                              = "${local.name_prefix}-oac-lambda"
+  description                       = "OAC for Lambda SSR Function URL - ${local.name_prefix} (unused when auth=NONE)"
+  origin_access_control_origin_type = "lambda"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
 
 resource "aws_cloudfront_distribution" "main" {
   enabled         = true
