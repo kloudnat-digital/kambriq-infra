@@ -147,9 +147,9 @@ resource "aws_lambda_function_url" "ssr" {
 
 # Extract domain from Lambda Function URL for CloudFront origin
 # Function URL format: https://<id>.lambda-url.<region>.on.aws
-# CloudFront needs just the domain without https://
+# CloudFront needs just the domain without https:// and without any trailing slashes
 locals {
-  lambda_function_url_domain = replace(aws_lambda_function_url.ssr.function_url, "https://", "")
+  lambda_function_url_domain = replace(replace(aws_lambda_function_url.ssr.function_url, "https://", ""), "/", "")
 }
 
 # Lambda permission to allow CloudFront to invoke Function URL
