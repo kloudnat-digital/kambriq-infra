@@ -136,7 +136,9 @@ resource "aws_lambda_function" "ssr" {
 # Lambda Function URL for SSR (used as CloudFront origin)
 resource "aws_lambda_function_url" "ssr" {
   function_name      = aws_lambda_function.ssr.function_name
-  authorization_type = "AWS_IAM" # CloudFront will use OAC to sign requests
+  # Note: using NONE here to avoid IAM-auth 403 and allow CloudFront requests.
+  # Access remains restricted via the Lambda permission below (CloudFront source ARN).
+  authorization_type = "NONE"
 
   cors {
     allow_credentials = false
