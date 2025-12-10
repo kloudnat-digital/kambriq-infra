@@ -94,8 +94,9 @@ resource "aws_lambda_function" "ssr" {
   function_name = "${local.name_prefix}-ssr"
   role          = aws_iam_role.lambda.arn
   runtime       = "nodejs20.x"
-  # OpenNext generates handler at .open-next/server-functions/default/index.handler
-  # When the bundle is deployed, the handler path is relative to the bundle root
+  # OpenNext generates handler at .open-next/server-functions/default/index.mjs
+  # Lambda with Node.js 20.x supports ESM modules (.mjs)
+  # Handler format: path/to/file.handlerFunction (Lambda resolves .mjs automatically)
   handler     = ".open-next/server-functions/default/index.handler"
   timeout     = 30
   memory_size = 1024
