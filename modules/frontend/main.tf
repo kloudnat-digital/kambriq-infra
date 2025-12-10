@@ -94,9 +94,11 @@ resource "aws_lambda_function" "ssr" {
   function_name = "${local.name_prefix}-ssr"
   role          = aws_iam_role.lambda.arn
   runtime       = "nodejs20.x"
-  handler       = "index.handler"
-  timeout       = 30
-  memory_size   = 1024
+  # OpenNext generates handler at .open-next/server-functions/default/index.handler
+  # When the bundle is deployed, the handler path is relative to the bundle root
+  handler     = ".open-next/server-functions/default/index.handler"
+  timeout     = 30
+  memory_size = 1024
 
   # Source code: Always use dummy placeholder (code deployed via deploy-app-dev.yml / deploy-app-prod.yml)
   filename         = data.archive_file.dummy_ssr.output_path
