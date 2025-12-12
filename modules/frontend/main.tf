@@ -112,19 +112,22 @@ resource "aws_lambda_function" "ssr" {
   timeout     = 30
   memory_size = 1024
 
-  # Package type: Support both ZIP and Container Image deployments
-  # Default to "Zip" for backward compatibility, but CI/CD can switch to "Image" when needed
-  # The CI/CD workflow will automatically switch to container images when bundle exceeds 250MB
+  # Package type: Use Container Image to support bundles > 250MB
+  # AWS Lambda does not allow changing package_type of an existing function
+  # Therefore, we use "Image" by default to support large Next.js bundles
   # Container images support up to 10GB (vs 250MB for ZIP)
-  # Note: package_type can be changed dynamically via AWS API (done by CI/CD workflow)
-  # We don't set it here to allow flexibility - CI/CD will update it when needed
-  # package_type = "Zip"  # Default, can be changed to "Image" by CI/CD when bundle > 250MB
+  package_type = "Image"
 
-  # Source code: Always use dummy placeholder (code deployed via deploy-app-dev.yml / deploy-app-prod.yml)
-  # For ZIP deployments: filename and source_code_hash are used
-  # For Image deployments: image_uri is used (set by CI/CD)
-  filename         = data.archive_file.dummy_ssr.output_path
-  source_code_hash = data.archive_file.dummy_ssr.output_base64sha256
+  # Container image configuration
+  # The CI/CD workflow will build and push the image to ECR, then update the Lambda
+  # We use a placeholder image URI here - the actual image will be updated by CI/CD
+  image_uri = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${data.aws_region.current.name}.amazonaws.com/kambriq-frontend-ssr-${var.env}:latest"
+  
+  # Image configuration for container-based Lambda
+  image_config {
+    # Command and entrypoint are handled by the Dockerfile CMD
+    # OpenNext handler is at .open-next/server-functions/default/index.handler
+  }
 
   vpc_config {
     subnet_ids         = var.subnet_ids
@@ -153,15 +156,13 @@ resource "aws_lambda_function" "ssr" {
   }
 
   # Note: Code is deployed via CI/CD workflows (deploy-app-dev.yml / deploy-app-prod.yml)
-  # For ZIP deployments: filename and source_code_hash are updated
-  # For Image deployments: package_type and image_uri are updated by CI/CD
-  # CI/CD can dynamically switch between ZIP and Image based on bundle size
+  # The Lambda uses Container Image deployment (package_type = "Image")
+  # CI/CD will update the image_uri with the latest ECR image on each deployment
   lifecycle {
     ignore_changes = [
       filename,
       source_code_hash,
-      package_type,  # CI/CD will update package_type to "Image" when bundle > 250MB
-      image_uri,     # CI/CD will update the image URI with the latest ECR image
+      image_uri,  # CI/CD will update the image URI with the latest ECR image
     ]
   }
 }
