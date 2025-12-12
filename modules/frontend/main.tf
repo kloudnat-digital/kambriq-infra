@@ -99,18 +99,8 @@ data "archive_file" "dummy_ssr" {
 resource "aws_lambda_function" "ssr" {
   function_name = "${local.name_prefix}-ssr"
   role          = aws_iam_role.lambda.arn
-  runtime       = "nodejs20.x"
-  # OpenNext generates handler at .open-next/server-functions/default/index.mjs
-  # Lambda with Node.js 20.x supports ESM modules (.mjs)
-  # Handler format: path/to/file.handlerFunction (Lambda resolves .mjs automatically)
-  # 
-  # IMPORTANT: The handler path is relative to the Lambda deployment package root.
-  # When the bundle web-ssr-bundle-*.zip is deployed, it contains .open-next/ at the root,
-  # so the handler path .open-next/server-functions/default/index.handler correctly
-  # points to .open-next/server-functions/default/index.mjs in the deployed package.
-  handler     = ".open-next/server-functions/default/index.handler"
-  timeout     = 30
-  memory_size = 1024
+  timeout       = 30
+  memory_size   = 1024
 
   # Package type: Use Container Image to support bundles > 250MB
   # AWS Lambda does not allow changing package_type of an existing function
@@ -124,9 +114,12 @@ resource "aws_lambda_function" "ssr" {
   image_uri = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${data.aws_region.current.name}.amazonaws.com/kambriq-frontend-ssr-${var.env}:latest"
   
   # Image configuration for container-based Lambda
+  # Note: handler and runtime are NOT specified for Image package_type
+  # They are defined in the Dockerfile CMD (see web/Dockerfile.ssr)
+  # OpenNext handler is at .open-next/server-functions/default/index.handler
   image_config {
     # Command and entrypoint are handled by the Dockerfile CMD
-    # OpenNext handler is at .open-next/server-functions/default/index.handler
+    # The Dockerfile specifies: CMD [".open-next/server-functions/default/index.handler"]
   }
 
   vpc_config {
