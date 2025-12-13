@@ -88,3 +88,14 @@ cloudfront_certificate_arn = "arn:aws:acm:us-east-1:051551940370:certificate/061
 
 # api_domain                = "api-dev.kambriq.com"
 # api_certificate_arn        = "arn:aws:acm:eu-central-1:ACCOUNT_ID:certificate/CERTIFICATE_ID"
+
+# ============================================================================
+# Bastion Configuration
+# ============================================================================
+# Bastion host for manual Prisma database migrations
+# See modules/bastion/README.md for usage instructions
+
+enable_bastion = true
+bastion_key_pair_name = "kambriq-bastion"
+allowed_ssh_cidr = "90.25.230.44/32"
+enable_bastion_autostop = true

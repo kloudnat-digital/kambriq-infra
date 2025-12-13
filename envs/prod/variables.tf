@@ -77,3 +77,31 @@ variable "api_certificate_arn" {
 # Application code is deployed via workflows deploy-app-dev.yml and deploy-app-prod.yml in the kambriq repository.
 # Terraform only creates the Lambda function structure (with dummy placeholder code).
 
+# ============================================================================
+# Bastion Configuration
+# ============================================================================
+
+variable "enable_bastion" {
+  description = "Enable bastion host for manual database migrations"
+  type        = bool
+  default     = false # Disabled by default in PROD for security
+}
+
+variable "bastion_key_pair_name" {
+  description = "Name of the existing EC2 Key Pair for SSH access to bastion (must exist in AWS)"
+  type        = string
+  default     = ""
+}
+
+variable "allowed_ssh_cidr" {
+  description = "CIDR block allowed to SSH into the bastion (e.g., '1.2.3.4/32' for single IP, '0.0.0.0/0' for any - NOT RECOMMENDED)"
+  type        = string
+  default     = ""
+}
+
+variable "enable_bastion_autostop" {
+  description = "Enable automatic daily stop of bastion at 23:00 Europe/Paris (21:00 UTC)"
+  type        = bool
+  default     = true
+}
+

@@ -67,6 +67,11 @@ output "rds_username" {
   sensitive   = true
 }
 
+output "rds_security_group_id" {
+  description = "RDS Security Group ID (for bastion access)"
+  value       = aws_security_group.rds.id
+}
+
 # ============================================================================
 # SES (Email)
 # ============================================================================
@@ -101,4 +106,10 @@ output "verify_store_bucket_name" {
   description = "Verify module bucket for Dev"
   value       = aws_s3_bucket.verify_store.bucket
 }
+
+# ============================================================================
+# Bastion Host - REMOVED
+# ============================================================================
+# The bastion is now deployed in the "shared" stack and is shared between
+# dev and prod environments. See envs/shared/outputs.tf for bastion outputs.
 

@@ -342,3 +342,11 @@ module "ssm_app_parameters" {
   # SES sender email
   ses_from_email = var.ses_from_email
 }
+
+# ============================================================================
+# Bastion Host - REMOVED
+# ============================================================================
+# The bastion is now deployed in the "shared" stack and is shared between
+# dev and prod environments. See envs/shared/main.tf for bastion configuration.
+#
+# The bastion can access both dev and prod RDS instances via Security Groups.

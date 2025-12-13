@@ -39,8 +39,8 @@ module "shared" {
   aws_region   = var.aws_region
   vpc_cidr     = var.vpc_cidr
 
-  domain_name      = var.domain_name
-  route53_zone_id  = var.route53_zone_id
+  domain_name     = var.domain_name
+  route53_zone_id = var.route53_zone_id
 
   # SES Configuration (created manually in AWS Console)
   # SES identities are managed manually - Terraform only consumes ARNs passed via tfvars.
@@ -60,4 +60,70 @@ module "shared" {
 
   enable_s3_logs      = var.enable_s3_logs
   enable_s3_artifacts = var.enable_s3_artifacts
+}
+
+# ============================================================================
+# Remote State - Dev and Prod (for RDS Security Groups)
+# ============================================================================
+# Note: These remote states are used to get RDS Security Groups for bastion access
+# The bastion is shared between dev and prod environments
+
+# Remote states for dev and prod (to get RDS Security Group IDs)
+# Note: These may not exist yet if dev/prod haven't been deployed
+# We use try() in the module to handle missing remote states gracefully
+data "terraform_remote_state" "dev" {
+  count   = var.enable_bastion ? 1 : 0
+  backend = "s3"
+
+  config = {
+    bucket = "kloudnat-infra-shared-store"
+    key    = "kambriq/dev/terraform.tfstate"
+    region = var.aws_region
+  }
+}
+
+# Prod remote state - COMMENTED OUT until prod is deployed
+# Uncomment this block after deploying prod environment
+# data "terraform_remote_state" "prod" {
+#   count   = var.enable_bastion ? 1 : 0
+#   backend = "s3"
+#
+#   config = {
+#     bucket = "kloudnat-infra-shared-store"
+#     key    = "kambriq/prod/terraform.tfstate"
+#     region = var.aws_region
+#   }
+# }
+
+# ============================================================================
+# Bastion Host (shared between dev and prod)
+# ============================================================================
+# The bastion allows SSH access to execute Prisma migrations manually
+# for both dev and prod RDS instances.
+
+module "bastion" {
+  count  = var.enable_bastion ? 1 : 0
+  source = "../../modules/bastion"
+
+  env              = "shared"
+  project_name     = local.project_name
+  vpc_id           = module.shared.vpc_id
+  public_subnet_id = module.shared.public_subnet_ids[0] # Use first public subnet
+
+  # Get RDS Security Groups from dev and prod remote states
+  # Note: prod remote state is commented out until prod is deployed
+  # The bastion will be created with dev RDS access initially, then updated after prod deployment
+  rds_security_group_ids = var.enable_bastion ? compact([
+    try(data.terraform_remote_state.dev[0].outputs.rds_security_group_id, ""),
+    # Uncomment after prod is deployed:
+    # try(data.terraform_remote_state.prod[0].outputs.rds_security_group_id, ""),
+  ]) : []
+
+  bastion_key_pair_name = var.bastion_key_pair_name
+  allowed_ssh_cidr      = var.allowed_ssh_cidr
+  instance_type         = "t3.micro"
+  asg_min_size          = var.asg_min_size
+  asg_desired_size      = var.asg_desired_size
+  asg_max_size          = var.asg_max_size
+  aws_region            = var.aws_region
 }

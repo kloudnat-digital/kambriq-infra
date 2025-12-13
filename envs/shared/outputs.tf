@@ -88,3 +88,37 @@ output "artifacts_bucket_id" {
   description = "S3 bucket ID for artifacts"
   value       = module.shared.artifacts_bucket_id
 }
+
+# ============================================================================
+# Bastion Outputs (shared between dev and prod)
+# ============================================================================
+
+output "bastion_public_ip" {
+  description = "Public IP address of the bastion host (Elastic IP, shared between dev and prod)"
+  value       = var.enable_bastion ? module.bastion[0].bastion_public_ip : null
+}
+
+output "bastion_asg_name" {
+  description = "Auto Scaling Group name for the bastion (shared between dev and prod)"
+  value       = var.enable_bastion ? module.bastion[0].bastion_asg_name : null
+}
+
+output "bastion_ssh_command" {
+  description = "SSH command example to connect to the bastion (shared between dev and prod)"
+  value       = var.enable_bastion ? module.bastion[0].bastion_ssh_command : null
+}
+
+output "bastion_stop_command" {
+  description = "Command to stop the bastion (set ASG capacity to 0)"
+  value       = var.enable_bastion ? module.bastion[0].bastion_stop_command : null
+}
+
+output "bastion_start_command" {
+  description = "Command to start the bastion (set ASG capacity to 1)"
+  value       = var.enable_bastion ? module.bastion[0].bastion_start_command : null
+}
+
+output "bastion_refresh_command" {
+  description = "Command to refresh ASG instances (after updating Launch Template user-data)"
+  value       = var.enable_bastion ? module.bastion[0].bastion_refresh_command : null
+}

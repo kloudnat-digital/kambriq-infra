@@ -93,3 +93,48 @@ variable "enable_s3_artifacts" {
   default     = true
 }
 
+# ============================================================================
+# Bastion Configuration (shared between dev and prod)
+# ============================================================================
+
+variable "enable_bastion" {
+  description = "Enable bastion host for manual database migrations (shared between dev and prod)"
+  type        = bool
+  default     = true
+}
+
+variable "bastion_key_pair_name" {
+  description = "Name of the existing EC2 Key Pair for SSH access to bastion (must exist in AWS)"
+  type        = string
+  default     = ""
+}
+
+variable "allowed_ssh_cidr" {
+  description = "List of CIDR blocks allowed to SSH into the bastion (e.g., ['1.2.3.4/32', '5.6.7.8/32']). Required if enable_bastion = true."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = var.enable_bastion == false || (length(var.allowed_ssh_cidr) > 0 && alltrue([for cidr in var.allowed_ssh_cidr : can(cidrhost(cidr, 0))]))
+    error_message = "allowed_ssh_cidr is required when enable_bastion is true. Please provide a non-empty list of valid CIDR blocks (e.g., ['1.2.3.4/32', '5.6.7.8/32'])."
+  }
+}
+
+variable "asg_min_size" {
+  description = "Minimum number of instances in ASG (0 to stop bastion, 1 to start)"
+  type        = number
+  default     = 1
+}
+
+variable "asg_desired_size" {
+  description = "Desired number of instances in ASG (0 to stop bastion, 1 to start)"
+  type        = number
+  default     = 1
+}
+
+variable "asg_max_size" {
+  description = "Maximum number of instances in ASG (should be 1 for bastion)"
+  type        = number
+  default     = 1
+}
+

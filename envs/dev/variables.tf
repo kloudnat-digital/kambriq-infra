@@ -72,4 +72,42 @@ variable "ses_from_email" {
 # Application code is deployed via workflows deploy-app-dev.yml and deploy-app-prod.yml in the kambriq repository.
 # Terraform only creates the Lambda function structure (with dummy placeholder code).
 
+# ============================================================================
+# Bastion Configuration
+# ============================================================================
+
+variable "enable_bastion" {
+  description = "Enable bastion host for manual database migrations"
+  type        = bool
+  default     = true
+}
+
+variable "bastion_key_pair_name" {
+  description = "Name of the existing EC2 Key Pair for SSH access to bastion (must exist in AWS). Required if enable_bastion = true."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.enable_bastion == false || var.bastion_key_pair_name != ""
+    error_message = "bastion_key_pair_name is required when enable_bastion is true. Please provide a valid EC2 Key Pair name."
+  }
+}
+
+variable "allowed_ssh_cidr" {
+  description = "CIDR block allowed to SSH into the bastion (e.g., '1.2.3.4/32' for single IP, '0.0.0.0/0' for any - NOT RECOMMENDED). Required if enable_bastion = true."
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.enable_bastion == false || (var.allowed_ssh_cidr != "" && can(cidrhost(var.allowed_ssh_cidr, 0)))
+    error_message = "allowed_ssh_cidr is required when enable_bastion is true. Please provide a valid CIDR block (e.g., '1.2.3.4/32')."
+  }
+}
+
+variable "enable_bastion_autostop" {
+  description = "Enable automatic daily stop of bastion at 23:00 Europe/Paris (21:00 UTC)"
+  type        = bool
+  default     = true
+}
+
 
