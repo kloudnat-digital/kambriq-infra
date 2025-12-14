@@ -65,6 +65,10 @@ terraform {
       source  = "hashicorp/archive"
       version = "~> 2.4"
     }
+    null = {
+      source  = "hashicorp/null"
+      version = "~> 3.0"
+    }
   }
 }
 
@@ -276,18 +280,31 @@ module "iam" {
 }
 
 # ============================================================================
+# ECR Repository for API Lambda Container Image
+# ============================================================================
+
+module "ecr_api" {
+  source = "../../modules/ecr-repository"
+
+  repository_name = "kambriq-api-${local.env}"
+  env             = local.env
+  aws_region      = var.aws_region
+}
+
+# ============================================================================
 # API (Lambda NestJS + API Gateway)
 # ============================================================================
-# Lambda code is deployed via deploy-app-prod.yml in the kambriq repository
+# Note: Lambda code is deployed via deploy-app-prod.yml in the kambriq repository
+# Using Container Image (ECR) instead of ZIP to support bundles > 250MB
 
 module "lambda" {
   source = "../../modules/lambda-api"
 
-  env         = local.env
-  runtime     = "nodejs20.x"
-  handler     = "dist/lambda.handler" # Updated: use lambda.handler for NestJS Lambda adapter
-  timeout     = 30
-  memory_size = 512
+  env                   = local.env
+  timeout               = 30
+  memory_size           = 512
+  ecr_repository_url    = module.ecr_api.repository_url
+  ecr_placeholder_ready = module.ecr_api.placeholder_image_ready
 
   role_arn          = module.iam.lambda_role_arn
   vpc_id            = data.terraform_remote_state.shared.outputs.vpc_id

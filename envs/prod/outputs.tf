@@ -94,6 +94,11 @@ output "lambda_function_name" {
   value       = module.lambda.function_name
 }
 
+output "ecr_api_repository_url" {
+  description = "ECR repository URL for API Lambda container image"
+  value       = module.ecr_api.repository_url
+}
+
 output "cloudfront_distribution_id" {
   description = "CloudFront distribution ID (for cache invalidation)"
   value       = module.frontend.cloudfront_distribution_id

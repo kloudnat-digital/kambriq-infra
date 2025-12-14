@@ -9,16 +9,21 @@ variable "function_name" {
   default     = ""
 }
 
-variable "runtime" {
-  description = "Lambda runtime"
+variable "ecr_repository_url" {
+  description = "ECR repository URL for container image (e.g., 123456789012.dkr.ecr.eu-central-1.amazonaws.com/kambriq-api-dev)"
   type        = string
-  default     = "nodejs20.x"
 }
 
-variable "handler" {
-  description = "Lambda handler (for NestJS Lambda adapter, use dist/lambda.handler)"
+variable "image_uri" {
+  description = "Container image URI (optional, defaults to ecr_repository_url:latest). CI/CD will update this."
   type        = string
-  default     = "dist/lambda.handler"
+  default     = ""
+}
+
+variable "ecr_placeholder_ready" {
+  description = "Reference to ECR placeholder image resource (ensures placeholder is created before Lambda)"
+  type        = any
+  default     = null
 }
 
 variable "timeout" {
@@ -96,11 +101,6 @@ variable "jwt_secret" {
   sensitive   = true
 }
 
-variable "source_code_hash" {
-  description = "Source code hash (for updates)"
-  type        = string
-  default     = ""
-}
 
 # ============================================================================
 # Artifact Configuration - REMOVED

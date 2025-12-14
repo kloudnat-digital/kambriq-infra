@@ -2,28 +2,29 @@ locals {
   function_name = var.function_name != "" ? var.function_name : "kambriq-api-${var.env}"
 }
 
-# Dummy zip file pour initialiser la fonction (sera remplacé par le vrai code via CI/CD)
-data "archive_file" "dummy" {
-  type        = "zip"
-  output_path = "${path.module}/dummy.zip"
-  source {
-    content  = "exports.handler = async (event) => { return { statusCode: 200, body: JSON.stringify({ message: 'Lambda initialized - deploy code via CI/CD' }) }; };"
-    filename = "index.js"
-  }
-}
-
-# Lambda Function
+# Lambda Function (Container Image)
 resource "aws_lambda_function" "main" {
   function_name = local.function_name
-  runtime       = var.runtime
-  handler       = var.handler
   role          = var.role_arn
   timeout       = var.timeout
   memory_size   = var.memory_size
+  package_type  = "Image"
 
-  # Source code: Always use dummy placeholder (code deployed via deploy-app-dev.yml / deploy-app-prod.yml)
-  filename         = data.archive_file.dummy.output_path
-  source_code_hash = var.source_code_hash != "" ? var.source_code_hash : data.archive_file.dummy.output_base64sha256
+  # Container image: Use provided image_uri or default to ECR repository URL with latest tag
+  # Note: The image must exist in ECR before creating the Lambda function.
+  # The ECR module creates a placeholder image automatically via null_resource.
+  # CI/CD will build and push the actual image, then update this Lambda function.
+  image_uri = var.image_uri != "" ? var.image_uri : "${var.ecr_repository_url}:latest"
+
+  # Allow Terraform to ignore image_uri changes (CI/CD will manage image updates)
+  lifecycle {
+    ignore_changes = [image_uri]
+  }
+
+  # Wait for placeholder image to be created (if Docker is available)
+  # If Docker is not available, user must create placeholder manually using the script
+  depends_on = [var.ecr_placeholder_ready]
+
 
   vpc_config {
     subnet_ids         = var.subnet_ids
