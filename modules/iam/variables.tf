@@ -19,3 +19,8 @@ variable "ses_identity_arn" {
   default     = ""
 }
 
+variable "aws_region" {
+  description = "AWS region (for SSM parameter ARN construction)"
+  type        = string
+}
+

@@ -265,6 +265,7 @@ module "iam" {
   source = "../../modules/iam"
 
   env                   = local.env
+  aws_region            = var.aws_region
   rds_security_group_id = aws_security_group.rds.id
   s3_media_bucket_arn   = module.s3_media.bucket_arn
   ses_identity_arn      = try(data.terraform_remote_state.shared.outputs.ses_email_identity_arn, "")
