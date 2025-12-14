@@ -357,31 +357,75 @@ BASHRC_EOF
     INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
     REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
     
-    # Get EIP allocation ID from tag (EIP is tagged with Name = "${local.name_prefix}-eip")
-    EIP_ALLOCATION_ID=$(aws ec2 describe-addresses \
-      --filters "Name=tag:Name,Values=${local.name_prefix}-eip" \
-      --query 'Addresses[0].AllocationId' \
-      --output text \
-      --region $REGION)
+    # Function to associate EIP with retries
+    associate_eip() {
+      local max_attempts=5
+      local attempt=1
+      local wait_time=15
+      
+      # Get EIP allocation ID from tag (EIP is tagged with Name = "${local.name_prefix}-eip")
+      EIP_ALLOCATION_ID=$(aws ec2 describe-addresses \
+        --filters "Name=tag:Name,Values=${local.name_prefix}-eip" \
+        --query 'Addresses[0].AllocationId' \
+        --output text \
+        --region $REGION 2>/dev/null)
+      
+      if [ -z "$EIP_ALLOCATION_ID" ] || [ "$EIP_ALLOCATION_ID" = "None" ] || [ "$EIP_ALLOCATION_ID" = "null" ]; then
+        echo "⚠️  EIP not found with tag Name=${local.name_prefix}-eip"
+        return 1
+      fi
+      
+      echo "📌 Found EIP Allocation ID: $EIP_ALLOCATION_ID"
+      
+      # Wait for instance to be fully ready (network interface must be available)
+      echo "⏳ Waiting for instance to be ready..."
+      sleep $wait_time
+      
+      # Retry association with exponential backoff
+      while [ $attempt -le $max_attempts ]; do
+        echo "🔄 Attempt $attempt/$max_attempts: Associating EIP to instance $INSTANCE_ID..."
+        
+        # Check if EIP is already associated to this instance
+        CURRENT_INSTANCE=$(aws ec2 describe-addresses \
+          --allocation-ids $EIP_ALLOCATION_ID \
+          --query 'Addresses[0].InstanceId' \
+          --output text \
+          --region $REGION 2>/dev/null)
+        
+        if [ "$CURRENT_INSTANCE" = "$INSTANCE_ID" ]; then
+          echo "✅ EIP is already associated to this instance"
+          return 0
+        fi
+        
+        # Try to associate
+        if aws ec2 associate-address \
+          --instance-id $INSTANCE_ID \
+          --allocation-id $EIP_ALLOCATION_ID \
+          --allow-reassociation \
+          --region $REGION 2>&1; then
+          echo "✅ EIP successfully associated to instance $INSTANCE_ID"
+          return 0
+        else
+          echo "⚠️  EIP association attempt $attempt failed, retrying in ${wait_time}s..."
+          sleep $wait_time
+          wait_time=$((wait_time * 2)) # Exponential backoff
+          attempt=$((attempt + 1))
+        fi
+      done
+      
+      echo "❌ Failed to associate EIP after $max_attempts attempts"
+      return 1
+    }
     
-    if [ -n "$EIP_ALLOCATION_ID" ] && [ "$EIP_ALLOCATION_ID" != "None" ]; then
-      # Wait a bit for the instance to be fully ready
-      sleep 10
-      # Associate EIP to this instance
-      aws ec2 associate-address \
-        --instance-id $INSTANCE_ID \
-        --allocation-id $EIP_ALLOCATION_ID \
-        --allow-reassociation \
-        --region $REGION || echo "⚠️  EIP association failed (may already be associated or retry later)"
-    else
-      echo "⚠️  EIP not found with tag Name=${local.name_prefix}-eip"
-    fi
+    # Run association in background to not block instance startup
+    associate_eip >> /var/log/eip-association.log 2>&1 &
     
     # Create a marker file to indicate setup is complete
     touch /var/log/bastion-setup-complete.log
     echo "Bastion setup completed at $(date)" >> /var/log/bastion-setup-complete.log
     echo "Instance ID: $INSTANCE_ID" >> /var/log/bastion-setup-complete.log
-    echo "EIP Allocation ID: $EIP_ALLOCATION_ID" >> /var/log/bastion-setup-complete.log
+    echo "Region: $REGION" >> /var/log/bastion-setup-complete.log
+    echo "EIP association initiated (check /var/log/eip-association.log for status)" >> /var/log/bastion-setup-complete.log
   EOF
   )
 
