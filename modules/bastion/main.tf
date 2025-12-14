@@ -368,52 +368,52 @@ BASHRC_EOF
         --filters "Name=tag:Name,Values=${local.name_prefix}-eip" \
         --query 'Addresses[0].AllocationId' \
         --output text \
-        --region $REGION 2>/dev/null)
+        --region $$REGION 2>/dev/null)
       
-      if [ -z "$EIP_ALLOCATION_ID" ] || [ "$EIP_ALLOCATION_ID" = "None" ] || [ "$EIP_ALLOCATION_ID" = "null" ]; then
+      if [ -z "$$EIP_ALLOCATION_ID" ] || [ "$$EIP_ALLOCATION_ID" = "None" ] || [ "$$EIP_ALLOCATION_ID" = "null" ]; then
         echo "⚠️  EIP not found with tag Name=${local.name_prefix}-eip"
         return 1
       fi
       
-      echo "📌 Found EIP Allocation ID: $EIP_ALLOCATION_ID"
+      echo "📌 Found EIP Allocation ID: $$EIP_ALLOCATION_ID"
       
       # Wait for instance to be fully ready (network interface must be available)
       echo "⏳ Waiting for instance to be ready..."
-      sleep $wait_time
+      sleep $$wait_time
       
       # Retry association with exponential backoff
-      while [ $attempt -le $max_attempts ]; do
-        echo "🔄 Attempt $attempt/$max_attempts: Associating EIP to instance $INSTANCE_ID..."
+      while [ $$attempt -le $$max_attempts ]; do
+        echo "🔄 Attempt $$attempt/$$max_attempts: Associating EIP to instance $$INSTANCE_ID..."
         
         # Check if EIP is already associated to this instance
         CURRENT_INSTANCE=$(aws ec2 describe-addresses \
-          --allocation-ids $EIP_ALLOCATION_ID \
+          --allocation-ids $$EIP_ALLOCATION_ID \
           --query 'Addresses[0].InstanceId' \
           --output text \
-          --region $REGION 2>/dev/null)
+          --region $$REGION 2>/dev/null)
         
-        if [ "$CURRENT_INSTANCE" = "$INSTANCE_ID" ]; then
+        if [ "$$CURRENT_INSTANCE" = "$$INSTANCE_ID" ]; then
           echo "✅ EIP is already associated to this instance"
           return 0
         fi
         
         # Try to associate
         if aws ec2 associate-address \
-          --instance-id $INSTANCE_ID \
-          --allocation-id $EIP_ALLOCATION_ID \
+          --instance-id $$INSTANCE_ID \
+          --allocation-id $$EIP_ALLOCATION_ID \
           --allow-reassociation \
-          --region $REGION 2>&1; then
-          echo "✅ EIP successfully associated to instance $INSTANCE_ID"
+          --region $$REGION 2>&1; then
+          echo "✅ EIP successfully associated to instance $$INSTANCE_ID"
           return 0
         else
-          echo "⚠️  EIP association attempt $attempt failed, retrying in ${wait_time}s..."
-          sleep $wait_time
-          wait_time=$((wait_time * 2)) # Exponential backoff
-          attempt=$((attempt + 1))
+          echo "⚠️  EIP association attempt $$attempt failed, retrying in $${wait_time}s..."
+          sleep $$wait_time
+          wait_time=$$((wait_time * 2)) # Exponential backoff
+          attempt=$$((attempt + 1))
         fi
       done
       
-      echo "❌ Failed to associate EIP after $max_attempts attempts"
+      echo "❌ Failed to associate EIP after $$max_attempts attempts"
       return 1
     }
     
