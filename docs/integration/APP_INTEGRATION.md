@@ -156,7 +156,7 @@ output "aws_region" {
 | `db_name` | Part of `DATABASE_URL` | Database connection |
 | `db_username` | Part of `DATABASE_URL` | Database connection (from SSM) |
 | `db_password` | Part of `DATABASE_URL` | Database connection (from SSM) |
-| `s3_media_bucket` | `S3_MEDIA_BUCKET` | S3 bucket for media storage |
+| `s3_media_bucket` | `AWS_S3_BUCKET_NAME` | S3 bucket for media storage |
 | `ses_from_email` | `SES_FROM_EMAIL` / `AWS_SES_FROM_EMAIL` | SES sender email |
 | `frontend_url` | `FRONTEND_URL` | CORS origin and email links |
 | `aws_region` | `AWS_REGION` | AWS SDK region configuration |

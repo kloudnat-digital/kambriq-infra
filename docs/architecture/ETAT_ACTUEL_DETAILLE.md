@@ -714,13 +714,13 @@ Permet de générer et stocker les secrets dans SSM Parameter Store avec la nouv
 
 **Dev :**
 - `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`
-- `S3_MEDIA_BUCKET`
+- `AWS_S3_BUCKET_NAME`
 - `SES_FROM_EMAIL` : noreply.dev@kambriq.com
 - `JWT_SECRET`
 
 **Prod :**
 - `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD`
-- `S3_MEDIA_BUCKET`
+- `AWS_S3_BUCKET_NAME`
 - `SES_FROM_EMAIL` : noreply@kambriq.com
 - `JWT_SECRET`
 
