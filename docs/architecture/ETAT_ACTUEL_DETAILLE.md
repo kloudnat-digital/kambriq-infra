@@ -191,7 +191,8 @@ kambriq-aws-iac-terraform/
 
 **Secrets (SSM Parameter Store) :**
 - `/kambriq/dev/db/password` : Mot de passe RDS
-- `/kambriq/dev/api/jwt_secret` : Clé secrète JWT
+- `/kambriq/dev/api/JWT_SECRET` : Clé secrète JWT (paramètre attendu par l'application)
+- `/kambriq/dev/api/jwt_secret` : (legacy) peut exister et être utilisé pour initialiser `JWT_SECRET` lors de la création
 
 **Outputs exposés :**
 - Frontend : CloudFront domain, S3 bucket name
@@ -233,7 +234,8 @@ kambriq-aws-iac-terraform/
 
 **Secrets (SSM Parameter Store) :**
 - `/kambriq/prod/db/password` : Mot de passe RDS
-- `/kambriq/prod/api/jwt_secret` : Clé secrète JWT
+- `/kambriq/prod/api/JWT_SECRET` : Clé secrète JWT (paramètre attendu par l'application)
+- `/kambriq/prod/api/jwt_secret` : (legacy) peut exister et être utilisé pour initialiser `JWT_SECRET` lors de la création
 
 **Outputs exposés :**
 - Identiques à `dev` (même structure)

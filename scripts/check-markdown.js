@@ -27,7 +27,10 @@ function log(message, color = 'reset') {
 // Patterns obsolètes à détecter
 const OBSOLETE_PATTERNS = [
   {
-    pattern: /api_bundle_s3_key|web_bundle_s3_key|ssr_bundle_s3_key|artifact_bucket_name/gi,
+    // NOTE: We intentionally match the *deprecated Terraform variable names* in lowercase.
+    // Do NOT use case-insensitive matching here, otherwise we would incorrectly flag
+    // environment variables like `ARTIFACT_BUCKET_NAME`.
+    pattern: /api_bundle_s3_key|web_bundle_s3_key|ssr_bundle_s3_key|artifact_bucket_name/g,
     message: 'Référence aux variables Terraform d\'artefacts applicatifs (obsolètes depuis 2025-12-07)',
     context: 'Les variables artifact_bucket_name, api_bundle_s3_key, ssr_bundle_s3_key ont été supprimées. Les déploiements applicatifs sont gérés par deploy-app-dev.yml et deploy-app-prod.yml dans le repo kambriq.',
     allowedIn: ['CHANGELOG.md', 'CLEANUP_SUMMARY.md', 'AUDIT_WORKFLOWS.md'], // Permis dans CHANGELOG et docs historiques
