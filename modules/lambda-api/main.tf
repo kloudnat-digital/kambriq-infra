@@ -33,15 +33,15 @@ resource "aws_lambda_function" "main" {
 
   environment {
     variables = {
-      NODE_ENV         = var.env
-      DB_HOST          = var.db_host
-      DB_PORT          = tostring(var.db_port)
-      DB_NAME          = var.db_name
-      DB_USERNAME      = var.db_username
-      DB_PASSWORD      = var.db_password
+      NODE_ENV           = var.env
+      DB_HOST            = var.db_host
+      DB_PORT            = tostring(var.db_port)
+      DB_NAME            = var.db_name
+      DB_USERNAME        = var.db_username
+      DB_PASSWORD        = var.db_password
       AWS_S3_BUCKET_NAME = var.s3_media_bucket
-      SES_FROM_EMAIL   = var.ses_from_email
-      JWT_SECRET       = var.jwt_secret
+      SES_FROM_EMAIL     = var.ses_from_email
+      JWT_SECRET         = var.jwt_secret
     }
   }
 

@@ -161,7 +161,7 @@ resource "aws_route_table_association" "private" {
 # See docs/setup/ROUTE53_DNS_SETUP.md for manual setup instructions.
 
 data "aws_route53_zone" "main" {
-  count = var.route53_zone_id != "" ? 1 : 0
+  count   = var.route53_zone_id != "" ? 1 : 0
   zone_id = var.route53_zone_id
 }
 

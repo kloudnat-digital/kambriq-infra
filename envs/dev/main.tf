@@ -359,6 +359,32 @@ module "ssm_app_parameters" {
 
   # SES sender email
   ses_from_email = var.ses_from_email
+
+  # Additional API KV (String)
+  default_visitor_role_id                    = "550e8400-e29b-41d4-a716-446655440002"
+  password_reset_token_expiration_hours      = 24
+  referral_code_expiration_hours             = 24
+  referral_invitation_token_expiration_hours = 24
+  jwt_expires_in                             = 900
+  jwt_refresh_expires_in                     = 604800
+  jwt_algorithm                              = "HS256"
+  cookie_secure                              = "true"
+  cookie_same_site                           = "strict"
+  cookie_domain                              = ""
+  verification_cost                          = 99
+  aws_ses_to_admin_contact                   = "contact@kambriq.com"
+  contact_whatsapp_number                    = "+237670000000"
+  paypal_environment                         = "sandbox"
+
+  # Web KV (public) - stored under /kambriq/dev/web/*
+  api_gateway_base_url                   = module.api_gateway.api_url
+  frontend_cloudfront_domain             = module.frontend.cloudfront_domain_name
+  next_public_jwt_expires_in             = 900
+  next_public_jwt_refresh_buffer_seconds = 180
+  next_public_stale_time                 = 300
+  next_public_refetch_interval           = 300
+  # Keep empty by default (set manually in SSM later)
+  next_public_paypal_client_id = ""
 }
 
 # ============================================================================

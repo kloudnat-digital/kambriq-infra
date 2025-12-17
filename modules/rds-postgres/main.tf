@@ -25,7 +25,7 @@ resource "aws_db_instance" "main" {
   identifier = "kambriq-postgres-${var.env}"
 
   engine         = "postgres"
-  engine_version = "15.15"  # Updated: 15.4 is not available, using latest 15.x version
+  engine_version = "15.15" # Updated: 15.4 is not available, using latest 15.x version
   instance_class = var.instance_class
 
   allocated_storage = var.allocated_storage

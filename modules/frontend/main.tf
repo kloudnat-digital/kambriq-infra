@@ -112,7 +112,7 @@ resource "aws_lambda_function" "ssr" {
   # The CI/CD workflow will build and push the image to ECR, then update the Lambda
   # We use a placeholder image URI here - the actual image will be updated by CI/CD
   image_uri = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${data.aws_region.current.name}.amazonaws.com/kambriq-frontend-ssr-${var.env}:latest"
-  
+
   # Image configuration for container-based Lambda
   # Note: handler and runtime are NOT specified for Image package_type
   # They are defined in the Dockerfile CMD (see web/Dockerfile.ssr)
@@ -132,10 +132,10 @@ resource "aws_lambda_function" "ssr" {
       # Force NODE_ENV=production for Lambda runtime
       # OpenNext bundles are built in production mode, so React expects production files
       # (react.production.js, not react.development.js)
-      NODE_ENV                  = "production"
-      NEXT_PUBLIC_API_BASE_URL  = var.api_gateway_url  # Used by Next.js app (environment.ts, actions, etc.)
-      NEXT_PUBLIC_SITE_URL      = var.domain_name != "" ? "https://${var.domain_name}" : ""
-      
+      NODE_ENV                 = "production"
+      NEXT_PUBLIC_API_BASE_URL = var.api_gateway_url # Used by Next.js app (environment.ts, actions, etc.)
+      NEXT_PUBLIC_SITE_URL     = var.domain_name != "" ? "https://${var.domain_name}" : ""
+
       # OpenNext ISR (Incremental Static Regeneration) cache configuration
       # OpenNext requires these environment variables to use S3 for ISR cache storage
       CACHE_BUCKET_NAME   = aws_s3_bucket.static.id
@@ -155,7 +155,7 @@ resource "aws_lambda_function" "ssr" {
     ignore_changes = [
       filename,
       source_code_hash,
-      image_uri,  # CI/CD will update the image URI with the latest ECR image
+      image_uri, # CI/CD will update the image URI with the latest ECR image
     ]
   }
 }
@@ -241,7 +241,7 @@ resource "aws_iam_role_policy" "lambda_s3" {
         Action = [
           "s3:GetObject",
           "s3:PutObject",
-          "s3:DeleteObject"  # Required for ISR cache invalidation
+          "s3:DeleteObject" # Required for ISR cache invalidation
         ]
         Resource = [
           "${aws_s3_bucket.static.arn}/*"
@@ -250,7 +250,7 @@ resource "aws_iam_role_policy" "lambda_s3" {
       {
         Effect = "Allow"
         Action = [
-          "s3:ListBucket"  # Required for ISR cache operations
+          "s3:ListBucket" # Required for ISR cache operations
         ]
         Resource = [
           aws_s3_bucket.static.arn
@@ -392,8 +392,8 @@ resource "aws_cloudfront_distribution" "main" {
 
     # Use cache policy and origin request policy instead of forwarded_values
     # This excludes Host header to prevent 403 errors from Lambda Function URL
-    cache_policy_id            = aws_cloudfront_cache_policy.lambda_ssr.id
-    origin_request_policy_id   = aws_cloudfront_origin_request_policy.lambda_ssr.id
+    cache_policy_id          = aws_cloudfront_cache_policy.lambda_ssr.id
+    origin_request_policy_id = aws_cloudfront_origin_request_policy.lambda_ssr.id
 
     compress = true
   }

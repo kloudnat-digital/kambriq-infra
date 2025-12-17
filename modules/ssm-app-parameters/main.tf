@@ -115,3 +115,287 @@ resource "aws_ssm_parameter" "ses_from_email" {
     Service     = "api"
   }
 }
+
+# ============================================================================
+# Additional API KV (String) - created by Terraform but can be updated manually
+# ============================================================================
+
+resource "aws_ssm_parameter" "default_visitor_role_id" {
+  name        = "/kambriq/${var.env}/api/DEFAULT_VISITOR_ROLE_ID"
+  type        = "String"
+  value       = var.default_visitor_role_id
+  description = "Default visitor role id for ${var.env}"
+  tags = {
+    Name        = "kambriq-api-default-visitor-role-id-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "password_reset_token_expiration_hours" {
+  name        = "/kambriq/${var.env}/api/PASSWORD_RESET_TOKEN_EXPIRATION_HOURS"
+  type        = "String"
+  value       = tostring(var.password_reset_token_expiration_hours)
+  description = "Password reset token expiration (hours) for ${var.env}"
+  tags = {
+    Name        = "kambriq-api-password-reset-token-expiration-hours-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "referral_code_expiration_hours" {
+  name        = "/kambriq/${var.env}/api/REFERRAL_CODE_EXPIRATION_HOURS"
+  type        = "String"
+  value       = tostring(var.referral_code_expiration_hours)
+  description = "Referral code expiration (hours) for ${var.env}"
+  tags = {
+    Name        = "kambriq-api-referral-code-expiration-hours-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "referral_invitation_token_expiration_hours" {
+  name        = "/kambriq/${var.env}/api/REFERRAL_INVITATION_TOKEN_EXPIRATION_HOURS"
+  type        = "String"
+  value       = tostring(var.referral_invitation_token_expiration_hours)
+  description = "Referral invitation token expiration (hours) for ${var.env}"
+  tags = {
+    Name        = "kambriq-api-referral-invitation-token-expiration-hours-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "jwt_expires_in" {
+  name        = "/kambriq/${var.env}/api/JWT_EXPIRES_IN"
+  type        = "String"
+  value       = tostring(var.jwt_expires_in)
+  description = "JWT access token expiration (seconds) for ${var.env}"
+  tags = {
+    Name        = "kambriq-api-jwt-expires-in-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "jwt_refresh_expires_in" {
+  name        = "/kambriq/${var.env}/api/JWT_REFRESH_EXPIRES_IN"
+  type        = "String"
+  value       = tostring(var.jwt_refresh_expires_in)
+  description = "JWT refresh token expiration (seconds) for ${var.env}"
+  tags = {
+    Name        = "kambriq-api-jwt-refresh-expires-in-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "jwt_algorithm" {
+  name        = "/kambriq/${var.env}/api/JWT_ALGORITHM"
+  type        = "String"
+  value       = var.jwt_algorithm
+  description = "JWT algorithm for ${var.env}"
+  tags = {
+    Name        = "kambriq-api-jwt-algorithm-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "cookie_secure" {
+  name        = "/kambriq/${var.env}/api/COOKIE_SECURE"
+  type        = "String"
+  value       = var.cookie_secure
+  description = "Cookie secure flag for ${var.env}"
+  tags = {
+    Name        = "kambriq-api-cookie-secure-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "cookie_same_site" {
+  name        = "/kambriq/${var.env}/api/COOKIE_SAME_SITE"
+  type        = "String"
+  value       = var.cookie_same_site
+  description = "Cookie SameSite policy for ${var.env}"
+  tags = {
+    Name        = "kambriq-api-cookie-same-site-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "cookie_domain" {
+  name        = "/kambriq/${var.env}/api/COOKIE_DOMAIN"
+  type        = "String"
+  value       = var.cookie_domain
+  description = "Cookie domain for ${var.env} (can be empty)"
+  tags = {
+    Name        = "kambriq-api-cookie-domain-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "verification_cost" {
+  name        = "/kambriq/${var.env}/api/VERIFICATION_COST"
+  type        = "String"
+  value       = tostring(var.verification_cost)
+  description = "Verification cost for ${var.env}"
+  tags = {
+    Name        = "kambriq-api-verification-cost-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "aws_ses_to_admin_contact" {
+  name        = "/kambriq/${var.env}/api/AWS_SES_TO_ADMIN_CONTACT"
+  type        = "String"
+  value       = var.aws_ses_to_admin_contact
+  description = "Admin contact email for verify notifications (${var.env})"
+  tags = {
+    Name        = "kambriq-api-aws-ses-to-admin-contact-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "contact_whatsapp_number" {
+  name        = "/kambriq/${var.env}/api/CONTACT_WHATSAPP_NUMBER"
+  type        = "String"
+  value       = var.contact_whatsapp_number
+  description = "WhatsApp contact number for templates (${var.env})"
+  tags = {
+    Name        = "kambriq-api-contact-whatsapp-number-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "paypal_environment" {
+  name        = "/kambriq/${var.env}/api/PAYPAL_ENVIRONMENT"
+  type        = "String"
+  value       = var.paypal_environment
+  description = "PayPal environment (sandbox/production) for ${var.env}"
+  tags = {
+    Name        = "kambriq-api-paypal-environment-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+  lifecycle { ignore_changes = [value] }
+}
+
+# ============================================================================
+# Web build-time KV (String) under /kambriq/{env}/web/*
+# ============================================================================
+
+resource "aws_ssm_parameter" "web_next_public_api_base_url" {
+  count       = var.api_gateway_base_url != "" ? 1 : 0
+  name        = "/kambriq/${var.env}/web/NEXT_PUBLIC_API_BASE_URL"
+  type        = "String"
+  value       = var.api_gateway_base_url
+  description = "Next.js public API base URL for ${var.env}"
+  tags = {
+    Name        = "kambriq-web-next-public-api-base-url-${var.env}"
+    Environment = var.env
+    Service     = "web"
+  }
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "web_next_public_site_url" {
+  count       = var.frontend_cloudfront_domain != "" ? 1 : 0
+  name        = "/kambriq/${var.env}/web/NEXT_PUBLIC_SITE_URL"
+  type        = "String"
+  value       = "https://${var.frontend_cloudfront_domain}"
+  description = "Next.js public site URL for ${var.env}"
+  tags = {
+    Name        = "kambriq-web-next-public-site-url-${var.env}"
+    Environment = var.env
+    Service     = "web"
+  }
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "web_next_public_jwt_expires_in" {
+  name        = "/kambriq/${var.env}/web/NEXT_PUBLIC_JWT_EXPIRES_IN"
+  type        = "String"
+  value       = tostring(var.next_public_jwt_expires_in)
+  description = "Next.js JWT expires in (seconds) for ${var.env}"
+  tags = {
+    Name        = "kambriq-web-next-public-jwt-expires-in-${var.env}"
+    Environment = var.env
+    Service     = "web"
+  }
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "web_next_public_jwt_refresh_buffer_seconds" {
+  name        = "/kambriq/${var.env}/web/NEXT_PUBLIC_JWT_REFRESH_BUFFER_SECONDS"
+  type        = "String"
+  value       = tostring(var.next_public_jwt_refresh_buffer_seconds)
+  description = "Next.js JWT refresh buffer (seconds) for ${var.env}"
+  tags = {
+    Name        = "kambriq-web-next-public-jwt-refresh-buffer-seconds-${var.env}"
+    Environment = var.env
+    Service     = "web"
+  }
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "web_next_public_stale_time" {
+  name        = "/kambriq/${var.env}/web/NEXT_PUBLIC_STALE_TIME"
+  type        = "String"
+  value       = tostring(var.next_public_stale_time)
+  description = "Next.js stale time (seconds) for ${var.env}"
+  tags = {
+    Name        = "kambriq-web-next-public-stale-time-${var.env}"
+    Environment = var.env
+    Service     = "web"
+  }
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "web_next_public_refetch_interval" {
+  name        = "/kambriq/${var.env}/web/NEXT_PUBLIC_REFETCH_INTERVAL"
+  type        = "String"
+  value       = tostring(var.next_public_refetch_interval)
+  description = "Next.js refetch interval (seconds) for ${var.env}"
+  tags = {
+    Name        = "kambriq-web-next-public-refetch-interval-${var.env}"
+    Environment = var.env
+    Service     = "web"
+  }
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "web_next_public_paypal_client_id" {
+  count       = var.next_public_paypal_client_id != "" ? 1 : 0
+  name        = "/kambriq/${var.env}/web/NEXT_PUBLIC_PAYPAL_CLIENT_ID"
+  type        = "String"
+  value       = var.next_public_paypal_client_id
+  description = "Next.js public PayPal client id for ${var.env}"
+  tags = {
+    Name        = "kambriq-web-next-public-paypal-client-id-${var.env}"
+    Environment = var.env
+    Service     = "web"
+  }
+  lifecycle { ignore_changes = [value] }
+}
