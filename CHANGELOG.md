@@ -5,13 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2025-12-15] - Optimisations CI/CD
+
+### Added
+- **Workflows Terraform optimisés** :
+  - `terraform-dev-optimized.yml` : Plan/apply avec format check, outputs GitHub Step Summary, commentaires PR automatiques
+  - `terraform-prod-optimized.yml` : Plan/apply avec format check, outputs GitHub Step Summary, input `skip_apply` optionnel
+- **Optimisations cold start Lambda** :
+  - Migrations Prisma désactivées au cold start (gérées manuellement depuis bastion)
+  - Express piné à 4.18.1 (compatibilité NestJS)
+- **Credentials optionnels** : S3, SES, OAuth utilisent IAM roles en Lambda (credentials explicites uniquement pour dev local)
+- **Variables alignées** : `AWS_S3_BUCKET_NAME` (remplace `S3_MEDIA_BUCKET`) pour cohérence infra/app
+
+### Changed
+- Documentation mise à jour pour référencer les workflows optimisés
+- Suppression des workflows non optimisés (`deploy-app-dev.yml`, `deploy-app-prod.yml`) dans le repo `kambriq`
+- Suppression des scripts non optimisés (`deploy-dev.sh`, `deploy-prod.sh`, `deploy-dev-local.sh`) dans le repo `kambriq`
+
 ## [2025-12-07] - Refonte du pipeline CI/CD
 
 ### Changed
 - **BREAKING** : Séparation complète des responsabilités infrastructure et applicatif
   - Terraform gère **uniquement l'infrastructure** (Lambda, API Gateway, RDS, S3, CloudFront, SSM, IAM, VPC, etc.)
-  - Les déploiements applicatifs (mise à jour du code API + Web) sont désormais gérés exclusivement par les workflows `deploy-app-dev.yml` et `deploy-app-prod.yml` dans le repository `kambriq`
-  - Les workflows Terraform (`terraform-dev.yml`, `terraform-prod.yml`) ne gèrent plus le déploiement du code applicatif
+  - Les déploiements applicatifs (mise à jour du code API + Web) sont désormais gérés exclusivement par les workflows optimisés `deploy-app-dev-optimized.yml` et `deploy-app-prod-optimized.yml` dans le repository `kambriq`
+  - Les workflows Terraform optimisés (`terraform-dev-optimized.yml`, `terraform-prod-optimized.yml`) ne gèrent plus le déploiement du code applicatif
   - Suppression des inputs `api_s3_key` et `web_s3_key` des workflows Terraform (plus nécessaires)
 - **BREAKING** : Standardisation de la gestion des secrets sur AWS SSM Parameter Store
   - Structure de paths : `/kambriq/dev/api/...`, `/kambriq/dev/web/...`, `/kambriq/prod/api/...`, `/kambriq/prod/web/...`
@@ -20,17 +37,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Terraform configure uniquement l'infrastructure, les secrets applicatifs sont lus depuis SSM au runtime par l'application
 
 ### Changed (Workflows)
-- `terraform-dev.yml` : Simplifié pour ne gérer que l'infrastructure
-  - Déclenchement : Pull Request (plan uniquement), Push sur `develop` (plan + apply), Workflow Dispatch (plan uniquement)
-  - Suppression des inputs `api_s3_key` et `web_s3_key`
-  - Suppression des variables `TF_VAR_api_bundle_s3_key` et `TF_VAR_ssr_bundle_s3_key`
-- `terraform-prod.yml` : Simplifié pour ne gérer que l'infrastructure
-  - Déclenchement : Workflow Dispatch uniquement (manuel)
+- `terraform-dev-optimized.yml` : Optimisé avec format check, outputs GitHub Step Summary, commentaires PR automatiques, input `skip_apply`
+  - Déclenchement : Pull Request (plan avec commentaire), Push sur `develop` (plan + apply avec outputs), Workflow Dispatch (plan/apply avec `skip_apply`)
+- `terraform-prod-optimized.yml` : Optimisé avec format check, outputs GitHub Step Summary, input `skip_apply`
+  - Déclenchement : Workflow Dispatch uniquement (manuel) avec input `skip_apply` (optionnel)
   - Protection via GitHub Environment `production`
-  - Suppression des inputs `api_s3_key` et `web_s3_key`
-  - Suppression des variables `TF_VAR_api_bundle_s3_key` et `TF_VAR_ssr_bundle_s3_key`
 
 ### Removed
+- Workflows Terraform non optimisés (`terraform-dev.yml`, `terraform-prod.yml`) - remplacés par versions optimisées
 - Références aux anciens mécanismes de déploiement applicatif via Terraform
 - Inputs workflow pour artefacts S3 applicatifs (plus nécessaires)
 - Variables Terraform liées aux bundles applicatifs

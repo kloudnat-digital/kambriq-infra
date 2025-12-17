@@ -43,8 +43,9 @@ const OBSOLETE_PATTERNS = [
 
 // Workflows qui doivent exister
 const REQUIRED_WORKFLOWS = [
-  '.github/workflows/terraform-dev.yml',
-  '.github/workflows/terraform-prod.yml',
+  '.github/workflows/terraform-dev-optimized.yml',
+  '.github/workflows/terraform-prod-optimized.yml',
+  '.github/workflows/terraform-shared.yml',
 ];
 
 function getModifiedMarkdownFiles() {

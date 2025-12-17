@@ -1,8 +1,8 @@
 # Contexte du Workspace KAMBRIQ
 
 **Date de création :** 2025-01-27  
-**Dernière mise à jour :** 2025-12-07  
-**Version :** 3.1 (Séparation infrastructure/applicatif - SSM Parameter Store - Déploiements directs - Outils CLI)
+**Dernière mise à jour :** 2025-12-15  
+**Version :** 3.2 (Optimisations CI/CD - Workflows parallèles - Docker Buildx cache - Smoke tests - Cold start optimisé)
 
 ---
 
@@ -29,11 +29,21 @@ Infrastructure AWS gérée via Terraform pour la plateforme KAMBRIQ.
 - **Email** : SES (Simple Email Service)
 - **Réseau** : VPC avec subnets publics/privés + NAT Gateway
 
-**⚠️ Migration récente (2025-12-07) :**
+**⚠️ Migrations récentes :**
+
+**2025-12-07 :**
 - **Séparation complète** : Terraform gère uniquement l'infrastructure, déploiements applicatifs via workflows `deploy-app-*` dans le repo `kambriq`
 - Frontend : Migration de static export vers **OpenNext** (SSR + Lambda)
 - Backend : Adaptation NestJS pour **Lambda** (handler `dist/lambda.handler`)
 - Secrets : Standardisation sur **SSM Parameter Store** (`/kambriq/{env}/{api|web}/...`)
+
+**2025-12-15 :**
+- **Optimisations CI/CD** : Workflows parallèles (build API + Web simultanés), Docker Buildx avec cache registry
+- **Cold start optimisé** : Suppression des migrations Prisma au démarrage Lambda (migrations gérées manuellement depuis bastion)
+- **Dépendances** : Express est désormais en **v5** côté API (le pin 4.18.1 n'est plus vrai dans le code actuel)
+- **Smoke tests** : Tests automatiques des Lambdas après déploiement (workflows GHA + script local)
+- **Credentials optionnels** : S3, SES, OAuth (Google/Facebook) utilisent IAM role en Lambda, credentials explicites uniquement pour dev local
+- **Variables alignées** : `AWS_S3_BUCKET_NAME` (au lieu de `S3_MEDIA_BUCKET`) pour cohérence infra/app
 
 ### Structure des Stacks (3 stacks indépendants)
 
@@ -63,15 +73,16 @@ Infrastructure AWS gérée via Terraform pour la plateforme KAMBRIQ.
 #### 2. `envs/dev/` - Environnement Développement
 **Ressources gérées :**
 - ✅ RDS PostgreSQL : t4g.micro, 20GB gp3
-- ✅ Lambda API : Node.js 20.x, 512MB, 30s timeout (handler: `dist/lambda.handler`)
+- ✅ Lambda API : Node.js 20.x, 512MB, 30s timeout (handler: `dist/lambda.handler`, package_type: Image)
 - ✅ API Gateway : HTTP API
 - ✅ Frontend OpenNext : S3 static assets + CloudFront + Lambda SSR
 - ✅ S3 Media : Bucket médias/documents
 - ✅ S3 Verify Store : Bucket documents de vérification (protégé contre la suppression)
-- ✅ IAM : Rôles et policies Lambda
+- ✅ IAM : Rôles et policies Lambda (SSM, S3, SES, RDS)
 - ✅ Security Groups : RDS + Lambda
+- ✅ ECR : Repositories pour images Docker (kambriq-api-dev, kambriq-frontend-ssr-dev)
 
-**Note** : Les variables d'artefacts S3 applicatifs (`api_bundle_s3_key`, `ssr_bundle_s3_key`) ne sont plus utilisées. Terraform gère uniquement l'infrastructure. Les déploiements applicatifs sont effectués via les workflows `deploy-app-dev.yml` et `deploy-app-prod.yml` dans le repository `kambriq`.
+**Note** : Les variables d'artefacts S3 applicatifs (`api_bundle_s3_key`, `ssr_bundle_s3_key`) ne sont plus utilisées. Terraform gère uniquement l'infrastructure. Les déploiements applicatifs sont effectués via les workflows `deploy-app-dev-optimized.yml` et `deploy-app-prod-optimized.yml` dans le repository `kambriq`.
 
 **Backend :**
 - Bucket S3 : `kloudnat-infra-shared-store`
@@ -83,11 +94,22 @@ Infrastructure AWS gérée via Terraform pour la plateforme KAMBRIQ.
 - Domaines personnalisés : **Optionnels**
 
 **Secrets (SSM Parameter Store) :**
-- `/kambriq/dev/api/DATABASE_URL`
-- `/kambriq/dev/api/JWT_SECRET`
-- `/kambriq/dev/api/FRONTEND_URL`
-- `/kambriq/dev/api/SES_FROM_EMAIL`
+- `/kambriq/dev/api/DATABASE_URL` (requis)
+- `/kambriq/dev/api/JWT_SECRET` (requis)
+- `/kambriq/dev/api/FRONTEND_URL` (requis)
+- `/kambriq/dev/api/SES_FROM_EMAIL` (requis)
+- `/kambriq/dev/api/AWS_S3_BUCKET_KEY_ID` (optionnel - IAM role utilisé en Lambda)
+- `/kambriq/dev/api/AWS_S3_BUCKET_SECRET_KEY` (optionnel - IAM role utilisé en Lambda)
+- `/kambriq/dev/api/AWS_SES_KEY_ID` (optionnel - IAM role utilisé en Lambda)
+- `/kambriq/dev/api/AWS_SES_SECRET_KEY` (optionnel - IAM role utilisé en Lambda)
 - `/kambriq/dev/web/...` (optionnel, pour runtime SSR)
+
+**Variables d'environnement Lambda (configurées par Terraform) :**
+- `NODE_ENV` : `dev` ou `prod`
+- `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USERNAME`, `DB_PASSWORD` : Connexion RDS
+- `AWS_S3_BUCKET_NAME` : Nom du bucket S3 médias (aligné avec l'application)
+- `SES_FROM_EMAIL` : Email expéditeur SES
+- `JWT_SECRET` : Clé secrète JWT (depuis SSM)
 
 #### 3. `envs/prod/` - Environnement Production
 **Ressources gérées :**
@@ -100,11 +122,18 @@ Infrastructure AWS gérée via Terraform pour la plateforme KAMBRIQ.
 - Domaines personnalisés : **Recommandés** (app.kambriq.com, api.kambriq.com)
 
 **Secrets (SSM Parameter Store) :**
-- `/kambriq/prod/api/DATABASE_URL`
-- `/kambriq/prod/api/JWT_SECRET`
-- `/kambriq/prod/api/FRONTEND_URL`
-- `/kambriq/prod/api/SES_FROM_EMAIL`
+- `/kambriq/prod/api/DATABASE_URL` (requis)
+- `/kambriq/prod/api/JWT_SECRET` (requis)
+- `/kambriq/prod/api/FRONTEND_URL` (requis)
+- `/kambriq/prod/api/SES_FROM_EMAIL` (requis)
+- `/kambriq/prod/api/AWS_S3_BUCKET_KEY_ID` (optionnel - IAM role utilisé en Lambda)
+- `/kambriq/prod/api/AWS_S3_BUCKET_SECRET_KEY` (optionnel - IAM role utilisé en Lambda)
+- `/kambriq/prod/api/AWS_SES_KEY_ID` (optionnel - IAM role utilisé en Lambda)
+- `/kambriq/prod/api/AWS_SES_SECRET_KEY` (optionnel - IAM role utilisé en Lambda)
 - `/kambriq/prod/web/...` (optionnel, pour runtime SSR)
+
+**Variables d'environnement Lambda (configurées par Terraform) :**
+- Identiques à DEV avec valeurs production
 
 ### Modules Terraform (9 modules réutilisables)
 
@@ -128,7 +157,7 @@ Infrastructure AWS gérée via Terraform pour la plateforme KAMBRIQ.
 - Gère S3 bucket pour assets statiques OpenNext
 - CloudFront distribution avec OAC
 - CloudFront aliases gérés par Terraform : `dev.kambriq.com` (dev) et `kambriq.com` (prod)
-- Lambda SSR (fonction créée, code mis à jour via `deploy-app-dev.yml` / `deploy-app-prod.yml`)
+- Lambda SSR (fonction créée, code mis à jour via `deploy-app-dev-optimized.yml` / `deploy-app-prod-optimized.yml`)
 - **Routing CloudFront / OpenNext** :
   - **Default behavior** : Toutes les routes (y compris `/`) sont routées vers la Lambda SSR via Lambda Function URL
   - **Static assets** : Routes `/_next/static/*` et `/assets/*` sont routées vers S3 avec cache agressif (1 an)
@@ -144,18 +173,18 @@ Infrastructure AWS gérée via Terraform pour la plateforme KAMBRIQ.
 - **Fichiers surveillés :** `envs/shared/**`, `modules/shared/**`, `modules/**`
 - **Rôle :** Infrastructure de base (VPC, Route53, SES, ACM)
 
-#### `terraform-dev.yml` ⭐ SIMPLIFIÉ (Infra only)
+#### `terraform-dev-optimized.yml` ⭐ SIMPLIFIÉ (Infra only)
 - **Déclencheurs :**
   - Pull Request vers `develop` : Plan uniquement (pas d'apply)
   - Push vers `develop` : Plan + Apply automatique
   - Workflow Dispatch : Plan uniquement (manuel)
-- **Fichiers surveillés :** `envs/dev/**`, `modules/**`, `.github/workflows/terraform-dev.yml`
+- **Fichiers surveillés :** `envs/dev/**`, `modules/**`, `.github/workflows/terraform-dev-optimized.yml`
 - **Caractéristiques :** 
   - Gère **uniquement l'infrastructure** (Lambda, API Gateway, RDS, S3, CloudFront, SSM, IAM, VPC, etc.)
-  - **Ne déploie pas le code applicatif** (fait par `deploy-app-dev.yml` dans le repo `kambriq`)
+  - **Ne déploie pas le code applicatif** (fait par `deploy-app-dev-optimized.yml` dans le repo `kambriq`)
   - Plan sauvegardé comme artifact
 
-#### `terraform-prod.yml` ⭐ SIMPLIFIÉ (Infra only)
+#### `terraform-prod-optimized.yml` ⭐ SIMPLIFIÉ (Infra only)
 - **Déclencheurs :**
   - Workflow Dispatch uniquement (manuel)
 - **Fichiers surveillés :** `envs/prod/**`, `modules/**`
@@ -163,7 +192,7 @@ Infrastructure AWS gérée via Terraform pour la plateforme KAMBRIQ.
   - Protection via GitHub Environment `production` (approbation manuelle possible)
   - Plan sauvegardé comme artifact (rétention 30 jours)
   - Gère **uniquement l'infrastructure** (Lambda, API Gateway, RDS, S3, CloudFront, SSM, IAM, VPC, etc.)
-  - **Ne déploie pas le code applicatif** (fait par `deploy-app-prod.yml` dans le repo `kambriq`)
+  - **Ne déploie pas le code applicatif** (fait par `deploy-app-prod-optimized.yml` dans le repo `kambriq`)
 
 ### Backend Terraform
 - **Type :** S3 backend
@@ -176,14 +205,18 @@ Infrastructure AWS gérée via Terraform pour la plateforme KAMBRIQ.
 - **Remote State :** `dev` et `prod` consomment les outputs de `shared` via `terraform_remote_state`
 
 ### Gestion des Secrets
-- **⚠️ IMPORTANT :** Les secrets applicatifs ne sont **PAS** gérés par Terraform
+- **⚠️ IMPORTANT :** Terraform gère **une partie** de la configuration runtime dans SSM (paramètres applicatifs). Certains secrets/valeurs sensibles peuvent nécessiter une **mise à jour manuelle** selon les environnements.
 - **Stockage :** SSM Parameter Store
 - **Script :** `scripts/generate-and-store-secrets.sh`
-- **Secrets :**
-  - `/kambriq/dev/db/password`
-  - `/kambriq/dev/api/jwt_secret`
-  - `/kambriq/prod/db/password`
-  - `/kambriq/prod/api/jwt_secret`
+- **SSM (créés par Terraform via `modules/ssm-app-parameters/`) :**
+  - `/kambriq/{dev|prod}/api/DATABASE_URL` (SecureString)
+  - `/kambriq/{dev|prod}/api/JWT_SECRET` (SecureString, valeur ignorée par Terraform après création pour permettre mise à jour manuelle)
+  - `/kambriq/{dev|prod}/api/FRONTEND_URL` (String)
+  - `/kambriq/{dev|prod}/api/SES_FROM_EMAIL` (String)
+- **SSM legacy (peut exister) :**
+  - `/kambriq/{dev|prod}/api/jwt_secret` (minuscules) — utilisé comme fallback à la création du paramètre `JWT_SECRET` (majuscules)
+- **Autres secrets (selon pratiques ops/infra) :**
+  - `/kambriq/{dev|prod}/db/password` (si vous conservez ce pattern pour bootstrap/ops)
 
 ### Ordre de déploiement obligatoire
 1. **Shared** → Déployer en premier
@@ -228,12 +261,16 @@ api/
 ```
 
 **Adaptation Lambda :**
-- **Handler Lambda :** `api/src/lambda.ts` (nouveau fichier)
+- **Handler Lambda :** `api/src/lambda.ts`
   - Utilise `@vendia/serverless-express` pour adapter NestJS à Lambda
   - Optimisation cold start (cache de l'instance NestJS)
+  - **Migrations Prisma désactivées** au cold start (gérées manuellement depuis bastion)
   - Compatible HTTP API Gateway (payload v2)
   - Handler exporté : `dist/lambda.handler`
 - **Fichier main.ts :** Conservé pour développement local (`pnpm dev`)
+- **Dépendances :**
+  - Express (version actuelle : **v5**)
+  - NestJS 11.x avec `@nestjs/platform-express@11.1.9`
 
 **Scripts principaux :**
 - `pnpm dev` - Démarre en mode watch (http://localhost:3001) - Serveur HTTP classique
@@ -274,7 +311,8 @@ api/
   - Output directory : `.open-next/`
   - Lambda configuration : memory 1024MB, timeout 30s, runtime nodejs20.x
   - Image optimization : Lambda@Edge
-  - ISR et Server Actions activés
+  - **ISR désactivé** dans la config actuelle (nécessite DynamoDB pour activer proprement)
+  - Server Actions activés
 - **Configuration Next.js :** `web/next.config.ts`
   - Optimisé pour OpenNext (pas de `output: 'export'`)
   - Image optimization via Lambda@Edge
@@ -293,7 +331,7 @@ api/
 - `.open-next/cache/` → Configuration ISR
 - `.open-next/image-optimization/` → Lambda@Edge pour images
 
-### CI/CD - GitHub Actions (4 workflows)
+### CI/CD - GitHub Actions (workflows présents dans ce workspace)
 
 #### `ci.yml` - CI Global
 **Déclencheurs :**
@@ -306,54 +344,30 @@ api/
 **Rôle :** CI global pour validation du code avant merge
 
 #### `build-artifacts.yml` - Build Artefacts (Optionnel)
+**⚠️ Statut :** ce workflow **n'est pas présent** dans le repo `kambriq` du workspace actuel.  
+Si vous avez besoin d’un workflow de génération d’artefacts “standalone”, il faut (ré)introduire `build-artifacts.yml`. Dans tous les cas, Terraform ne consomme plus ces artefacts : le déploiement applicatif est fait par `deploy-app-dev-optimized.yml` / `deploy-app-prod-optimized.yml`.
+
+#### `deploy-app-dev-optimized.yml` ⭐ Optimisé (2025-12-15) - Déploiement DEV
 **Déclencheurs :**
-- `push` sur `main`
-- `workflow_dispatch` (manuel)
+- `workflow_dispatch` (manuel) avec input `debug` (optionnel)
 
-**Actions :**
-1. Build API → `api-bundle.zip` (dist/ + node_modules/ + prisma/ + package.json)
-2. Build Web OpenNext → `web-ssr.zip` (.open-next/)
-3. Upload vers S3 : `api/api-<sha>.zip` et `web/web-<sha>.zip`
-4. Expose les clés S3 en outputs GitHub Actions
+**Optimisations :**
+- **Parallélisation** : Build API et Web en parallèle, validation AWS en parallèle
+- **Docker Buildx cache** : Cache registry ECR pour accélérer les builds
+- **Artifacts GitHub** : Assets Web partagés entre jobs via artifacts
+- **Smoke tests** : Tests automatiques des Lambdas après déploiement
+- **Inspections conditionnelles** : Vérifications SSM uniquement si `debug=true`
 
-**Rôle :** Génération optionnelle des artefacts pour consommation future
+**Jobs :**
+1. `build-api` : Build et push image Docker API vers ECR (avec cache)
+2. `build-web` : Build OpenNext, décision ZIP vs Container Image, push S3 ou ECR
+3. `validate-aws` : Validation des ressources AWS (Lambdas, S3, CloudFront) en parallèle
+4. `deploy` : Update Lambdas, sync assets, invalidation CloudFront, smoke tests
 
-**Outputs :**
-- `api_s3_key` : Clé S3 de l'artefact API
-- `web_s3_key` : Clé S3 de l'artefact Web
-- `artifacts_bucket` : Nom du bucket S3
+#### `deploy-app-prod-optimized.yml` ⭐ Optimisé (2025-12-15) - Déploiement PROD
+**Identique à `deploy-app-dev-optimized.yml`** mais pour l'environnement production avec protection `production`.
 
-#### `deploy-app-dev.yml` ⭐ NOUVEAU - Déploiement Applicatif DEV
-**Déclencheurs :**
-- `workflow_dispatch` (manuel)
-
-**Actions :**
-1. Build API (NestJS) → package en ZIP
-2. Build Web (OpenNext) → package bundle SSR
-3. Update Lambda API : `aws lambda update-function-code`
-4. Update Lambda SSR : `aws lambda update-function-code`
-5. Sync assets statiques vers S3
-6. Invalidation CloudFront cache
-
-**Rôle :** Déploiement direct du code applicatif en DEV (sans passer par Terraform)
-
-**Secrets requis :**
-- `AWS_ACCESS_KEY_ID_DEV`, `AWS_SECRET_ACCESS_KEY_DEV`, `AWS_REGION_DEV`
-- `API_LAMBDA_NAME_DEV`, `WEB_SSR_LAMBDA_NAME_DEV`
-- `WEB_ASSETS_BUCKET_DEV`, `CLOUDFRONT_DISTRIBUTION_ID_DEV`
-
-#### `deploy-app-prod.yml` ⭐ NOUVEAU - Déploiement Applicatif PROD
-**Déclencheurs :**
-- `workflow_dispatch` (manuel)
-
-**Protection :**
-- Environment `production` (approbation manuelle possible)
-
-**Actions :** Identiques à `deploy-app-dev.yml` mais pour l'environnement production
-
-**Secrets requis :** Même structure avec suffixe `_PROD`
-
-**⚠️ Note :** Les workflows `backend-dev.yml` et `frontend-dev.yml` ont été supprimés. Le déploiement se fait maintenant directement via `deploy-app-dev.yml` et `deploy-app-prod.yml`.
+**⚠️ Note :** Les workflows `backend-dev.yml` et `frontend-dev.yml` ont été supprimés. Le déploiement se fait maintenant directement via `deploy-app-dev-optimized.yml` / `deploy-app-prod-optimized.yml` (optimisés).
 
 ### Scripts Utilitaires
 
@@ -369,6 +383,29 @@ Génère `web/.env.dev.terraform` avec les variables d'environnement depuis les 
 
 **Prérequis :** Terraform doit être initialisé et le stack `dev` déployé.
 
+#### Déploiement local optimisé ⭐ NOUVEAU (2025-12-15)
+```bash
+# Script de déploiement local aligné sur les workflows optimisés
+./scripts/deploy-dev-local-optimized.sh
+```
+
+**Fonctionnalités :**
+- Build API avec Docker Buildx + cache ECR
+- Build Web OpenNext, décision automatique ZIP vs Container Image
+- Update Lambdas (API + SSR)
+- Sync assets S3 + invalidation CloudFront
+- Smoke tests automatiques après déploiement
+
+**Variables d'environnement requises :**
+- `ARTIFACT_BUCKET_NAME`
+- `API_LAMBDA_NAME_DEV`
+- `WEB_SSR_LAMBDA_NAME_DEV`
+- `WEB_ASSETS_BUCKET_DEV`
+- `CLOUDFRONT_DISTRIBUTION_ID_DEV`
+- `AWS_REGION` (optionnel, défaut: eu-central-1)
+
+**Prérequis :** AWS credentials configurés (profil ou variables d'environnement), Docker lancé.
+
 ---
 
 ## 🔗 Intégration entre les Repos
@@ -382,19 +419,19 @@ Génère `web/.env.dev.terraform` avec les variables d'environnement depuis les 
 
 **Repository `kambriq` :**
 - Gère le code applicatif (API + Web)
-- Déploie le code via les workflows `deploy-app-dev.yml` et `deploy-app-prod.yml`
+- Déploie le code via les workflows `deploy-app-dev-optimized.yml` et `deploy-app-prod-optimized.yml`
 - Effectue directement : build, package, `aws lambda update-function-code`, sync S3, invalidation CloudFront
 
 ### 2. Flux de Déploiement
 
 **Infrastructure (ce repo) :**
 1. Modifier le code Terraform si nécessaire
-2. Exécuter `terraform-dev.yml` ou `terraform-prod.yml` pour mettre à jour l'infrastructure
+2. Exécuter `terraform-dev-optimized.yml` ou `terraform-prod-optimized.yml` pour mettre à jour l'infrastructure
 3. Terraform crée/modifie les ressources AWS (Lambda functions, API Gateway, RDS, S3, CloudFront, etc.)
 
 **Application (repo `kambriq`) :**
 1. Modifier le code API ou Web
-2. Exécuter `deploy-app-dev.yml` ou `deploy-app-prod.yml` pour déployer le nouveau code
+2. Exécuter `deploy-app-dev-optimized.yml` ou `deploy-app-prod-optimized.yml` pour déployer le nouveau code
 3. Les workflows effectuent directement :
    - Build API + Web
    - Package en ZIP
@@ -424,11 +461,17 @@ Génère `web/.env.dev.terraform` avec les variables d'environnement depuis les 
 ```
 
 **Secrets API (stockés dans SSM) :**
-- `/kambriq/dev/api/DATABASE_URL`
-- `/kambriq/dev/api/JWT_SECRET`
-- `/kambriq/dev/api/FRONTEND_URL`
-- `/kambriq/dev/api/SES_FROM_EMAIL`
+- `/kambriq/dev/api/DATABASE_URL` (requis)
+- `/kambriq/dev/api/JWT_SECRET` (requis)
+- `/kambriq/dev/api/FRONTEND_URL` (requis)
+- `/kambriq/dev/api/SES_FROM_EMAIL` (requis)
+- `/kambriq/dev/api/AWS_S3_BUCKET_KEY_ID` (optionnel - IAM role utilisé en Lambda)
+- `/kambriq/dev/api/AWS_S3_BUCKET_SECRET_KEY` (optionnel - IAM role utilisé en Lambda)
+- `/kambriq/dev/api/AWS_SES_KEY_ID` (optionnel - IAM role utilisé en Lambda)
+- `/kambriq/dev/api/AWS_SES_SECRET_KEY` (optionnel - IAM role utilisé en Lambda)
 - Même structure pour `/kambriq/prod/api/...`
+
+**Note (2025-12-15) :** Les credentials S3 et SES sont optionnels car les Lambdas utilisent automatiquement les IAM roles. Ils ne sont nécessaires que pour le développement local.
 
 **Secrets Web (optionnel, pour runtime SSR) :**
 - `/kambriq/dev/web/...` (si nécessaire)
@@ -448,18 +491,17 @@ Génère `web/.env.dev.terraform` avec les variables d'environnement depuis les 
 **Flux de déploiement :**
 
 1. **Application (repo `kambriq`) :**
-   - Workflow `build-artifacts.yml` : Build et upload artefacts S3 (optionnel)
-   - Workflows `deploy-app-dev.yml` et `deploy-app-prod.yml` : Déploiement direct du code applicatif (API + Web)
+   - Workflows `deploy-app-dev-optimized.yml` et `deploy-app-prod-optimized.yml` : Déploiement direct du code applicatif (API + Web)
 
 2. **Infrastructure (repo `kambriq-aws-iac-terraform`) :**
-   - Workflows Terraform (`terraform-dev.yml`, `terraform-prod.yml`) : Gestion de l'infrastructure uniquement (ne déploie pas le code applicatif)
+   - Workflows Terraform (`terraform-dev-optimized.yml`, `terraform-prod-optimized.yml`) : Gestion de l'infrastructure uniquement (ne déploie pas le code applicatif)
    - Créent/modifient les ressources AWS (Lambda, API Gateway, RDS, S3, CloudFront, SSM, IAM, VPC, etc.)
    - Génèrent les outputs nécessaires (noms de Lambdas, buckets, IDs CloudFront, etc.)
 
 **Ordre recommandé :**
 1. Déployer infrastructure `shared` → `dev` → `prod`
 2. Créer les secrets dans SSM Parameter Store
-3. Build artefacts dans `kambriq` (workflow `build-artifacts.yml`)
+3. (Optionnel) Mettre en place un workflow de build d’artefacts dans `kambriq` si nécessaire (non présent dans ce workspace)
 4. Déployer infrastructure avec artefacts (workflows Terraform)
 
 ---
@@ -588,7 +630,6 @@ cd kambriq-aws-iac-terraform
 
 **Backend :**
 ```bash
-# Déploiement automatique via GitHub Actions sur push vers develop
 # Ou manuellement :
 cd kambriq/api
 pnpm package:lambda
@@ -597,7 +638,6 @@ pnpm package:lambda
 
 **Frontend :**
 ```bash
-# Déploiement automatique via GitHub Actions (workflow build-artifacts.yml)
 # Ou manuellement :
 cd kambriq/web
 pnpm build:opennext  # Build OpenNext (génère .open-next/)
@@ -614,7 +654,9 @@ pnpm build:opennext  # Build OpenNext (génère .open-next/)
 | **Frontend** | Next.js 16, React 19, Tailwind CSS 4, TypeScript |
 | **Backend** | NestJS, Prisma ORM, PostgreSQL 15 |
 | **Runtime** | Node.js 20.x (Lambda), Node.js 22 (CI/CD) |
-| **Package Manager** | pnpm 9.x+ |
+| **Package Manager** | pnpm 10.22.0 (corepack) |
+| **Express** | 4.18.1 (piné pour compatibilité NestJS) |
+| **Docker** | Buildx avec cache registry ECR |
 | **CI/CD** | GitHub Actions |
 | **Cloud** | AWS (eu-central-1) |
 | **Database** | PostgreSQL 15.15 (RDS) |
@@ -719,17 +761,18 @@ pnpm build:opennext  # Build OpenNext (génère .open-next/)
 |----------|-------------|---------|
 | `terraform-shared.yml` | PR vers `main` | `terraform plan` (commentaire PR) |
 | `terraform-shared.yml` | Push vers `main` | `terraform plan` + `apply` |
-| `terraform-dev.yml` | PR vers `develop` (plan), Push `develop` (plan+apply), Workflow Dispatch (plan) | Infrastructure DEV uniquement (ne déploie pas le code applicatif) |
-| `terraform-prod.yml` | Workflow Dispatch | Infrastructure PROD uniquement (ne déploie pas le code applicatif) + protection environnement `production` |
+| `terraform-dev-optimized.yml` | PR vers `develop` (plan), Push `develop` (plan+apply), Workflow Dispatch (plan) | Infrastructure DEV uniquement (ne déploie pas le code applicatif) |
+| `terraform-prod-optimized.yml` | Workflow Dispatch | Infrastructure PROD uniquement (ne déploie pas le code applicatif) + protection environnement `production` |
 
 ### Application (`kambriq`)
 
 | Workflow | Déclencheur | Actions |
 |----------|-------------|---------|
 | `ci.yml` | Push/PR sur `develop`, `main` | Lint, test, check-types (API + Web) |
-| `build-artifacts.yml` | Push sur `main`, `workflow_dispatch` | Build API + Web OpenNext, upload S3 artefacts, expose `api_s3_key` et `web_s3_key` (optionnel) |
-| `deploy-app-dev.yml` ⭐ NOUVEAU | Workflow Dispatch | Déploiement applicatif DEV : build, update Lambda API + SSR, sync S3, invalidation CloudFront |
-| `deploy-app-prod.yml` ⭐ NOUVEAU | Workflow Dispatch | Déploiement applicatif PROD : même logique que dev, avec protection `production` |
+| `deploy-app-dev-optimized.yml` ⭐ NOUVEAU | Workflow Dispatch | Déploiement applicatif DEV : build, update Lambda API + SSR, sync S3, invalidation CloudFront |
+| `deploy-app-prod-optimized.yml` ⭐ NOUVEAU | Workflow Dispatch | Déploiement applicatif PROD : même logique que dev, avec protection `production` |
+| `deploy-app-dev-optimized.yml` ⭐ NOUVEAU (2025-12-15) | Workflow Dispatch | Déploiement DEV optimisé : builds parallèles, Docker Buildx cache, smoke tests |
+| `deploy-app-prod-optimized.yml` ⭐ NOUVEAU (2025-12-15) | Workflow Dispatch | Déploiement PROD optimisé : même logique que dev optimisé, avec protection `production` |
 
 ---
 
@@ -751,15 +794,14 @@ pnpm build:opennext  # Build OpenNext (génère .open-next/)
 ### Application
 - [ ] Configurer secrets GitHub Actions (AWS credentials pour workflows applicatifs)
 - [ ] Tester workflow `ci.yml` (lint, test, check-types)
-- [ ] Tester workflow `build-artifacts.yml` (build et upload S3 - optionnel)
-- [ ] Tester déploiement applicatif DEV (workflow `deploy-app-dev.yml`)
-- [ ] Tester déploiement applicatif PROD (workflow `deploy-app-prod.yml`)
+- [ ] Tester déploiement applicatif DEV (workflow `deploy-app-dev-optimized.yml`)
+- [ ] Tester déploiement applicatif PROD (workflow `deploy-app-prod-optimized.yml`)
 - [ ] Vérifier que l'application fonctionne avec l'infrastructure
 
 ### Intégration Infrastructure/Application
-- [ ] Vérifier que l'infrastructure est déployée (via `terraform-dev.yml` / `terraform-prod.yml`)
+- [ ] Vérifier que l'infrastructure est déployée (via `terraform-dev-optimized.yml` / `terraform-prod-optimized.yml`)
 - [ ] Vérifier que les Lambda functions existent (créées par Terraform)
-- [ ] Tester déploiement du code applicatif (via `deploy-app-dev.yml` / `deploy-app-prod.yml`)
+- [ ] Tester déploiement du code applicatif (via `deploy-app-dev-optimized.yml` / `deploy-app-prod-optimized.yml`)
 - [ ] Vérifier que Lambda API utilise le nouveau code
 - [ ] Vérifier que Lambda SSR utilise le nouveau code
 - [ ] Vérifier que les assets S3 sont synchronisés
@@ -770,20 +812,20 @@ pnpm build:opennext  # Build OpenNext (génère .open-next/)
 
 ## 📦 Déploiements Applicatifs
 
-**⚠️ Important** : Depuis 2025-12-07, les déploiements applicatifs (mise à jour du code API + Web) sont gérés par les workflows `deploy-app-dev.yml` et `deploy-app-prod.yml` dans le repository `kambriq`. Terraform ne gère plus les artefacts applicatifs.
+**⚠️ Important** : Depuis 2025-12-07, les déploiements applicatifs (mise à jour du code API + Web) sont gérés par les workflows `deploy-app-dev-optimized.yml` et `deploy-app-prod-optimized.yml` dans le repository `kambriq`. Terraform ne gère plus les artefacts applicatifs.
 
 ### Workflows de Déploiement Applicatif
 
 **Repository `kambriq` :**
 
-**`deploy-app-dev.yml`** :
+**`deploy-app-dev-optimized.yml`** :
 - Build API + Web
 - Package en ZIP
 - `aws lambda update-function-code` (API + SSR)
 - Sync assets S3
 - Invalidation CloudFront
 
-**`deploy-app-prod.yml`** :
+**`deploy-app-prod-optimized.yml`** :
 - Même logique que dev
 - Protection via GitHub Environment `production`
 
@@ -803,8 +845,9 @@ pnpm build:opennext  # Build OpenNext (génère .open-next/)
   - `.open-next/image-optimization/` - Lambda@Edge pour images
 
 **Note** : Le workflow `build-artifacts.yml` peut toujours générer et uploader des artefacts S3 (optionnel), mais ils ne sont plus consommés par Terraform.
+**⚠️ Statut workspace actuel :** le workflow `build-artifacts.yml` n'est pas présent dans le repo `kambriq` de ce workspace.
 
-**Note** : Les variables Terraform `artifact_bucket_name`, `api_bundle_s3_key` et `ssr_bundle_s3_key` ne sont plus utilisées. Terraform crée uniquement les Lambda functions (structure), le code est mis à jour via les workflows `deploy-app-dev.yml` et `deploy-app-prod.yml` dans le repository `kambriq`.
+**Note** : Les variables Terraform `artifact_bucket_name`, `api_bundle_s3_key` et `ssr_bundle_s3_key` ne sont plus utilisées. Terraform crée uniquement les Lambda functions (structure), le code est mis à jour via les workflows `deploy-app-dev-optimized.yml` et `deploy-app-prod-optimized.yml` dans le repository `kambriq`.
 
 ---
 
@@ -844,13 +887,33 @@ pnpm build:opennext  # Build OpenNext (génère .open-next/)
 
 **Après :**
 - Terraform gère uniquement l'infrastructure (création/modification des ressources AWS)
-- Déploiements applicatifs via workflows `deploy-app-dev.yml` et `deploy-app-prod.yml` dans le repo `kambriq`
+- Déploiements applicatifs via workflows `deploy-app-dev-optimized.yml` et `deploy-app-prod-optimized.yml` dans le repo `kambriq`
 - Workflows Terraform simplifiés (pas d'inputs pour artefacts)
 - Secrets gérés via SSM Parameter Store (`/kambriq/{env}/{api|web}/...`)
 - Chargement des secrets au runtime par l'application
 
+### Optimisations CI/CD (2025-12-15)
+
+**Workflows optimisés :**
+- **Parallélisation** : Builds API et Web simultanés, validation AWS en parallèle
+- **Docker Buildx cache** : Cache registry ECR (`buildcache` tag) pour accélérer les builds Docker
+- **Artifacts GitHub** : Partage des assets Web entre jobs via GitHub Actions artifacts
+- **Smoke tests** : Tests automatiques des Lambdas après déploiement (invocation avec payload API Gateway v2.0)
+- **Inspections conditionnelles** : Vérifications SSM uniquement si `debug=true` (input workflow)
+
+**Optimisations cold start Lambda :**
+- **Migrations Prisma désactivées** : Plus d'exécution au cold start (gérées manuellement depuis bastion)
+- **Express** : ne plus considérer 4.18.1 comme “pin” (API en v5 dans le code actuel)
+- **Credentials optionnels** : S3, SES, OAuth utilisent IAM roles en Lambda (credentials explicites uniquement pour dev local)
+
+**Alignement variables :**
+- `AWS_S3_BUCKET_NAME` : Variable unifiée entre Terraform et application (remplace `S3_MEDIA_BUCKET`)
+
+**Scripts locaux :**
+- `deploy-dev-local-optimized.sh` : Script de déploiement local aligné sur les workflows optimisés
+
 ---
 
-**Dernière mise à jour :** 2025-12-07  
-**Version :** 3.1 (Séparation infrastructure/applicatif - SSM Parameter Store - Déploiements directs - Outils CLI)  
+**Dernière mise à jour :** 2025-12-15  
+**Version :** 3.2 (Optimisations CI/CD - Workflows parallèles - Docker Buildx cache - Smoke tests - Cold start optimisé)  
 **Maintenu par :** Équipe Infrastructure KAMBRIQ

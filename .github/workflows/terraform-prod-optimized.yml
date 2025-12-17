@@ -1,0 +1,91 @@
+name: Terraform Prod (Optimized)
+
+on:
+  workflow_dispatch:
+    inputs:
+      skip_apply:
+        description: 'Skip apply (plan only)'
+        type: boolean
+        default: false
+
+jobs:
+  terraform-prod:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      AWS_REGION: eu-central-1
+      TF_VERSION: 1.5.0
+      WORKING_DIR: envs/prod
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID_PROD }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY_PROD }}
+          aws-region: ${{ secrets.AWS_REGION_PROD }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform Format Check
+        working-directory: ${{ env.WORKING_DIR }}
+        run: terraform fmt -check
+        continue-on-error: true
+
+      - name: Terraform Init
+        working-directory: ${{ env.WORKING_DIR }}
+        run: terraform init -input=false
+
+      - name: Terraform Validate
+        working-directory: ${{ env.WORKING_DIR }}
+        run: terraform validate -no-color
+
+      - name: Terraform Plan
+        id: plan
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          terraform plan -no-color -input=false -out=terraform.tfplan
+        continue-on-error: true
+
+      - name: Save Plan Output
+        if: always() && steps.plan.outcome != 'skipped'
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          terraform show -no-color terraform.tfplan > plan.txt 2>/dev/null || echo "No plan available" > plan.txt
+          echo "## Terraform Plan Output (PROD)" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          head -n 500 plan.txt >> $GITHUB_STEP_SUMMARY || echo "Plan output not available" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Terraform plan
+        if: always() && steps.plan.outcome != 'skipped'
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-prod
+          path: ${{ env.WORKING_DIR }}/terraform.tfplan
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Terraform Apply
+        if: |
+          !inputs.skip_apply &&
+          steps.plan.outcome == 'success'
+        working-directory: ${{ env.WORKING_DIR }}
+        run: terraform apply -input=false -auto-approve terraform.tfplan
+
+      - name: Output Terraform State
+        if: always() && steps.apply.conclusion == 'success'
+        working-directory: ${{ env.WORKING_DIR }}
+        run: |
+          terraform output -json > terraform-outputs.json 2>/dev/null || true
+          echo "## Terraform Outputs (PROD)" >> $GITHUB_STEP_SUMMARY
+          echo '```json' >> $GITHUB_STEP_SUMMARY
+          cat terraform-outputs.json >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "No outputs available" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY

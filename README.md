@@ -2,7 +2,7 @@
 
 Infrastructure Terraform modulaire pour l'application KAMBRIQ sur AWS.
 
-**⚠️ Important** : Ce repository gère **uniquement l'infrastructure AWS** (Lambda, API Gateway, RDS, S3, CloudFront, SSM, IAM, VPC, etc.). Les déploiements applicatifs (mise à jour du code API + Web) sont gérés par les workflows `deploy-app-dev.yml` et `deploy-app-prod.yml` dans le repository `kambriq`.
+**⚠️ Important** : Ce repository gère **uniquement l'infrastructure AWS** (Lambda, API Gateway, RDS, S3, CloudFront, SSM, IAM, VPC, etc.). Les déploiements applicatifs (mise à jour du code API + Web) sont gérés par les workflows optimisés `deploy-app-dev-optimized.yml` et `deploy-app-prod-optimized.yml` dans le repository `kambriq`.
 
 ## 📚 Documentation
 
@@ -193,7 +193,7 @@ Trois workflows GitHub Actions gèrent le déploiement de l'infrastructure :
 
 #### Vue d'ensemble
 
-**⚠️ Important** : Les workflows Terraform gèrent **uniquement l'infrastructure** (création/modification des ressources AWS). Ils ne déploient **pas** le code applicatif. Les déploiements applicatifs sont effectués par les workflows `deploy-app-dev.yml` et `deploy-app-prod.yml` dans le repository `kambriq`.
+**⚠️ Important** : Les workflows Terraform gèrent **uniquement l'infrastructure** (création/modification des ressources AWS). Ils ne déploient **pas** le code applicatif. Les déploiements applicatifs sont effectués par les workflows `deploy-app-dev.yml` et `deploy-app-prod-optimized.yml` dans le repository `kambriq`.
 
 Les workflows Terraform sont configurés pour :
 - **Développement** : Plan/Apply sur push vers `develop` ou déclenchement manuel
@@ -202,7 +202,7 @@ Les workflows Terraform sont configurés pour :
 
 ### Workflows Terraform
 
-#### 1. Workflow `terraform-dev.yml` - Environnement de développement
+#### 1. Workflow `terraform-dev-optimized.yml` ⭐ Optimisé (2025-12-15) - Environnement de développement
 
 Gère le stack `dev` (infrastructure uniquement).
 
@@ -225,7 +225,7 @@ Gère le stack `dev` (infrastructure uniquement).
 
 **Note** : Les secrets applicatifs (DB password, JWT secrets) ne sont **pas** passés via GitHub Secrets. Ils sont gérés via SSM Parameter Store / Secrets Manager et configurés directement dans les variables d'environnement Lambda.
 
-#### 2. Workflow `terraform-prod.yml` - Environnement de production
+#### 2. Workflow `terraform-prod-optimized.yml` ⭐ Optimisé (2025-12-15) - Environnement de production
 
 Gère le stack `prod` (infrastructure uniquement) avec sécurité renforcée.
 
@@ -237,7 +237,7 @@ Gère le stack `prod` (infrastructure uniquement) avec sécurité renforcée.
 - Protection via GitHub Environment `production` (approbation manuelle possible)
 - Plan sauvegardé comme artifact (rétention 30 jours)
 - Gère uniquement l'infrastructure (Lambda, API Gateway, RDS, S3, CloudFront, SSM, IAM, VPC, etc.)
-- **Ne déploie pas le code applicatif** (fait par `deploy-app-prod.yml` dans le repo `kambriq`)
+- **Ne déploie pas le code applicatif** (fait par `deploy-app-prod-optimized.yml` dans le repo `kambriq`)
 
 **Secrets requis :**
 - `AWS_ACCESS_KEY_ID_PROD`
@@ -287,17 +287,17 @@ Gère le stack `shared` (VPC, Route53, SES, ACM, S3 logs).
      - Build API + Web, package en ZIP
      - `aws lambda update-function-code` (API + SSR)
      - Sync assets S3, invalidation CloudFront
-   - **`deploy-app-prod.yml`** : Déploiement applicatif direct en PROD (même logique, avec protection `production`)
+   - **`deploy-app-prod-optimized.yml`** : Déploiement applicatif direct en PROD (même logique, avec protection `production`)
 
 **Flux de déploiement :**
 
 1. **Infrastructure** (ce repo) :
    - Modifier le code Terraform si nécessaire
-   - Exécuter `terraform-dev.yml` ou `terraform-prod.yml` pour mettre à jour l'infrastructure
+   - Exécuter `terraform-dev-optimized.yml` ou `terraform-prod-optimized.yml` pour mettre à jour l'infrastructure
 
 2. **Application** (repo `kambriq`) :
    - Modifier le code API ou Web
-   - Exécuter `deploy-app-dev.yml` ou `deploy-app-prod.yml` pour déployer le nouveau code
+   - Exécuter `deploy-app-dev.yml` ou `deploy-app-prod-optimized.yml` pour déployer le nouveau code
 
 Voir [`docs/integration/APP_INTEGRATION.md`](docs/integration/APP_INTEGRATION.md) pour les détails sur l'intégration. Voir aussi [`docs/setup/TERRAFORM_USAGE.md`](docs/setup/TERRAFORM_USAGE.md) pour un guide d'usage complet. Voir [`docs/architecture/CONTEXTE_WORKSPACE.md`](docs/architecture/CONTEXTE_WORKSPACE.md) pour une vue d'ensemble complète.
 
@@ -578,8 +578,8 @@ Cela permet de :
 Le repository utilise **3 workflows séparés** pour une meilleure organisation :
 
 1. **`terraform-shared.yml`** : Gère uniquement le stack shared
-2. **`terraform-dev.yml`** : Gère uniquement le stack dev
-3. **`terraform-prod.yml`** : Gère uniquement le stack prod (déclenchement manuel)
+2. **`terraform-dev-optimized.yml`** : Gère uniquement le stack dev
+3. **`terraform-prod-optimized.yml`** : Gère uniquement le stack prod (déclenchement manuel)
 
 Chaque workflow :
 - Vérifie le format avec `terraform fmt -check`

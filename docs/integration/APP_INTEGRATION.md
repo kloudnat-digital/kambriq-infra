@@ -1,6 +1,6 @@
 # Application Integration Guide
 
-**⚠️ Important** : Ce document explique comment l'infrastructure Terraform et l'application Kambriq s'intègrent. Depuis 2025-12-07, les déploiements applicatifs (mise à jour du code API + Web) sont gérés par les workflows `deploy-app-dev.yml` et `deploy-app-prod.yml` dans le repository `kambriq`, et non plus par Terraform.
+**⚠️ Important** : Ce document explique comment l'infrastructure Terraform et l'application Kambriq s'intègrent. Depuis 2025-12-07, les déploiements applicatifs (mise à jour du code API + Web) sont gérés par les workflows `deploy-app-dev-optimized.yml` et `deploy-app-prod-optimized.yml` dans le repository `kambriq`, et non plus par Terraform.
 
 Ce document explique :
 - Comment les outputs Terraform sont utilisés par l'application
@@ -263,7 +263,7 @@ aws ssm put-parameter \
 
 ## CI/CD Integration
 
-**⚠️ Important** : Depuis 2025-12-07, les déploiements applicatifs sont gérés par les workflows `deploy-app-dev.yml` et `deploy-app-prod.yml` dans le repository `kambriq`. Ces workflows effectuent directement :
+**⚠️ Important** : Depuis 2025-12-07, les déploiements applicatifs sont gérés par les workflows `deploy-app-dev-optimized.yml` et `deploy-app-prod-optimized.yml` dans le repository `kambriq`. Ces workflows effectuent directement :
 - Build API + Web
 - Update Lambda code (`aws lambda update-function-code`)
 - Sync S3 assets
@@ -273,7 +273,7 @@ Les secrets applicatifs sont lus depuis SSM Parameter Store au runtime par l'app
 
 ### Workflows de Déploiement Applicatif
 
-#### `deploy-app-dev.yml` et `deploy-app-prod.yml`
+#### `deploy-app-dev-optimized.yml` et `deploy-app-prod-optimized.yml`
 
 Ces workflows dans le repository `kambriq` effectuent :
 
@@ -371,7 +371,7 @@ Next.js requires environment variables to be prefixed with `NEXT_PUBLIC_` to be 
 
 Les variables `NEXT_PUBLIC_*` sont fournies par les workflows GitHub Actions lors du build :
 
-**Dans `deploy-app-dev.yml` et `deploy-app-prod.yml`** :
+**Dans `deploy-app-dev-optimized.yml` et `deploy-app-prod-optimized.yml`** :
 - Les variables `NEXT_PUBLIC_*` peuvent être définies via les secrets GitHub (si nécessaire)
 - Généralement, ces valeurs sont non sensibles (URLs, domaines, etc.)
 - Le build OpenNext est effectué avec ces variables
@@ -433,11 +433,11 @@ Les secrets sont lus depuis SSM au runtime par l'application, pas injectés dans
 
 ### 6. IAM Permissions
 
-**Pour les workflows Terraform** (`terraform-dev.yml`, `terraform-prod.yml`) :
+**Pour les workflows Terraform optimisés** (`terraform-dev-optimized.yml`, `terraform-prod-optimized.yml`) :
 - Permissions pour créer/modifier les ressources AWS (Lambda, API Gateway, RDS, S3, CloudFront, SSM structure, IAM, VPC, etc.)
 - Pas besoin de permissions pour lire/écrire les secrets applicatifs dans SSM (gérés manuellement)
 
-**Pour les workflows de déploiement applicatif** (`deploy-app-dev.yml`, `deploy-app-prod.yml`) :
+**Pour les workflows de déploiement applicatif** (`deploy-app-dev-optimized.yml`, `deploy-app-prod-optimized.yml`) :
 - Permissions pour `lambda:UpdateFunctionCode` (mise à jour du code Lambda)
 - Permissions pour `s3:PutObject`, `s3:DeleteObject` (sync assets)
 - Permissions pour `cloudfront:CreateInvalidation` (invalidation cache)
@@ -659,7 +659,7 @@ module "frontend" {
   env                = local.env
   api_gateway_url    = module.api_gateway.api_gateway_base_url
   # Les variables artifact_bucket_name et ssr_bundle_s3_key ne sont plus utilisées
-  # Le code applicatif est déployé via deploy-app-dev.yml / deploy-app-prod.yml
+  # Le code applicatif est déployé via deploy-app-dev-optimized.yml / deploy-app-prod-optimized.yml
   # ... other variables
 }
 ```

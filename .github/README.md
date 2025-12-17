@@ -4,11 +4,13 @@ Ce répertoire contient les workflows GitHub Actions pour déployer l'infrastruc
 
 ## Workflows disponibles
 
-**⚠️ Important** : Ces workflows gèrent **uniquement l'infrastructure** (création/modification des ressources AWS). Ils ne déploient **pas** le code applicatif. Les déploiements applicatifs sont effectués par les workflows `deploy-app-dev.yml` et `deploy-app-prod.yml` dans le repository `kambriq`.
+**⚠️ Important** : Ces workflows gèrent **uniquement l'infrastructure** (création/modification des ressources AWS). Ils ne déploient **pas** le code applicatif. Les déploiements applicatifs sont effectués par les workflows optimisés `deploy-app-dev-optimized.yml` et `deploy-app-prod-optimized.yml` dans le repository `kambriq`.
 
 - **`terraform-shared.yml`** : Déploie l'infrastructure partagée (VPC, Route53, SES, ACM)
-- **`terraform-dev.yml`** : Gère l'infrastructure de développement (RDS, Lambda, API Gateway, S3, CloudFront) - Infrastructure uniquement
-- **`terraform-prod.yml`** : Gère l'infrastructure de production (même ressources que dev, avec sécurité renforcée) - Infrastructure uniquement
+- **`terraform-dev-optimized.yml`** ⭐ : Gère l'infrastructure DEV optimisé (plan/apply avec outputs, format check, commentaires PR)
+- **`terraform-prod-optimized.yml`** ⭐ : Gère l'infrastructure PROD optimisé (plan/apply avec outputs, protection production)
+- **`terraform-dev-optimized.yml`** : Legacy (à migrer vers optimisé)
+- **`terraform-prod-optimized.yml`** : Legacy (à migrer vers optimisé)
 
 ## Configuration requise
 
@@ -16,15 +18,10 @@ Ce répertoire contient les workflows GitHub Actions pour déployer l'infrastruc
 
 Configurer les secrets suivants dans GitHub (Settings → Secrets and variables → Actions) :
 
-#### Secrets pour `terraform-dev.yml`
-- `AWS_ACCESS_KEY_ID_DEV` : Clé d'accès AWS avec permissions pour créer les ressources
-- `AWS_SECRET_ACCESS_KEY_DEV` : Clé secrète AWS
-- `AWS_REGION_DEV` : Région AWS (optionnel, défaut: `eu-central-1`)
-
-#### Secrets pour `terraform-prod.yml`
-- `AWS_ACCESS_KEY_ID_PROD` : Clé d'accès AWS avec permissions pour créer les ressources
-- `AWS_SECRET_ACCESS_KEY_PROD` : Clé secrète AWS
-- `AWS_REGION_PROD` : Région AWS (optionnel, défaut: `eu-central-1`)
+#### Secrets pour `terraform-dev-optimized.yml` et `terraform-prod-optimized.yml`
+- `AWS_ACCESS_KEY_ID_DEV` / `AWS_ACCESS_KEY_ID_PROD` : Clé d'accès AWS avec permissions pour créer les ressources
+- `AWS_SECRET_ACCESS_KEY_DEV` / `AWS_SECRET_ACCESS_KEY_PROD` : Clé secrète AWS
+- `AWS_REGION_DEV` / `AWS_REGION_PROD` : Région AWS (optionnel, défaut: `eu-central-1`)
 
 #### Option : OIDC avec IAM Role (Recommandé)
 - `AWS_ROLE_ARN` : ARN du rôle IAM pour l'authentification OIDC
@@ -45,15 +42,17 @@ Configurer les secrets suivants dans GitHub (Settings → Secrets and variables 
 - **Pull Request vers `main`** : Exécute `terraform plan` et commente le PR
 - **Push vers `main`** : Exécute `terraform plan` et `apply` automatiquement
 
-### Workflow `terraform-dev.yml`
-- **Pull Request** vers `develop` : Plan uniquement (pas d'apply)
+### Workflow `terraform-dev-optimized.yml` ⭐ Optimisé (2025-12-15)
+- **Pull Request** vers `develop` : Plan uniquement (pas d'apply) + commentaire PR
 - **Push** vers `develop` : Plan + Apply automatique
-- **Workflow Dispatch** : Plan uniquement (manuel)
+- **Workflow Dispatch** : Plan/Apply avec input `skip_apply` (optionnel)
+- **Optimisations** : Format check, outputs dans GitHub Step Summary, commentaires PR automatiques
 - **⚠️ Important** : Gère uniquement l'infrastructure, ne déploie pas le code applicatif
 
-### Workflow `terraform-prod.yml`
-- **Workflow Dispatch** : Déclenchement manuel uniquement
+### Workflow `terraform-prod-optimized.yml` ⭐ Optimisé (2025-12-15)
+- **Workflow Dispatch** : Déclenchement manuel avec input `skip_apply` (optionnel)
 - Protection via GitHub Environment `production` (approbation manuelle possible)
+- **Optimisations** : Format check, outputs dans GitHub Step Summary
 - **⚠️ Important** : Gère uniquement l'infrastructure, ne déploie pas le code applicatif
 
 ## Déploiement manuel
@@ -69,7 +68,7 @@ Configurer les secrets suivants dans GitHub (Settings → Secrets and variables 
 ⚠️ **Note** : Pour la production, il est recommandé d'activer l'approbation manuelle dans GitHub (Settings → Environments → production).
 
 ### Pour déployer le code applicatif :
-Les déploiements applicatifs (mise à jour du code API + Web) sont effectués via les workflows `deploy-app-dev.yml` et `deploy-app-prod.yml` dans le repository `kambriq`. Voir la documentation dans `kambriq/docs/deployment/PIPELINE_OVERVIEW.md`.
+Les déploiements applicatifs (mise à jour du code API + Web) sont effectués via les workflows optimisés `deploy-app-dev-optimized.yml` et `deploy-app-prod-optimized.yml` dans le repository `kambriq`. Voir la documentation dans `kambriq/docs/deployment/PIPELINE_OVERVIEW.md`.
 
 ## Permissions AWS requises
 

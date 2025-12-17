@@ -38,7 +38,9 @@ Le repo `kambriq-aws-iac-terraform` gère l'infrastructure AWS pour la plateform
 - **Email :** SES (Simple Email Service)
 - **Réseau :** VPC avec subnets publics/privés + NAT Gateway
 
-**⚠️ Migration récente (v3.1 - 2025-12-07) :**
+**⚠️ Migrations récentes :**
+- **v3.1 (2025-12-07)** : Séparation infrastructure/applicatif, SSM Parameter Store
+- **v3.2 (2025-12-15)** : Optimisations CI/CD, workflows parallèles, Docker Buildx cache, smoke tests
 - **Séparation complète** : Terraform gère uniquement l'infrastructure, déploiements applicatifs via workflows `deploy-app-*` dans le repo `kambriq`
 - Frontend : Migration de static export vers **OpenNext** (SSR + Lambda)
 - Backend : Adaptation NestJS pour **Lambda** (handler `dist/lambda.handler`)
@@ -63,8 +65,8 @@ kambriq-aws-iac-terraform/
 ├── .github/
 │   └── workflows/
 │       ├── terraform-shared.yml    # Workflow infrastructure partagée
-│       ├── terraform-dev.yml       # Workflow environnement dev
-│       └── terraform-prod.yml      # Workflow environnement prod
+│       ├── terraform-dev-optimized.yml       # Workflow environnement dev optimisé ⭐
+│       └── terraform-prod-optimized.yml      # Workflow environnement prod optimisé ⭐
 ├── docs/
 │   ├── architecture/               # Documentation architecture
 │   ├── integration/                # Guides d'intégration
@@ -304,7 +306,7 @@ kambriq-aws-iac-terraform/
 - `env`, `project_name`
 - `api_gateway_url` : URL de l'API Gateway pour configuration frontend
 
-**Note** : Les variables `artifact_bucket_name` et `ssr_bundle_s3_key` ont été supprimées. Terraform gère uniquement l'infrastructure. Les déploiements applicatifs sont gérés par `deploy-app-dev.yml` et `deploy-app-prod.yml` dans le repo `kambriq`.
+**Note** : Les variables `artifact_bucket_name` et `ssr_bundle_s3_key` ont été supprimées. Terraform gère uniquement l'infrastructure. Les déploiements applicatifs sont gérés par `deploy-app-dev-optimized.yml` et `deploy-app-prod-optimized.yml` dans le repo `kambriq`.
 
 **Outputs :**
 - `cloudfront_url`, `cloudfront_domain`, `cloudfront_distribution_id`
@@ -471,7 +473,7 @@ kambriq-aws-iac-terraform/
 
 ---
 
-### 5.2 Workflow `terraform-dev.yml` ⭐ SIMPLIFIÉ
+### 5.2 Workflow `terraform-dev-optimized.yml` ⭐ Optimisé (2025-12-15)
 
 **⚠️ Important** : Ce workflow gère **uniquement l'infrastructure**. Il ne déploie **pas** le code applicatif.
 
@@ -483,30 +485,32 @@ kambriq-aws-iac-terraform/
 **Fichiers surveillés :**
 - `envs/dev/**`
 - `modules/**`
-- `.github/workflows/terraform-dev.yml`
+- `.github/workflows/terraform-dev*.yml`
 
 **Étapes :**
 1. Checkout code
 2. Configure AWS credentials (suffixe `_DEV`)
 3. Setup Terraform 1.5.0
-4. Init Terraform (`-input=false`)
-5. Validate Terraform
-6. Plan Terraform (condition : `if: github.event_name != 'push'`)
-7. Plan Terraform avec output (condition : `if: github.event_name == 'push'`)
-8. Upload Plan Artifact (si push)
-9. Apply Terraform (condition : `if: github.event_name == 'push' && success()`)
+4. **Terraform Format Check** (continue-on-error)
+5. Init Terraform (`-input=false`)
+6. Validate Terraform
+7. Plan Terraform avec output dans GitHub Step Summary
+8. **Comment PR** : Commentaire automatique sur PR avec plan (si PR)
+9. Upload Plan Artifact
+10. Apply Terraform (si push vers `develop` ou `workflow_dispatch` sans `skip_apply`)
+11. **Output Terraform State** : Affichage des outputs dans GitHub Step Summary
 
 **Environnement :** Aucun (pas de protection manuelle)
 
-**Caractéristiques :**
-- Gère uniquement l'infrastructure (Lambda functions créées, mais code non mis à jour)
-- Plan sauvegardé comme artifact
-- Apply automatique uniquement sur push `develop`
-- Pas d'inputs nécessaires (simplifié)
+**Optimisations :**
+- Format check avant plan
+- Outputs dans GitHub Step Summary
+- Commentaires PR automatiques
+- Input `skip_apply` pour plan uniquement
 
 ---
 
-### 5.3 Workflow `terraform-prod.yml` ⭐ SIMPLIFIÉ
+### 5.3 Workflow `terraform-prod-optimized.yml` ⭐ Optimisé (2025-12-15)
 
 **⚠️ Important** : Ce workflow gère **uniquement l'infrastructure**. Il ne déploie **pas** le code applicatif.
 
@@ -516,7 +520,7 @@ kambriq-aws-iac-terraform/
 **Fichiers surveillés :**
 - `envs/prod/**`
 - `modules/**`
-- `.github/workflows/terraform-prod.yml`
+- `.github/workflows/terraform-prod*.yml`
 
 **Job `terraform-prod` :**
 
@@ -526,23 +530,30 @@ kambriq-aws-iac-terraform/
 1. Checkout code
 2. Configure AWS credentials (suffixe `_PROD`)
 3. Setup Terraform 1.5.0
-4. Init Terraform (`-input=false`)
-5. Validate Terraform
-6. Plan Terraform avec output (`-out=terraform.tfplan`)
-7. Upload Plan Artifact (rétention 30 jours)
-8. Apply Terraform (condition : `if: success()`)
+4. **Terraform Format Check** (continue-on-error)
+5. Init Terraform (`-input=false`)
+6. Validate Terraform
+7. Plan Terraform avec output dans GitHub Step Summary
+8. Upload Plan Artifact (rétention 30 jours)
+9. Apply Terraform (si `skip_apply=false`)
+10. **Output Terraform State** : Affichage des outputs dans GitHub Step Summary
 
 **Caractéristiques :**
 - Gère uniquement l'infrastructure (Lambda functions créées, mais code non mis à jour)
 - Protection via GitHub Environment `production`
 - Plan sauvegardé comme artifact (rétention 30 jours)
-- Pas d'inputs nécessaires (simplifié)
+- Input `skip_apply` pour plan uniquement
 
-**Environnement :** `production` (approbation manuelle possible mais commentée)
+**Optimisations :**
+- Format check avant plan
+- Outputs dans GitHub Step Summary
+- Input `skip_apply` pour contrôle fin
+
+**Environnement :** `production` (approbation manuelle possible)
 
 **Sécurité :**
 - Plan toujours généré avant apply
-- Apply conditionnel (pas automatique sur workflow_dispatch)
+- Apply conditionnel (input `skip_apply`)
 - Plan sauvegardé comme artifact pour review
 
 ---
@@ -556,7 +567,7 @@ kambriq-aws-iac-terraform/
 - `AWS_SECRET_ACCESS_KEY_DEV` / `AWS_SECRET_ACCESS_KEY_PROD`
 - `AWS_REGION_DEV` / `AWS_REGION_PROD` (optionnel, défaut: eu-central-1)
 
-**Note** : Les secrets liés aux artefacts applicatifs ne sont plus nécessaires. Terraform gère uniquement l'infrastructure. Les déploiements applicatifs sont gérés par les workflows `deploy-app-dev.yml` et `deploy-app-prod.yml` dans le repository `kambriq`.
+**Note** : Les secrets liés aux artefacts applicatifs ne sont plus nécessaires. Terraform gère uniquement l'infrastructure. Les déploiements applicatifs sont gérés par les workflows `deploy-app-dev-optimized.yml` et `deploy-app-prod-optimized.yml` dans le repository `kambriq`.
 
 **Alternative disponible :** OIDC avec IAM Role (commenté dans les workflows)
 
@@ -894,7 +905,7 @@ terraform output
 - ✅ Activer DynamoDB state locking (optionnel mais recommandé)
 
 **Actions à faire :**
-- [ ] Décommenter les lignes d'approbation manuelle dans `terraform-prod.yml`
+- [ ] Utiliser `terraform-prod-optimized.yml` avec protection `production` configurée
 - [ ] Activer `encrypt = true` dans les `backend.tf`
 - [ ] Créer DynamoDB table pour state locking
 - [ ] Activer versioning sur `kloudnat-infra-shared-store`

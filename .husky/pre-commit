@@ -1,1 +1,2 @@
 node scripts/check-markdown.js
+node scripts/update-contexte-workspace.js

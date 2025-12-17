@@ -61,8 +61,8 @@ All modules referenced by active environments still exist in `modules/`:
 ### GitHub Actions Workflows Verified
 
 ✅ **`.github/workflows/terraform-shared.yml`** - References `envs/shared/**` and `modules/**` (all exist)
-✅ **`.github/workflows/terraform-dev.yml`** - References `envs/dev/**` and `modules/**` (all exist)
-✅ **`.github/workflows/terraform-prod.yml`** - References `envs/prod/**` and `modules/**` (all exist)
+✅ **`.github/workflows/terraform-dev-optimized.yml`** - References `envs/dev/**` and `modules/**` (all exist)
+✅ **`.github/workflows/terraform-prod-optimized.yml`** - References `envs/prod/**` and `modules/**` (all exist)
 
 ### .gitignore Status
 
