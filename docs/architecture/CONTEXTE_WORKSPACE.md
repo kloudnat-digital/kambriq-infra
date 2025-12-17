@@ -1,8 +1,8 @@
 # Contexte du Workspace KAMBRIQ
 
 **Date de création :** 2025-01-27  
-**Dernière mise à jour :** 2025-12-15  
-**Version :** 3.2 (Optimisations CI/CD - Workflows parallèles - Docker Buildx cache - Smoke tests - Cold start optimisé)
+**Dernière mise à jour :** 2025-12-17  
+**Version :** 3.3 (Smoke tests renforcés: HTTP + pages clés + signup flow DEV - Fix SSM batching - Health checks étendus)
 
 ---
 
@@ -44,6 +44,15 @@ Infrastructure AWS gérée via Terraform pour la plateforme KAMBRIQ.
 - **Smoke tests** : Tests automatiques des Lambdas après déploiement (workflows GHA + script local)
 - **Credentials optionnels** : S3, SES, OAuth (Google/Facebook) utilisent IAM role en Lambda, credentials explicites uniquement pour dev local
 - **Variables alignées** : `AWS_S3_BUCKET_NAME` (au lieu de `S3_MEDIA_BUCKET`) pour cohérence infra/app
+
+**2025-12-17 :**
+- **Fix runtime SSM** : `GetParameters` est limité à 10 noms → batching ajouté côté API (`AwsSsmConfigService`) pour éviter crash au cold start
+- **Health checks étendus** : ajout de `GET /api/auth/health` (public) en plus de `GET /api/health`
+- **Smoke tests renforcés** :
+  - Tests **Lambda** stricts (statusCode + body) sur API `/api/health` et SSR `/`
+  - Tests **HTTP** (API Gateway + CloudFront) avec retry
+  - Tests **pages clés** : landing + `/products/{lands,verify,kbs,kamnet}`
+  - DEV uniquement : flow **signup → signin → cleanup** via `DELETE /api/auth/users/{id}`
 
 ### Structure des Stacks (3 stacks indépendants)
 
@@ -914,6 +923,6 @@ pnpm build:opennext  # Build OpenNext (génère .open-next/)
 
 ---
 
-**Dernière mise à jour :** 2025-12-15  
-**Version :** 3.2 (Optimisations CI/CD - Workflows parallèles - Docker Buildx cache - Smoke tests - Cold start optimisé)  
+**Dernière mise à jour :** 2025-12-17  
+**Version :** 3.3 (Smoke tests renforcés: HTTP + pages clés + signup flow DEV - Fix SSM batching - Health checks étendus)  
 **Maintenu par :** Équipe Infrastructure KAMBRIQ
