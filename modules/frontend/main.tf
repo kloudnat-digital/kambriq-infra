@@ -186,6 +186,9 @@ resource "aws_lambda_function_url" "ssr" {
 # CloudFront needs just the domain without https:// and without any trailing slashes
 locals {
   lambda_function_url_domain = replace(replace(aws_lambda_function_url.ssr.function_url, "https://", ""), "/", "")
+  # Extract domain from API Gateway URL (e.g., https://xxxxx.execute-api.eu-central-1.amazonaws.com -> xxxxx.execute-api.eu-central-1.amazonaws.com)
+  # Remove protocol and any trailing slashes/paths
+  api_gateway_domain = replace(replace(replace(var.api_gateway_url, "https://", ""), "http://", ""), "/", "")
 }
 
 # Lambda permission to allow CloudFront to invoke Function URL
@@ -344,6 +347,64 @@ resource "aws_cloudfront_origin_request_policy" "lambda_ssr" {
   }
 }
 
+# Cache Policy for API Gateway (no caching for API requests)
+resource "aws_cloudfront_cache_policy" "api_gateway" {
+  name        = "${local.name_prefix}-api-gateway-cache"
+  comment     = "Cache policy for API Gateway - no caching"
+  default_ttl = 0
+  max_ttl     = 0
+  min_ttl     = 0
+
+  parameters_in_cache_key_and_forwarded_to_origin {
+    cookies_config {
+      cookie_behavior = "none"
+    }
+    headers_config {
+      header_behavior = "none"
+    }
+    query_strings_config {
+      query_string_behavior = "none"
+    }
+    enable_accept_encoding_brotli = false
+    enable_accept_encoding_gzip   = false
+  }
+}
+
+# Origin Request Policy for API Gateway (forward all headers, query strings, cookies)
+resource "aws_cloudfront_origin_request_policy" "api_gateway" {
+  name    = "${local.name_prefix}-api-gateway-origin-request"
+  comment = "Origin request policy for API Gateway - forward all"
+
+  cookies_config {
+    cookie_behavior = "all"
+  }
+
+  headers_config {
+    header_behavior = "allViewer"
+  }
+
+  query_strings_config {
+    query_string_behavior = "all"
+  }
+}
+
+# CloudFront Function for /api/* paths
+# Note: We keep the /api prefix because NestJS setGlobalPrefix("api") expects the full path /api/auth/signin
+# The API Gateway route ANY /{proxy+} will capture everything after /, including "api/auth/signin"
+# serverless-express will extract the path from rawPath and NestJS will match /api/auth/signin correctly
+resource "aws_cloudfront_function" "api_path_rewrite" {
+  name    = "${local.name_prefix}-api-path-rewrite"
+  runtime = "cloudfront-js-2.0"
+  comment = "Pass through API requests to API Gateway (keep /api prefix)"
+  publish = true
+  code    = <<-EOF
+function handler(event) {
+    // Pass through the request as-is - keep /api prefix for NestJS routing
+    return event.request;
+}
+EOF
+}
+
 resource "aws_cloudfront_distribution" "main" {
   enabled         = true
   is_ipv6_enabled = true
@@ -372,7 +433,19 @@ resource "aws_cloudfront_distribution" "main" {
     }
   }
 
-  # Origin 2: S3 bucket for static assets only
+  # Origin 2: API Gateway for /api/* routes
+  origin {
+    domain_name = local.api_gateway_domain
+    origin_id   = "APIGateway-${var.env}"
+    custom_origin_config {
+      http_port              = 443
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  # Origin 3: S3 bucket for static assets only
   origin {
     domain_name              = aws_s3_bucket.static.bucket_regional_domain_name
     origin_id                = "S3-${aws_s3_bucket.static.id}"
@@ -382,7 +455,29 @@ resource "aws_cloudfront_distribution" "main" {
   # ============================================================================
   # CloudFront Cache Behaviors
   # ============================================================================
-  # Default behavior: Route all requests to Lambda SSR (for pages, API routes, etc.)
+  # Cache behavior 0: API Gateway for /api/* routes (MUST be first, before default)
+  ordered_cache_behavior {
+    path_pattern     = "/api/*"
+    target_origin_id = "APIGateway-${var.env}"
+    viewer_protocol_policy = "redirect-to-https"
+
+    allowed_methods = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods  = ["GET", "HEAD"]
+
+    # Use cache policy and origin request policy for API Gateway
+    cache_policy_id          = aws_cloudfront_cache_policy.api_gateway.id
+    origin_request_policy_id = aws_cloudfront_origin_request_policy.api_gateway.id
+
+    # Use CloudFront Function to rewrite /api/* to /* (remove /api prefix)
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.api_path_rewrite.arn
+    }
+
+    compress = true
+  }
+
+  # Default behavior: Route all requests to Lambda SSR (for pages, etc.)
   default_cache_behavior {
     target_origin_id       = "LambdaSSR-${aws_lambda_function.ssr.function_name}"
     viewer_protocol_policy = "redirect-to-https"
