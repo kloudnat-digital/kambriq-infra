@@ -140,6 +140,9 @@ resource "aws_lambda_function" "ssr" {
       # OpenNext requires these environment variables to use S3 for ISR cache storage
       CACHE_BUCKET_NAME   = aws_s3_bucket.static.id
       CACHE_BUCKET_REGION = data.aws_region.current.name
+
+      # Environment identifier for SSM config loading (used by ssm-config-loader.ts)
+      KAMBRIQ_ENV = var.env # dev or prod
     }
   }
 
@@ -263,6 +266,41 @@ resource "aws_iam_role_policy" "lambda_s3" {
   })
 }
 
+# Policy for SSM Parameter Store access (for NextAuth and other runtime config)
+resource "aws_iam_role_policy" "lambda_ssm" {
+  name = "${local.name_prefix}-lambda-ssm"
+  role = aws_iam_role.lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter",
+          "ssm:GetParameters",
+          "ssm:GetParametersByPath"
+        ]
+        Resource = [
+          "arn:aws:ssm:${data.aws_region.current.name}:*:parameter/kambriq/${var.env}/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "ssm.${data.aws_region.current.name}.amazonaws.com"
+          }
+        }
+      }
+    ]
+  })
+}
+
 # ============================================================================
 # CloudFront Distribution
 # ============================================================================
@@ -320,10 +358,11 @@ resource "aws_cloudfront_cache_policy" "lambda_ssr" {
 }
 
 # Origin Request Policy for Lambda Function URL
-# Excludes Host header to prevent 403 errors (Lambda Function URL expects its own hostname)
+# Forwards Host and forwarded headers for NextAuth/Next.js Server Actions validation
+# Lambda Function URLs accept any Host header, so we forward the viewer hostname
 resource "aws_cloudfront_origin_request_policy" "lambda_ssr" {
   name    = "${local.name_prefix}-lambda-ssr-origin-request"
-  comment = "Origin request policy for Lambda Function URL SSR - excludes Host header"
+  comment = "Origin request policy for Lambda Function URL SSR - forwards Host and forwarded headers for NextAuth"
 
   cookies_config {
     cookie_behavior = "all"
@@ -335,9 +374,13 @@ resource "aws_cloudfront_origin_request_policy" "lambda_ssr" {
       items = [
         "Accept",
         "Content-Type",
+        "Host",
         "Origin",
         "Referer",
         "User-Agent",
+        "X-Forwarded-For",
+        "X-Forwarded-Host",
+        # Note: X-Forwarded-Proto is automatically added by CloudFront, cannot be explicitly whitelisted
       ]
     }
   }
@@ -370,25 +413,52 @@ resource "aws_cloudfront_cache_policy" "api_gateway" {
   }
 }
 
-# Origin Request Policy for API Gateway (forward all headers, query strings, cookies)
-resource "aws_cloudfront_origin_request_policy" "api_gateway" {
-  name    = "${local.name_prefix}-api-gateway-origin-request"
-  comment = "Origin request policy for API Gateway - forward all"
+# Origin Request Policy for API Gateway
+# Use AWS managed policy to forward all headers EXCEPT Host (API Gateway rejects unknown Host headers)
+# Policy ID: b689b0a8-53d0-40ab-baf2-68738e2966ac
+# This policy forwards: all headers except Host, all cookies, all query strings
 
-  cookies_config {
-    cookie_behavior = "all"
-  }
-
-  headers_config {
-    header_behavior = "allViewer"
-  }
-
-  query_strings_config {
-    query_string_behavior = "all"
-  }
+# CloudFront Function for SSR behaviors (fixes Server Actions host mismatch)
+# Sets Host and x-forwarded-host to viewer hostname for Next.js validation
+# Next.js Server Actions validate that x-forwarded-host matches origin header
+resource "aws_cloudfront_function" "ssr_host_header" {
+  name    = "${local.name_prefix}-ssr-host-header"
+  runtime = "cloudfront-js-2.0"
+  comment = "Fix host headers for Next.js Server Actions - sets Host and x-forwarded-host to viewer hostname"
+  publish = true
+  code    = <<-EOF
+function handler(event) {
+    var request = event.request;
+    var headers = request.headers;
+    
+    // Get the viewer hostname from the request
+    // In CloudFront, headers.host contains the viewer's hostname (custom domain or CloudFront domain)
+    var hostname = headers.host?.value;
+    
+    // If host header is missing, try x-forwarded-host (shouldn't happen in normal flow)
+    if (!hostname) {
+        hostname = headers['x-forwarded-host']?.value;
+    }
+    
+    // Set Host header to viewer hostname (Next.js Server Actions validation)
+    // This is critical: Next.js validates that Host matches the origin
+    headers.host = { value: hostname };
+    
+    // Set x-forwarded-host to viewer hostname (Next.js uses this for Server Actions validation)
+    headers['x-forwarded-host'] = { value: hostname };
+    
+    // Set Origin header to match hostname (Next.js Server Actions require matching origin)
+    headers.origin = { value: 'https://' + hostname };
+    
+    // Set x-forwarded-proto for HTTPS (CloudFront always uses HTTPS)
+    headers['x-forwarded-proto'] = { value: 'https' };
+    
+    return request;
+}
+EOF
 }
 
-# CloudFront Function for /api/* paths
+# CloudFront Function for /api/* paths to API Gateway
 # Note: We keep the /api prefix because NestJS setGlobalPrefix("api") expects the full path /api/auth/signin
 # The API Gateway route ANY /{proxy+} will capture everything after /, including "api/auth/signin"
 # serverless-express will extract the path from rawPath and NestJS will match /api/auth/signin correctly
@@ -455,7 +525,134 @@ resource "aws_cloudfront_distribution" "main" {
   # ============================================================================
   # CloudFront Cache Behaviors
   # ============================================================================
-  # Cache behavior 0: API Gateway for /api/* routes (MUST be first, before default)
+  # IMPORTANT: Order matters! CloudFront evaluates cache behaviors in order,
+  # the first matching pattern wins.
+  #
+  # Best Practice Routing:
+  # - Next.js API routes (handled by Next.js SSR Lambda)
+  # - NestJS backend routes (handled by API Gateway)
+  #
+  # Order:
+  # 1. /api/account/* → Next.js SSR Lambda (Next.js API routes for account management)
+  # 2. /api/kbs/* → Next.js SSR Lambda (Next.js API routes for KBS features)
+  # 3. /api/verify/* → Next.js SSR Lambda (Next.js API routes for verification)
+  # 4. /api/countries → Next.js SSR Lambda (Next.js API route for countries)
+  # 5. /api/auth/* → Next.js SSR Lambda (NextAuth routes - signin, callback, providers, etc.)
+  # 6. /api/* → NestJS API Gateway (catch-all for backend routes, excluding /api/auth/*)
+  # 7. /_next/static/* → S3 (static Next.js assets)
+  # 8. /assets/* → S3 (other static assets)
+  # 9. * (default) → Next.js SSR Lambda (all other routes including pages)
+
+  # Cache behavior 0: Next.js API routes - /api/account/* (account management)
+  ordered_cache_behavior {
+    path_pattern     = "/api/account/*"
+    target_origin_id = "LambdaSSR-${aws_lambda_function.ssr.function_name}"
+    viewer_protocol_policy = "redirect-to-https"
+
+    allowed_methods = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods  = ["GET", "HEAD"]
+
+    # Use Lambda SSR cache policy (no caching) and origin request policy (forwards cookies, query strings)
+    cache_policy_id          = aws_cloudfront_cache_policy.lambda_ssr.id
+    origin_request_policy_id = aws_cloudfront_origin_request_policy.lambda_ssr.id
+
+    # Fix host headers for Next.js Server Actions
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.ssr_host_header.arn
+    }
+
+    compress = true
+  }
+
+  # Cache behavior 1: Next.js API routes - /api/kbs/* (KBS features)
+  ordered_cache_behavior {
+    path_pattern     = "/api/kbs/*"
+    target_origin_id = "LambdaSSR-${aws_lambda_function.ssr.function_name}"
+    viewer_protocol_policy = "redirect-to-https"
+
+    allowed_methods = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods  = ["GET", "HEAD"]
+
+    cache_policy_id          = aws_cloudfront_cache_policy.lambda_ssr.id
+    origin_request_policy_id = aws_cloudfront_origin_request_policy.lambda_ssr.id
+
+    # Fix host headers for Next.js Server Actions
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.ssr_host_header.arn
+    }
+
+    compress = true
+  }
+
+  # Cache behavior 2: Next.js API routes - /api/verify/* (verification features)
+  ordered_cache_behavior {
+    path_pattern     = "/api/verify/*"
+    target_origin_id = "LambdaSSR-${aws_lambda_function.ssr.function_name}"
+    viewer_protocol_policy = "redirect-to-https"
+
+    allowed_methods = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods  = ["GET", "HEAD"]
+
+    cache_policy_id          = aws_cloudfront_cache_policy.lambda_ssr.id
+    origin_request_policy_id = aws_cloudfront_origin_request_policy.lambda_ssr.id
+
+    # Fix host headers for Next.js Server Actions
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.ssr_host_header.arn
+    }
+
+    compress = true
+  }
+
+  # Cache behavior 3: Next.js API route - /api/countries
+  ordered_cache_behavior {
+    path_pattern     = "/api/countries*"
+    target_origin_id = "LambdaSSR-${aws_lambda_function.ssr.function_name}"
+    viewer_protocol_policy = "redirect-to-https"
+
+    allowed_methods = ["GET", "HEAD", "OPTIONS"]
+    cached_methods  = ["GET", "HEAD"]
+
+    cache_policy_id          = aws_cloudfront_cache_policy.lambda_ssr.id
+    origin_request_policy_id = aws_cloudfront_origin_request_policy.lambda_ssr.id
+
+    # Fix host headers for Next.js Server Actions
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.ssr_host_header.arn
+    }
+
+    compress = true
+  }
+
+  # Cache behavior 4: NextAuth routes - /api/auth/* (must be before /api/* catch-all)
+  # NextAuth handles all /api/auth/* endpoints (signin, callback, providers, etc.)
+  ordered_cache_behavior {
+    path_pattern     = "/api/auth/*"
+    target_origin_id = "LambdaSSR-${aws_lambda_function.ssr.function_name}"
+    viewer_protocol_policy = "redirect-to-https"
+
+    allowed_methods = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
+    cached_methods  = ["GET", "HEAD"]
+
+    # Use Lambda SSR cache policy (no caching) and origin request policy (forwards cookies)
+    cache_policy_id          = aws_cloudfront_cache_policy.lambda_ssr.id
+    origin_request_policy_id = aws_cloudfront_origin_request_policy.lambda_ssr.id
+
+    # Fix host headers for NextAuth/Next.js Server Actions
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.ssr_host_header.arn
+    }
+
+    compress = true
+  }
+
+  # Cache behavior 5: NestJS API Gateway for all other /api/* routes (backend routes)
+  # This MUST be after NextAuth and Next.js specific routes, so it acts as a catch-all for NestJS
   ordered_cache_behavior {
     path_pattern     = "/api/*"
     target_origin_id = "APIGateway-${var.env}"
@@ -464,11 +661,13 @@ resource "aws_cloudfront_distribution" "main" {
     allowed_methods = ["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"]
     cached_methods  = ["GET", "HEAD"]
 
-    # Use cache policy and origin request policy for API Gateway
+    # Use cache policy and AWS managed origin request policy for API Gateway
+    # Managed policy AllViewerExceptHostHeader forwards all headers except Host,
+    # plus all cookies and query strings (required for authentication)
     cache_policy_id          = aws_cloudfront_cache_policy.api_gateway.id
-    origin_request_policy_id = aws_cloudfront_origin_request_policy.api_gateway.id
+    origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac" # AWS managed: AllViewerExceptHostHeader
 
-    # Use CloudFront Function to rewrite /api/* to /* (remove /api prefix)
+    # Use CloudFront Function to pass through requests (keep /api prefix for NestJS)
     function_association {
       event_type   = "viewer-request"
       function_arn = aws_cloudfront_function.api_path_rewrite.arn
@@ -490,10 +689,16 @@ resource "aws_cloudfront_distribution" "main" {
     cache_policy_id          = aws_cloudfront_cache_policy.lambda_ssr.id
     origin_request_policy_id = aws_cloudfront_origin_request_policy.lambda_ssr.id
 
+    # Fix host headers for Next.js Server Actions
+    function_association {
+      event_type   = "viewer-request"
+      function_arn = aws_cloudfront_function.ssr_host_header.arn
+    }
+
     compress = true
   }
 
-  # Cache behavior 1: Static Next.js assets (/_next/static/*)
+  # Cache behavior 6: Static Next.js assets (/_next/static/*)
   ordered_cache_behavior {
     path_pattern     = "/_next/static/*"
     target_origin_id = "S3-${aws_s3_bucket.static.id}"
@@ -516,7 +721,7 @@ resource "aws_cloudfront_distribution" "main" {
     compress    = true
   }
 
-  # Cache behavior 2: Other static assets (/assets/*)
+  # Cache behavior 7: Other static assets (/assets/*)
   ordered_cache_behavior {
     path_pattern     = "/assets/*"
     target_origin_id = "S3-${aws_s3_bucket.static.id}"

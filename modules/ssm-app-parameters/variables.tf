@@ -180,3 +180,27 @@ variable "next_public_paypal_client_id" {
   type        = string
   default     = ""
 }
+
+# ============================================================================
+# Web runtime parameters (SSR) stored under /kambriq/{env}/web/*
+# These are loaded by SSR Lambda at runtime (not build-time)
+# ============================================================================
+
+variable "nextauth_url" {
+  description = "NEXTAUTH_URL - Base URL for NextAuth (CloudFront custom domain or CloudFront domain)"
+  type        = string
+  default     = ""
+}
+
+variable "nextauth_secret" {
+  description = "NEXTAUTH_SECRET - Secret key for NextAuth JWT signing (SecureString)"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "api_base_url" {
+  description = "API_BASE_URL - Direct API Gateway URL for SSR server-to-server calls (not CloudFront)"
+  type        = string
+  default     = ""
+}

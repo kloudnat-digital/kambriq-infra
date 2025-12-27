@@ -312,6 +312,8 @@ module "lambda" {
   s3_media_bucket = module.s3_media.bucket_id
   ses_from_email  = var.ses_from_email
   jwt_secret      = data.aws_ssm_parameter.jwt_secret.value
+  # Use custom domain if set, otherwise use CloudFront distribution URL
+  frontend_url = var.cloudfront_domain != "" ? "https://${var.cloudfront_domain}" : module.frontend.cloudfront_url
 }
 
 # ============================================================================
@@ -385,6 +387,14 @@ module "ssm_app_parameters" {
   next_public_refetch_interval           = 300
   # Keep empty by default (set manually in SSM later)
   next_public_paypal_client_id = ""
+
+  # Web runtime (SSR) - stored under /kambriq/dev/web/*
+  # NEXTAUTH_URL: Use custom domain if set, otherwise CloudFront domain
+  nextauth_url = var.cloudfront_domain != "" ? "https://${var.cloudfront_domain}" : module.frontend.cloudfront_url
+  # API_BASE_URL: Direct API Gateway URL for SSR server-to-server calls (not CloudFront)
+  api_base_url = module.api_gateway.api_url
+  # NEXTAUTH_SECRET: Will be generated and set via script (empty by default, must be set manually)
+  nextauth_secret = ""
 }
 
 # ============================================================================

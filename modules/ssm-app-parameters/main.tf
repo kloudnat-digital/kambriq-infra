@@ -421,3 +421,66 @@ resource "aws_ssm_parameter" "web_next_public_paypal_client_id" {
   }
   lifecycle { ignore_changes = [value] }
 }
+
+# ============================================================================
+# Web runtime parameters (SSR) - loaded by SSR Lambda at runtime
+# ============================================================================
+
+resource "aws_ssm_parameter" "web_nextauth_url" {
+  count       = var.nextauth_url != "" ? 1 : 0
+  name        = "/kambriq/${var.env}/web/NEXTAUTH_URL"
+  type        = "String"
+  value       = var.nextauth_url
+  overwrite   = true
+  description = "NextAuth base URL for ${var.env}"
+  tags = {
+    Name        = "kambriq-web-nextauth-url-${var.env}"
+    Environment = var.env
+    Service     = "web"
+  }
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "web_nextauth_secret" {
+  count       = var.nextauth_secret != "" ? 1 : 0
+  name        = "/kambriq/${var.env}/web/NEXTAUTH_SECRET"
+  type        = "SecureString"
+  value       = var.nextauth_secret
+  overwrite   = true
+  description = "NextAuth JWT signing secret for ${var.env}"
+  tags = {
+    Name        = "kambriq-web-nextauth-secret-${var.env}"
+    Environment = var.env
+    Service     = "web"
+  }
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "web_api_base_url" {
+  count       = var.api_base_url != "" ? 1 : 0
+  name        = "/kambriq/${var.env}/web/API_BASE_URL"
+  type        = "String"
+  value       = var.api_base_url
+  overwrite   = true
+  description = "API Gateway base URL for SSR server-to-server calls (${var.env})"
+  tags = {
+    Name        = "kambriq-web-api-base-url-${var.env}"
+    Environment = var.env
+    Service     = "web"
+  }
+  lifecycle { ignore_changes = [value] }
+}
+
+resource "aws_ssm_parameter" "web_jwt_expires_in" {
+  name        = "/kambriq/${var.env}/web/JWT_EXPIRES_IN"
+  type        = "String"
+  value       = tostring(var.jwt_expires_in)
+  overwrite   = true
+  description = "JWT access token expiration (seconds) for ${var.env}"
+  tags = {
+    Name        = "kambriq-web-jwt-expires-in-${var.env}"
+    Environment = var.env
+    Service     = "web"
+  }
+  lifecycle { ignore_changes = [value] }
+}
