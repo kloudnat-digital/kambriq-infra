@@ -439,7 +439,7 @@ resource "aws_cloudfront_cache_policy" "lambda_ssr" {
 # to forward headers correctly. NextAuth uses trustHost: true and NEXTAUTH_URL from SSM.
 resource "aws_cloudfront_origin_request_policy" "lambda_ssr" {
   name    = "${local.name_prefix}-lambda-ssr-origin-request"
-  comment = "Forwards Host and headers for NextAuth (no CloudFront Functions)"
+  comment = "Forwards Host and headers for NextAuth and Next.js Server Actions"
 
   cookies_config {
     cookie_behavior = "all"
@@ -450,16 +450,21 @@ resource "aws_cloudfront_origin_request_policy" "lambda_ssr" {
     headers {
       items = [
         "Accept",
-        "Accept-Language",
         "Content-Type",
         # NOTE: Host header is EXCLUDED - Lambda Function URLs require their own hostname
         # Forwarding viewer Host (dev.kambriq.com) causes 403 AccessDeniedException
         # Lambda Function URL expects: *.lambda-url.region.on.aws
         "Origin",
-        "Referer",
         "User-Agent",
         "X-Forwarded-For",
         "X-Forwarded-Host",
+        # Next.js Server Actions headers (required for POST requests to work)
+        # CRITICAL: Only 3 most important headers (CloudFront limit: 10 headers max)
+        "RSC",                              # React Server Components (CRITICAL)
+        "Next-Action",                      # Server Actions identifier (CRITICAL)
+        "Next-Router-State-Tree",           # Router state for Server Actions (CRITICAL)
+        # Note: Next-Router-Prefetch and Next-Router-Segment-Prefetch removed due to CloudFront 10-header limit
+        # These are optimization headers, not required for basic Server Actions functionality
         # Note: X-Forwarded-Proto is automatically added by CloudFront when using HTTPS, cannot be explicitly whitelisted
         # CloudFront also sets CloudFront-Viewer-* headers automatically (read-only, cannot be whitelisted)
       ]
@@ -582,9 +587,12 @@ resource "aws_cloudfront_distribution" "main" {
   # 4. /api/countries → Next.js SSR Lambda (Next.js API route for countries)
   # 5. /api/auth/* → Next.js SSR Lambda (NextAuth routes - signin, callback, providers, etc.)
   # 6. /api/* → NestJS API Gateway (catch-all for backend routes, excluding /api/auth/*)
-  # 7. /_next/static/* → S3 (static Next.js assets)
-  # 8. /assets/* → S3 (other static assets)
-  # 9. * (default) → Next.js SSR Lambda (all other routes including pages)
+  # 7. /logo* → S3 (root-level logo files)
+  # 8. /favicon.ico → S3 (favicon)
+  # 9. /kambriq-logo-transparent.svg → S3 (logo SVG)
+  # 10. /_next/static/* → S3 (static Next.js assets)
+  # 11. /assets/* → S3 (other static assets)
+  # 12. * (default) → Next.js SSR Lambda (all other routes including pages)
 
   # Cache behavior 0: Next.js API routes - /api/account/* (account management)
   ordered_cache_behavior {
@@ -697,6 +705,81 @@ resource "aws_cloudfront_distribution" "main" {
     compress = true
   }
 
+  # Cache behavior 6: Root-level logo files (/logo*)
+  # These files are in /public/ and deployed to S3, should be served from S3
+  ordered_cache_behavior {
+    path_pattern     = "/logo*"
+    target_origin_id = "S3-${aws_s3_bucket.static.id}"
+
+    allowed_methods = ["GET", "HEAD", "OPTIONS"]
+    cached_methods  = ["GET", "HEAD"]
+
+    forwarded_values {
+      query_string = false
+      cookies {
+        forward = "none"
+      }
+    }
+
+    viewer_protocol_policy = "redirect-to-https"
+    # DEV: No caching to prevent test interference
+    # PROD: Use aggressive caching (1 year = 31536000)
+    min_ttl     = var.env == "dev" ? 0 : 31536000
+    default_ttl = var.env == "dev" ? 0 : 31536000
+    max_ttl     = var.env == "dev" ? 0 : 31536000
+    compress    = true
+  }
+
+  # Cache behavior 7: Favicon (/favicon.ico)
+  # This file is in /public/ and deployed to S3, should be served from S3
+  ordered_cache_behavior {
+    path_pattern     = "/favicon.ico"
+    target_origin_id = "S3-${aws_s3_bucket.static.id}"
+
+    allowed_methods = ["GET", "HEAD", "OPTIONS"]
+    cached_methods  = ["GET", "HEAD"]
+
+    forwarded_values {
+      query_string = false
+      cookies {
+        forward = "none"
+      }
+    }
+
+    viewer_protocol_policy = "redirect-to-https"
+    # DEV: No caching to prevent test interference
+    # PROD: Use aggressive caching (1 year = 31536000)
+    min_ttl     = var.env == "dev" ? 0 : 31536000
+    default_ttl = var.env == "dev" ? 0 : 31536000
+    max_ttl     = var.env == "dev" ? 0 : 31536000
+    compress    = true
+  }
+
+  # Cache behavior 8: Kambriq logo SVG (/kambriq-logo-transparent.svg)
+  # This file is in /public/ and deployed to S3, should be served from S3
+  ordered_cache_behavior {
+    path_pattern     = "/kambriq-logo-transparent.svg"
+    target_origin_id = "S3-${aws_s3_bucket.static.id}"
+
+    allowed_methods = ["GET", "HEAD", "OPTIONS"]
+    cached_methods  = ["GET", "HEAD"]
+
+    forwarded_values {
+      query_string = false
+      cookies {
+        forward = "none"
+      }
+    }
+
+    viewer_protocol_policy = "redirect-to-https"
+    # DEV: No caching to prevent test interference
+    # PROD: Use aggressive caching (1 year = 31536000)
+    min_ttl     = var.env == "dev" ? 0 : 31536000
+    default_ttl = var.env == "dev" ? 0 : 31536000
+    max_ttl     = var.env == "dev" ? 0 : 31536000
+    compress    = true
+  }
+
   # Default behavior: Route all requests to Lambda SSR (for pages, etc.)
   default_cache_behavior {
     target_origin_id       = "LambdaSSR-${aws_lambda_function.ssr.function_name}"
@@ -716,7 +799,7 @@ resource "aws_cloudfront_distribution" "main" {
     compress = true
   }
 
-  # Cache behavior 6: Static Next.js assets (/_next/static/*)
+  # Cache behavior 9: Static Next.js assets (/_next/static/*)
   ordered_cache_behavior {
     path_pattern     = "/_next/static/*"
     target_origin_id = "S3-${aws_s3_bucket.static.id}"
@@ -732,14 +815,15 @@ resource "aws_cloudfront_distribution" "main" {
     }
 
     viewer_protocol_policy = "redirect-to-https"
-    # Aggressive caching for static assets (1 year)
-    min_ttl     = 31536000
-    default_ttl = 31536000
-    max_ttl     = 31536000
+    # DEV: No caching to prevent test interference (tests need fresh assets)
+    # PROD: Use aggressive caching (1 year = 31536000) for performance
+    min_ttl     = var.env == "dev" ? 0 : 31536000
+    default_ttl = var.env == "dev" ? 0 : 31536000
+    max_ttl     = var.env == "dev" ? 0 : 31536000
     compress    = true
   }
 
-  # Cache behavior 7: Other static assets (/assets/*)
+  # Cache behavior 10: Other static assets (/assets/*)
   ordered_cache_behavior {
     path_pattern     = "/assets/*"
     target_origin_id = "S3-${aws_s3_bucket.static.id}"
@@ -755,10 +839,11 @@ resource "aws_cloudfront_distribution" "main" {
     }
 
     viewer_protocol_policy = "redirect-to-https"
-    # Aggressive caching for static assets (1 year)
-    min_ttl     = 31536000
-    default_ttl = 31536000
-    max_ttl     = 31536000
+    # DEV: No caching to prevent test interference
+    # PROD: Use aggressive caching (1 year = 31536000)
+    min_ttl     = var.env == "dev" ? 0 : 31536000
+    default_ttl = var.env == "dev" ? 0 : 31536000
+    max_ttl     = var.env == "dev" ? 0 : 31536000
     compress    = true
   }
 
