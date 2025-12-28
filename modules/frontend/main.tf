@@ -140,6 +140,11 @@ resource "aws_lambda_function" "ssr" {
       # OpenNext requires these environment variables to use S3 for ISR cache storage
       CACHE_BUCKET_NAME   = aws_s3_bucket.static.id
       CACHE_BUCKET_REGION = data.aws_region.current.name
+      
+      # WORKAROUND: OpenNext bundle attempts DynamoDB access even when ISR is disabled
+      # Creating a minimal DynamoDB table to satisfy OpenNext's cache system
+      # The table is mostly unused since ISR is disabled, but prevents ValidationException errors
+      CACHE_DYNAMO_TABLE = aws_dynamodb_table.opennext_cache.name
 
       # Environment identifier for SSM config loading (used by ssm-config-loader.ts)
       KAMBRIQ_ENV = var.env # dev or prod
@@ -160,6 +165,50 @@ resource "aws_lambda_function" "ssr" {
       source_code_hash,
       image_uri, # CI/CD will update the image URI with the latest ECR image
     ]
+  }
+}
+
+# DynamoDB table for OpenNext cache (workaround for OpenNext bundle DynamoDB dependency)
+# NOTE: ISR is disabled, but OpenNext bundle still attempts DynamoDB access
+# This minimal table prevents ValidationException errors
+resource "aws_dynamodb_table" "opennext_cache" {
+  name           = "${local.name_prefix}-cache"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "path"
+  range_key      = "tag"
+
+  attribute {
+    name = "path"
+    type = "S"
+  }
+
+  attribute {
+    name = "tag"
+    type = "S"
+  }
+
+  attribute {
+    name = "revalidatedAt"
+    type = "N"
+  }
+
+  # Global Secondary Index required by OpenNext's cache system
+  global_secondary_index {
+    name     = "revalidate"
+    hash_key = "path"
+    range_key = "revalidatedAt"
+    
+    projection_type = "ALL"
+  }
+
+  ttl {
+    attribute_name = "ttl"
+    enabled        = false # Disable TTL since table is mostly unused
+  }
+
+  tags = {
+    Name = "${local.name_prefix}-cache"
+    Env  = var.env
   }
 }
 
@@ -301,6 +350,32 @@ resource "aws_iam_role_policy" "lambda_ssm" {
   })
 }
 
+# Policy for DynamoDB access (for OpenNext cache table - workaround)
+resource "aws_iam_role_policy" "lambda_dynamodb" {
+  name = "${local.name_prefix}-lambda-dynamodb"
+  role = aws_iam_role.lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:Query",
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:UpdateItem",
+          "dynamodb:DeleteItem"
+        ]
+        Resource = [
+          aws_dynamodb_table.opennext_cache.arn,
+          "${aws_dynamodb_table.opennext_cache.arn}/index/*"
+        ]
+      }
+    ]
+  })
+}
+
 # ============================================================================
 # CloudFront Distribution
 # ============================================================================
@@ -360,9 +435,11 @@ resource "aws_cloudfront_cache_policy" "lambda_ssr" {
 # Origin Request Policy for Lambda Function URL
 # Forwards Host and forwarded headers for NextAuth/Next.js Server Actions validation
 # Lambda Function URLs accept any Host header, so we forward the viewer hostname
+# NOTE: CloudFront Functions cannot modify Host header (disallowed), so we rely on Origin Request Policy
+# to forward headers correctly. NextAuth uses trustHost: true and NEXTAUTH_URL from SSM.
 resource "aws_cloudfront_origin_request_policy" "lambda_ssr" {
   name    = "${local.name_prefix}-lambda-ssr-origin-request"
-  comment = "Origin request policy for Lambda Function URL SSR - forwards Host and forwarded headers for NextAuth"
+  comment = "Forwards Host and headers for NextAuth (no CloudFront Functions)"
 
   cookies_config {
     cookie_behavior = "all"
@@ -373,14 +450,18 @@ resource "aws_cloudfront_origin_request_policy" "lambda_ssr" {
     headers {
       items = [
         "Accept",
+        "Accept-Language",
         "Content-Type",
-        "Host",
+        # NOTE: Host header is EXCLUDED - Lambda Function URLs require their own hostname
+        # Forwarding viewer Host (dev.kambriq.com) causes 403 AccessDeniedException
+        # Lambda Function URL expects: *.lambda-url.region.on.aws
         "Origin",
         "Referer",
         "User-Agent",
         "X-Forwarded-For",
         "X-Forwarded-Host",
-        # Note: X-Forwarded-Proto is automatically added by CloudFront, cannot be explicitly whitelisted
+        # Note: X-Forwarded-Proto is automatically added by CloudFront when using HTTPS, cannot be explicitly whitelisted
+        # CloudFront also sets CloudFront-Viewer-* headers automatically (read-only, cannot be whitelisted)
       ]
     }
   }
@@ -418,62 +499,24 @@ resource "aws_cloudfront_cache_policy" "api_gateway" {
 # Policy ID: b689b0a8-53d0-40ab-baf2-68738e2966ac
 # This policy forwards: all headers except Host, all cookies, all query strings
 
-# CloudFront Function for SSR behaviors (fixes Server Actions host mismatch)
-# Sets Host and x-forwarded-host to viewer hostname for Next.js validation
-# Next.js Server Actions validate that x-forwarded-host matches origin header
-resource "aws_cloudfront_function" "ssr_host_header" {
-  name    = "${local.name_prefix}-ssr-host-header"
-  runtime = "cloudfront-js-2.0"
-  comment = "Fix host headers for Next.js Server Actions - sets Host and x-forwarded-host to viewer hostname"
-  publish = true
-  code    = <<-EOF
-function handler(event) {
-    var request = event.request;
-    var headers = request.headers;
-    
-    // Get the viewer hostname from the request
-    // In CloudFront, headers.host contains the viewer's hostname (custom domain or CloudFront domain)
-    var hostname = headers.host?.value;
-    
-    // If host header is missing, try x-forwarded-host (shouldn't happen in normal flow)
-    if (!hostname) {
-        hostname = headers['x-forwarded-host']?.value;
-    }
-    
-    // Set Host header to viewer hostname (Next.js Server Actions validation)
-    // This is critical: Next.js validates that Host matches the origin
-    headers.host = { value: hostname };
-    
-    // Set x-forwarded-host to viewer hostname (Next.js uses this for Server Actions validation)
-    headers['x-forwarded-host'] = { value: hostname };
-    
-    // Set Origin header to match hostname (Next.js Server Actions require matching origin)
-    headers.origin = { value: 'https://' + hostname };
-    
-    // Set x-forwarded-proto for HTTPS (CloudFront always uses HTTPS)
-    headers['x-forwarded-proto'] = { value: 'https' };
-    
-    return request;
-}
-EOF
-}
-
-# CloudFront Function for /api/* paths to API Gateway
-# Note: We keep the /api prefix because NestJS setGlobalPrefix("api") expects the full path /api/auth/signin
-# The API Gateway route ANY /{proxy+} will capture everything after /, including "api/auth/signin"
-# serverless-express will extract the path from rawPath and NestJS will match /api/auth/signin correctly
-resource "aws_cloudfront_function" "api_path_rewrite" {
-  name    = "${local.name_prefix}-api-path-rewrite"
-  runtime = "cloudfront-js-2.0"
-  comment = "Pass through API requests to API Gateway (keep /api prefix)"
-  publish = true
-  code    = <<-EOF
-function handler(event) {
-    // Pass through the request as-is - keep /api prefix for NestJS routing
-    return event.request;
-}
-EOF
-}
+# ============================================================================
+# CloudFront Functions - REMOVED
+# ============================================================================
+# 
+# CloudFront Functions have been removed because:
+# 1. CloudFront Functions CANNOT modify the Host header (disallowed header)
+# 2. Attempting to set Host header causes 502 errors: "The CloudFront function tried to add a disallowed header"
+# 3. Origin Request Policy already forwards Host, X-Forwarded-Host, and other required headers correctly
+# 4. NextAuth uses trustHost: true and NEXTAUTH_URL from SSM, not header manipulation
+# 
+# Previous functions (now removed):
+# - aws_cloudfront_function.ssr_host_header: Tried to set Host header (disallowed) → caused 502 errors
+# - aws_cloudfront_function.api_path_rewrite: Unnecessary pass-through function
+#
+# Solution: Use Origin Request Policy to forward headers, and configure NextAuth correctly.
+# See: aws_cloudfront_origin_request_policy.lambda_ssr for header forwarding configuration.
+#
+# ============================================================================
 
 resource "aws_cloudfront_distribution" "main" {
   enabled         = true
@@ -556,11 +599,8 @@ resource "aws_cloudfront_distribution" "main" {
     cache_policy_id          = aws_cloudfront_cache_policy.lambda_ssr.id
     origin_request_policy_id = aws_cloudfront_origin_request_policy.lambda_ssr.id
 
-    # Fix host headers for Next.js Server Actions
-    function_association {
-      event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.ssr_host_header.arn
-    }
+    # NOTE: CloudFront Function removed - relying on Origin Request Policy + NextAuth trustHost
+    # CloudFront Functions cannot modify Host/Origin headers without causing 502 errors
 
     compress = true
   }
@@ -577,11 +617,7 @@ resource "aws_cloudfront_distribution" "main" {
     cache_policy_id          = aws_cloudfront_cache_policy.lambda_ssr.id
     origin_request_policy_id = aws_cloudfront_origin_request_policy.lambda_ssr.id
 
-    # Fix host headers for Next.js Server Actions
-    function_association {
-      event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.ssr_host_header.arn
-    }
+    # NOTE: CloudFront Function removed - relying on Origin Request Policy + NextAuth trustHost
 
     compress = true
   }
@@ -598,11 +634,7 @@ resource "aws_cloudfront_distribution" "main" {
     cache_policy_id          = aws_cloudfront_cache_policy.lambda_ssr.id
     origin_request_policy_id = aws_cloudfront_origin_request_policy.lambda_ssr.id
 
-    # Fix host headers for Next.js Server Actions
-    function_association {
-      event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.ssr_host_header.arn
-    }
+    # NOTE: CloudFront Function removed - relying on Origin Request Policy + NextAuth trustHost
 
     compress = true
   }
@@ -619,11 +651,7 @@ resource "aws_cloudfront_distribution" "main" {
     cache_policy_id          = aws_cloudfront_cache_policy.lambda_ssr.id
     origin_request_policy_id = aws_cloudfront_origin_request_policy.lambda_ssr.id
 
-    # Fix host headers for Next.js Server Actions
-    function_association {
-      event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.ssr_host_header.arn
-    }
+    # NOTE: CloudFront Function removed - relying on Origin Request Policy + NextAuth trustHost
 
     compress = true
   }
@@ -642,11 +670,7 @@ resource "aws_cloudfront_distribution" "main" {
     cache_policy_id          = aws_cloudfront_cache_policy.lambda_ssr.id
     origin_request_policy_id = aws_cloudfront_origin_request_policy.lambda_ssr.id
 
-    # Fix host headers for NextAuth/Next.js Server Actions
-    function_association {
-      event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.ssr_host_header.arn
-    }
+    # NOTE: CloudFront Function removed - relying on Origin Request Policy + NextAuth trustHost
 
     compress = true
   }
@@ -667,11 +691,8 @@ resource "aws_cloudfront_distribution" "main" {
     cache_policy_id          = aws_cloudfront_cache_policy.api_gateway.id
     origin_request_policy_id = "b689b0a8-53d0-40ab-baf2-68738e2966ac" # AWS managed: AllViewerExceptHostHeader
 
-    # Use CloudFront Function to pass through requests (keep /api prefix for NestJS)
-    function_association {
-      event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.api_path_rewrite.arn
-    }
+    # NOTE: CloudFront Function removed - API Gateway route works without function
+    # The /api prefix is preserved by the origin request policy
 
     compress = true
   }
@@ -685,15 +706,12 @@ resource "aws_cloudfront_distribution" "main" {
     cached_methods  = ["GET", "HEAD"]
 
     # Use cache policy and origin request policy instead of forwarded_values
-    # This excludes Host header to prevent 403 errors from Lambda Function URL
+    # Origin Request Policy forwards Host, X-Forwarded-Host, and other headers needed by NextAuth
     cache_policy_id          = aws_cloudfront_cache_policy.lambda_ssr.id
     origin_request_policy_id = aws_cloudfront_origin_request_policy.lambda_ssr.id
 
-    # Fix host headers for Next.js Server Actions
-    function_association {
-      event_type   = "viewer-request"
-      function_arn = aws_cloudfront_function.ssr_host_header.arn
-    }
+    # NOTE: CloudFront Function removed - relying on Origin Request Policy + NextAuth trustHost
+    # NextAuth will use NEXTAUTH_URL and trustHost: true to validate requests
 
     compress = true
   }

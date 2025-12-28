@@ -1,8 +1,8 @@
 # Contexte du Workspace KAMBRIQ
 
 **Date de création :** 2025-01-27  
-**Dernière mise à jour :** 2025-12-17  
-**Version :** 3.3 (Smoke tests renforcés: HTTP + pages clés + signup flow DEV - Fix SSM batching - Health checks étendus)
+**Dernière mise à jour :** 2025-12-26  
+**Version :** 3.4 (Actualisation contexte - Vérification workflows et dépendances)
 
 ---
 
@@ -664,7 +664,7 @@ pnpm build:opennext  # Build OpenNext (génère .open-next/)
 | **Backend** | NestJS, Prisma ORM, PostgreSQL 15 |
 | **Runtime** | Node.js 20.x (Lambda), Node.js 22 (CI/CD) |
 | **Package Manager** | pnpm 10.22.0 (corepack) |
-| **Express** | 4.18.1 (piné pour compatibilité NestJS) |
+| **Express** | 5.1.0 (compatibilité NestJS avec Express 5) |
 | **Docker** | Buildx avec cache registry ECR |
 | **CI/CD** | GitHub Actions |
 | **Cloud** | AWS (eu-central-1) |
@@ -912,7 +912,7 @@ pnpm build:opennext  # Build OpenNext (génère .open-next/)
 
 **Optimisations cold start Lambda :**
 - **Migrations Prisma désactivées** : Plus d'exécution au cold start (gérées manuellement depuis bastion)
-- **Express** : ne plus considérer 4.18.1 comme “pin” (API en v5 dans le code actuel)
+- **Express** : Version 5.1.0 utilisée (compatibilité NestJS avec Express 5, query parser configuré en mode "extended")
 - **Credentials optionnels** : S3, SES, OAuth utilisent IAM roles en Lambda (credentials explicites uniquement pour dev local)
 
 **Alignement variables :**
@@ -923,6 +923,6 @@ pnpm build:opennext  # Build OpenNext (génère .open-next/)
 
 ---
 
-**Dernière mise à jour :** 2025-12-17  
-**Version :** 3.3 (Smoke tests renforcés: HTTP + pages clés + signup flow DEV - Fix SSM batching - Health checks étendus)  
+**Dernière mise à jour :** 2025-12-26  
+**Version :** 3.4 (Actualisation contexte - Vérification workflows et dépendances)  
 **Maintenu par :** Équipe Infrastructure KAMBRIQ

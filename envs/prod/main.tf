@@ -321,6 +321,7 @@ module "lambda" {
   s3_media_bucket = module.s3_media.bucket_id
   ses_from_email  = var.ses_from_email
   jwt_secret      = data.aws_ssm_parameter.jwt_secret.value
+  frontend_url    = var.cloudfront_domain != "" ? "https://${var.cloudfront_domain}" : module.frontend.cloudfront_url
 }
 
 # ============================================================================

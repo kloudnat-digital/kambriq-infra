@@ -42,6 +42,7 @@ resource "aws_lambda_function" "main" {
       AWS_S3_BUCKET_NAME = var.s3_media_bucket
       SES_FROM_EMAIL     = var.ses_from_email
       JWT_SECRET         = var.jwt_secret
+      FRONTEND_URL       = var.frontend_url
     }
   }
 

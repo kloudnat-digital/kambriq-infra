@@ -101,6 +101,10 @@ variable "jwt_secret" {
   sensitive   = true
 }
 
+variable "frontend_url" {
+  description = "Frontend URL for CORS configuration (e.g., https://dev.kambriq.com or CloudFront URL)"
+  type        = string
+}
 
 # ============================================================================
 # Artifact Configuration - REMOVED
