@@ -1,0 +1,9 @@
+aws_region = "eu-central-1"
+
+db_username = "kambriq_admin"
+db_password = "CHANGE_ME_SECURE_PASSWORD"
+
+# CloudFront certificate ARN (must be in us-east-1)
+# Already configured with your certificate
+cloudfront_certificate_arn = "arn:aws:acm:us-east-1:051551940370:certificate/061b780e-6b44-4535-96e3-e36c537d802f"
+

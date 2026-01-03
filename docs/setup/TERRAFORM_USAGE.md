@@ -1,24 +1,27 @@
-# Guide d'usage Terraform – KAMBRIQ
+# Guide d'usage Terraform – KAMBRIQ v2.0
 
-Ce guide explique comment utiliser le dépôt Terraform pour déployer l'infrastructure AWS de KAMBRIQ.
+Ce guide explique comment utiliser le dépôt Terraform pour déployer l'infrastructure AWS de KAMBRIQ v2.0.
+
+**✅ Migration V1 → V2 complétée** : L'ancienne stack serverless a été supprimée. Ce guide décrit uniquement l'infrastructure V2.
 
 ## 1. Objectif du repo
 
-Ce dépôt gère l'infrastructure AWS pour la plateforme KAMBRIQ via Terraform (Infrastructure as Code).
+Ce dépôt gère l'infrastructure AWS pour la plateforme KAMBRIQ v2.0 via Terraform (Infrastructure as Code).
 
 **Infrastructure partagée** (stack `shared`) :
 - VPC avec subnets publics/privés
 - Route53 (DNS pour `kambriq.com`)
 - SES (Simple Email Service) - identités domaine et email
-- ACM (certificats SSL pour API Gateway)
+- ACM (certificats SSL pour ALB et CloudFront)
 
-**Infrastructure applicative** (stacks `dev` et `prod`) :
+**Infrastructure applicative** (stacks `dev-v2` et `prod-v2`) :
 - RDS PostgreSQL (base de données)
-- Lambda (API NestJS avec handler `dist/lambda.handler`)
-- API Gateway (point d'entrée HTTP API)
-- Frontend OpenNext (S3 assets + CloudFront + Lambda SSR)
-- S3 (buckets pour médias et artefacts de build)
-- IAM (rôles et politiques)
+- ECS Fargate (orchestration containers)
+- ALB (Application Load Balancer avec routing rules)
+- CloudFront (CDN devant ALB)
+- ECR (repositories pour images Docker)
+- S3 (buckets pour médias)
+- IAM (rôles et politiques pour ECS)
 
 ## 2. Structure du repo
 
@@ -27,23 +30,21 @@ kambriq-aws-iac-terraform/
 ├── modules/              # Modules Terraform réutilisables
 │   ├── shared/          # Ressources partagées (VPC, Route53, SES, ACM)
 │   ├── rds-postgres/    # Base de données PostgreSQL
-│   ├── frontend/        # Frontend OpenNext (S3 + CloudFront + Lambda SSR) ⭐
+│   ├── ecs-cluster/     # ECS Cluster + CloudWatch Logs ⭐ V2
+│   ├── ecs-service/     # ECS Task Definition + Service ⭐ V2
+│   ├── alb/             # Application Load Balancer ⭐ V2
+│   ├── cloudfront-v2/   # CloudFront Distribution (ALB origin) ⭐ V2
+│   ├── iam-roles-ecs/   # IAM Roles pour ECS tasks ⭐ V2
+│   ├── ecr-repository/  # ECR repositories
 │   ├── s3-media/        # Bucket S3 pour médias/documents
-│   ├── lambda-api/      # Fonction Lambda pour API NestJS (handler: dist/lambda.handler)
-│   ├── api-gateway/     # API Gateway HTTP API
-│   ├── iam/             # Rôles et policies IAM
-│   ├── s3-static-site/  # ⚠️ LEGACY - Remplacé par modules/frontend/
-│   └── cloudfront/      # ⚠️ LEGACY - Remplacé par modules/frontend/
+│   └── iam/             # Rôles et policies IAM
 ├── envs/                # Configurations par environnement
 │   ├── shared/          # Stack shared (VPC, DNS, SES, ACM)
-│   ├── dev/             # Environnement de développement
-│   └── prod/            # Environnement de production
+│   ├── dev-v2/          # Environnement de développement V2 ⭐
+│   └── prod-v2/         # Environnement de production V2 (à créer)
 └── .github/workflows/   # Workflows GitHub Actions
-    ├── terraform-shared.yml  # Déploiement infrastructure partagée
-    ├── terraform-dev-optimized.yml     # Déploiement infrastructure dev optimisé ⭐
-    ├── terraform-prod-optimized.yml    # Déploiement infrastructure prod optimisé ⭐
-    ├── terraform-dev-optimized.yml               # Legacy (à migrer vers optimisé)
-    └── terraform-prod-optimized.yml              # Legacy (à migrer vers optimisé)
+    ├── terraform-shared.yml      # Déploiement infrastructure partagée
+    └── terraform-validate-v2.yml # Validation Terraform V2 ⭐
 ```
 
 ### Workflows GitHub Actions
@@ -52,19 +53,13 @@ kambriq-aws-iac-terraform/
   - Sur PR : exécute `terraform plan` et commente la PR
   - Sur push vers `main` : exécute `terraform plan` + `apply`
 
-- **`terraform-dev-optimized.yml`** ⭐ : Gère l'infrastructure dev optimisé (plan/apply avec outputs, format check)
-  - CloudFront alias `dev.kambriq.com` géré par Terraform via `envs/dev/variables.tf`
-  - **⚠️ Important** : Gère uniquement l'infrastructure, ne déploie pas le code applicatif
-  - Déclenchement : Pull Request vers `develop` (plan uniquement), Push sur `develop` (plan + apply), Workflow Dispatch (plan uniquement)
-  - Exécute `terraform plan` + `apply` (sur push `develop`) pour créer/modifier les ressources AWS
-  - Le code applicatif est déployé via `deploy-app-dev.yml` dans le repository `kambriq`
+- **`terraform-validate-v2.yml`** ⭐ : Valide les configurations Terraform V2
+  - Format check (`terraform fmt -check`)
+  - Validation (`terraform validate`)
+  - Plan (`terraform plan`) pour vérifier les changements
+  - Déclenchement : Pull Request, Push, ou Workflow Dispatch
 
-- **`terraform-prod-optimized.yml`** ⭐ : Gère l'infrastructure prod optimisé (plan/apply avec outputs, protection production)
-  - **⚠️ Important** : Gère uniquement l'infrastructure, ne déploie pas le code applicatif
-  - CloudFront alias `kambriq.com` géré par Terraform via `envs/prod/variables.tf`
-  - Déclenchement manuel (`workflow_dispatch`) uniquement
-  - Protection via GitHub Environment `production` (approbation manuelle possible)
-  - Le code applicatif est déployé via `deploy-app-prod-optimized.yml` dans le repository `kambriq`
+**⚠️ Important** : Les workflows Terraform gèrent uniquement l'infrastructure. Le code applicatif est déployé via `deploy-v2-dev.yml` dans le repository `kambriq`.
 
 ## 3. Ordre de lecture des docs existants
 

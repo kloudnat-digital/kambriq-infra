@@ -1,11 +1,13 @@
-# Application Integration Guide
+# Application Integration Guide - V2.0
 
-**⚠️ Important** : Ce document explique comment l'infrastructure Terraform et l'application Kambriq s'intègrent. Depuis 2025-12-07, les déploiements applicatifs (mise à jour du code API + Web) sont gérés par les workflows `deploy-app-dev-optimized.yml` et `deploy-app-prod-optimized.yml` dans le repository `kambriq`, et non plus par Terraform.
+**✅ Migration V1 → V2 complétée** : L'ancienne stack serverless (Lambda + OpenNext + NestJS) a été supprimée.
+
+**⚠️ Important** : Ce document explique comment l'infrastructure Terraform V2 et l'application Kambriq V2 s'intègrent. Les déploiements applicatifs (mise à jour du code API + Web) sont gérés par le workflow `deploy-v2-dev.yml` dans le repository `kambriq`.
 
 Ce document explique :
-- Comment les outputs Terraform sont utilisés par l'application
+- Comment les outputs Terraform V2 sont utilisés par l'application
 - Comment les secrets sont gérés via SSM Parameter Store
-- Comment les workflows de déploiement applicatif interagissent avec l'infrastructure
+- Comment les workflows de déploiement applicatif V2 interagissent avec l'infrastructure
 
 ## Table of Contents
 
@@ -20,34 +22,36 @@ Ce document explique :
 
 ## Overview
 
-The Terraform infrastructure generates outputs that must be consumed by:
-- **Backend (NestJS API)**: Deployed as AWS Lambda
-- **Frontend (Next.js)**: Deployed to S3 (static assets) and Lambda SSR (server-side rendering) via CloudFront
+The Terraform infrastructure V2 generates outputs that must be consumed by:
+- **Backend (FastAPI)**: Deployed as ECS Fargate container
+- **Frontend (Next.js)**: Deployed as ECS Fargate container
 
-### CloudFront Routing Architecture
+### CloudFront → ALB → ECS Architecture
 
-The CloudFront distribution uses a **dual-origin architecture** for OpenNext:
+The CloudFront distribution uses **ALB as origin** with routing rules:
 
 **Request Flow for `https://dev.kambriq.com/`:**
 ```
 DNS (dev.kambriq.com) 
-  → CloudFront Distribution (E9V3S1IFEYPUP)
-    → Default Cache Behavior
-      → Origin: Lambda Function URL (SSR)
-        → Lambda Function (kambriq-frontend-dev-ssr)
-          → Handler: .open-next/server-functions/default/index.handler
-            → OpenNext index.mjs
-              → Next.js App Router (SSR)
-                → Returns HTML response
+  → CloudFront Distribution
+    → Origin: ALB (HTTPS)
+      → ALB Routing Rules
+        → /api/* → FastAPI Target Group (port 8000)
+        → /* → Next.js Target Group (port 3000)
+          → ECS Services (Fargate)
+            → FastAPI container (apps/api)
+            → Next.js container (apps/web)
 ```
 
-1. **Lambda Function URL (SSR Origin)** - Default behavior for all routes:
-   - Handles all page requests (including `/`)
-   - Handles API routes and dynamic content
-   - **Authorization**: `NONE` (access restricted via Lambda permission with CloudFront source ARN)
-   - **Invoke Mode**: `BUFFERED` (default, compatible with OpenNext `streaming: false`)
-   - No caching (dynamic content)
-   - **Handler**: `.open-next/server-functions/default/index.handler` pointing to `index.mjs` in the bundle
+1. **CloudFront Distribution** - CDN + SSL termination:
+   - Origin: ALB (HTTPS only)
+   - Cache behaviors: `/api/*` (no cache), `/*` (cache static assets)
+   - Domain: `dev.kambriq.com` (canonical)
+
+2. **ALB (Application Load Balancer)** - Routing:
+   - Listener 443 (HTTPS) with ACM certificate
+   - Routing rules: `/api/*` → FastAPI, `/*` → Next.js
+   - Target groups: ECS services (FastAPI + Next.js)
 
 2. **S3 Bucket (Static Assets Origin)** - Ordered cache behaviors:
    - `/_next/static/*` - Next.js static assets (cached 1 year)

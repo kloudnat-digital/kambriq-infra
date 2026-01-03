@@ -1,8 +1,10 @@
-# KAMBRIQ AWS Infrastructure as Code (Terraform)
+# KAMBRIQ AWS Infrastructure as Code (Terraform) - v2.0
 
-Infrastructure Terraform modulaire pour l'application KAMBRIQ sur AWS.
+Infrastructure Terraform modulaire pour l'application KAMBRIQ v2.0 sur AWS.
 
-**⚠️ Important** : Ce repository gère **uniquement l'infrastructure AWS** (Lambda, API Gateway, RDS, S3, CloudFront, SSM, IAM, VPC, etc.). Les déploiements applicatifs (mise à jour du code API + Web) sont gérés par les workflows optimisés `deploy-app-dev-optimized.yml` et `deploy-app-prod-optimized.yml` dans le repository `kambriq`.
+**✅ Migration V1 → V2 complétée** : L'ancienne stack serverless (Lambda + OpenNext + NestJS + API Gateway) a été supprimée. L'infrastructure actuelle utilise **ECS Fargate + ALB + CloudFront + FastAPI + Next.js**.
+
+**⚠️ Important** : Ce repository gère **uniquement l'infrastructure AWS** (ECS, ALB, CloudFront, RDS, S3, SSM, IAM, VPC, etc.). Les déploiements applicatifs (mise à jour du code API + Web) sont gérés par les workflows `deploy-v2-dev.yml` dans le repository `kambriq`.
 
 ## 📚 Documentation
 
@@ -17,79 +19,83 @@ Infrastructure Terraform modulaire pour l'application KAMBRIQ sur AWS.
 ├── modules/              # Modules Terraform réutilisables
 │   ├── shared/          # Ressources partagées (VPC, Route53, SES, ACM)
 │   ├── rds-postgres/    # Base de données PostgreSQL
-│   ├── frontend/         # Frontend OpenNext (S3 + CloudFront + Lambda SSR) ⭐
+│   ├── ecs-cluster/     # ECS Cluster + CloudWatch Logs ⭐ V2
+│   ├── ecs-service/     # ECS Task Definition + Service ⭐ V2
+│   ├── alb/             # Application Load Balancer ⭐ V2
+│   ├── cloudfront-v2/   # CloudFront Distribution (ALB origin) ⭐ V2
+│   ├── iam-roles-ecs/   # IAM Roles pour ECS tasks ⭐ V2
+│   ├── ecr-repository/  # ECR repositories (réutilisé)
 │   ├── s3-media/        # Bucket S3 pour médias/documents
-│   ├── lambda-api/      # Fonction Lambda pour API NestJS (handler: dist/lambda.handler)
-│   ├── api-gateway/     # API Gateway HTTP API
-│   ├── iam/             # Rôles et policies IAM
-│   ├── s3-static-site/  # ⚠️ LEGACY - Remplacé par modules/frontend/
-│   └── cloudfront/      # ⚠️ LEGACY - Remplacé par modules/frontend/
+│   └── iam/             # Rôles et policies IAM
 ├── envs/                # Configurations par environnement
 │   ├── shared/          # Stack shared (VPC, DNS, SES, ACM)
-│   ├── dev/             # Environnement de développement
-│   └── prod/            # Environnement de production
+│   ├── dev-v2/          # Environnement de développement V2 ⭐
+│   ├── prod-v2/         # Environnement de production V2 (à créer)
+│   ├── dev/             # ⚠️ LEGACY - Ancienne stack V1 (supprimée)
+│   └── prod/            # ⚠️ LEGACY - Ancienne stack V1 (à supprimer)
 ├── docs/                # Documentation organisée par usage
-│   ├── setup/           # Guides de démarrage (TERRAFORM_USAGE.md)
-│   ├── integration/     # Guides d'intégration (APP_INTEGRATION.md)
-│   └── maintenance/     # Documentation de maintenance
-├── legacy/              # Modules et fichiers obsolètes (référence uniquement)
-│   └── modules/         # Anciens modules (network, ses) - non utilisés
+│   ├── setup/           # Guides de démarrage
+│   ├── integration/     # Guides d'intégration
+│   ├── ARCHITECTURE_V2.md           # Architecture V2 ⭐
+│   ├── ARCHITECTURE_V2_DETAILED.md  # Architecture V2 détaillée ⭐
+│   ├── BOOTSTRAP_V2.md              # Guide bootstrap V2 ⭐
+│   └── V2_IMPLEMENTATION_COMPLETE.md # Migration complétée ⭐
 └── versions.tf          # Contraintes de versions
 ```
 
-## Architecture MVP KAMBRIQ – Serverless AWS
+## Architecture KAMBRIQ v2.0 – ECS Fargate + ALB
 
-### Vue d'ensemble de l'architecture MVP
+### Vue d'ensemble de l'architecture V2.0
 
-Pour le MVP (v1.0.0), l'architecture retenue est **100 % serverless AWS** pour optimiser les coûts et simplifier l'opérationnel :
+L'architecture KAMBRIQ v2.0 utilise **ECS Fargate + ALB + CloudFront** pour remplacer l'ancienne stack serverless :
 
 **Frontend :**
-- **OpenNext** : Next.js 16 avec SSR sur AWS (S3 + CloudFront + Lambda)
-  - S3 pour assets statiques (`.open-next/assets/`)
-  - CloudFront CDN pour distribution globale
-  - Lambda SSR pour rendu côté serveur (`.open-next/server/`)
-  - Lambda@Edge pour optimisation d'images
-  - Support ISR (Incremental Static Regeneration)
-  - Coûts optimisés (pay-per-use)
+- **Next.js Classic** : Next.js 16 App Router avec SSR (standalone mode)
+  - Déployé sur ECS Fargate (container)
+  - CloudFront CDN devant ALB
+  - Pas de Lambda, pas d'OpenNext
+  - Support SSR/SSG/CSR hybride
 
 **Backend :**
-- **Lambda + API Gateway** : NestJS déployé comme fonction serverless
-  - Lambda Node.js 20.x (512MB, 30s timeout)
-  - Handler : `dist/lambda.handler` (adaptateur `@vendia/serverless-express`)
-  - API Gateway HTTP API pour le routage (payload v2)
-  - Auto-scaling selon la charge, pay-per-use
-  - Optimisation cold start (cache de l'instance NestJS)
+- **FastAPI** : Backend Python avec architecture clean
+  - Déployé sur ECS Fargate (container)
+  - JWT access token (15 min) + refresh token cookie (7 jours)
+  - SQLAlchemy + Alembic pour la base de données
+  - Compatible avec le schéma Prisma existant
+
+**Load Balancing :**
+- **ALB** : Application Load Balancer avec routing rules
+  - `/api/*` → FastAPI Target Group (port 8000)
+  - `/*` → Next.js Target Group (port 3000)
+  - HTTPS avec ACM certificate
 
 **Base de données :**
-- **RDS PostgreSQL** : Instance dédiée t4g.micro
+- **RDS PostgreSQL** : Instance dédiée t4g.micro (réutilisée)
   - 20GB gp3 storage
   - Backups automatiques (7j en dev, 30j en prod)
-  - Accès via VPC privée depuis Lambda
+  - Accès via VPC privée depuis ECS
 
 **Stockage :**
-- **S3** : Buckets séparés pour :
-  - Frontend OpenNext assets (public via CloudFront)
-  - Médias/documents (privé, accès via API)
-  - Artefacts de build (pour consommation par Terraform)
+- **S3** : Buckets pour médias/documents
+- **ECR** : Repositories pour images Docker (API + Web)
 
 **Email :**
-- **SES** : Amazon Simple Email Service
+- **SES** : Amazon Simple Email Service (réutilisé)
   - Domain identity pour `kambriq.com`
   - Email identity pour `noreply@kambriq.com`
 
 **Secrets & Configuration :**
-- **SSM Parameter Store / Secrets Manager** : Stockage des secrets
+- **SSM Parameter Store** : Stockage des secrets (réutilisé)
   - Mots de passe de base de données
   - Clés JWT
-  - Secrets OAuth
-  - **Jamais** dans Git ou Terraform outputs
+  - Variables d'environnement applicatives
 
 **Réseau :**
-- **VPC** : Réseau privé avec subnets publics/privés
-- **NAT Gateway** : 1 seul pour réduire les coûts
-- **Route53** : DNS pour `kambriq.com`
+- **VPC** : Réseau privé avec subnets publics/privés (réutilisé)
+- **NAT Gateway** : 1 seul pour réduire les coûts (réutilisé)
+- **Route53** : DNS pour `kambriq.com` (réutilisé)
 
-> **Note** : Pour le MVP (v1.0.0), l'architecture retenue est 100 % serverless AWS (Lambda + API Gateway + S3 + CloudFront + RDS). Une migration vers ECS/EKS pourra être envisagée plus tard en fonction de la montée en charge et des besoins spécifiques (WebSockets, long-running tasks, etc.).
+> **✅ Migration complétée** : L'ancienne stack V1 (Lambda + OpenNext + NestJS + API Gateway) a été supprimée. L'infrastructure V2 est maintenant opérationnelle.
 
 ### Vue d'ensemble des stacks Terraform
 
@@ -99,29 +105,31 @@ L'infrastructure est organisée en **3 stacks Terraform** :
    - VPC avec public/private subnets + NAT Gateway (1 seul pour réduire les coûts)
    - Route53 hosted zone pour `kambriq.com`
    - SES domain identity
-   - ACM certificates (API Gateway)
+   - ACM certificates (ALB + CloudFront)
    - S3 buckets pour logs et artifacts
 
-2. **`envs/dev`** : Environnement de développement
+2. **`envs/dev-v2`** : Environnement de développement V2.0 ⭐
    - RDS PostgreSQL (instance dédiée)
-   - Lambda API + API Gateway (handler: `dist/lambda.handler`)
-   - Frontend OpenNext (S3 + CloudFront + Lambda SSR)
-   - S3 media bucket
-   - IAM roles pour Lambda
+   - ECS Cluster + Services (FastAPI + Next.js)
+   - ALB avec routing rules (`/api/*` → FastAPI, `/*` → Next.js)
+   - CloudFront Distribution (ALB origin)
+   - ECR repositories (API + Web)
+   - IAM roles pour ECS tasks
    - SSM Parameter Store pour secrets applicatifs (`/kambriq/dev/api/...`, `/kambriq/dev/web/...`)
 
-3. **`envs/prod`** : Environnement de production
+3. **`envs/prod-v2`** : Environnement de production V2.0 (à créer)
    - RDS PostgreSQL (instance dédiée, backups 30 jours)
-   - Lambda API + API Gateway (handler: `dist/lambda.handler`)
-   - Frontend OpenNext (S3 + CloudFront + Lambda SSR)
-   - S3 media bucket
-   - IAM roles pour Lambda
+   - ECS Cluster + Services (FastAPI + Next.js)
+   - ALB avec routing rules
+   - CloudFront Distribution
+   - ECR repositories
+   - IAM roles pour ECS tasks
    - Domaines personnalisés (app.kambriq.com, api.kambriq.com)
    - SSM Parameter Store pour secrets applicatifs (`/kambriq/prod/api/...`, `/kambriq/prod/web/...`)
 
 ### Flux de déploiement
 
-**IMPORTANT** : Le stack `shared` doit être déployé **EN PREMIER** avant `dev` et `prod`.
+**IMPORTANT** : Le stack `shared` doit être déployé **EN PREMIER** avant `dev-v2` et `prod-v2`.
 
 ```bash
 # 1. Déployer shared
@@ -130,18 +138,20 @@ terraform init
 terraform plan
 terraform apply
 
-# 2. Déployer dev
-cd ../dev
+# 2. Déployer dev-v2
+cd ../dev-v2
 terraform init
 terraform plan  # Lit les outputs de shared via remote_state
 terraform apply
 
-# 3. Déployer prod
-cd ../prod
+# 3. Déployer prod-v2 (quand prêt)
+cd ../prod-v2
 terraform init
 terraform plan  # Lit les outputs de shared via remote_state
 terraform apply
 ```
+
+**⚠️ Note** : Les anciens stacks `envs/dev` et `envs/prod` (V1) ont été supprimés. Utilisez uniquement `envs/dev-v2` et `envs/prod-v2`.
 
 ### Ressources par stack
 
@@ -153,21 +163,25 @@ terraform apply
 - **ACM** : Certificat wildcard `*.kambriq.com` pour API Gateway
 - **S3** : Buckets pour logs et artifacts
 
-#### Stack Dev (`envs/dev`)
+#### Stack Dev V2 (`envs/dev-v2`)
 - **RDS PostgreSQL** : t4g.micro, 20GB gp3, backups 7 jours
-- **Lambda API** : Node.js 20.x, 512MB, 30s timeout
-- **API Gateway** : HTTP API (URL par défaut ou `api-dev.kambriq.com`)
-- **S3 Static** : Bucket pour frontend Next.js
+- **ECS Cluster** : Fargate avec Container Insights
+- **ECS Service API** : FastAPI (port 8000, 256 CPU, 512 MB)
+- **ECS Service Web** : Next.js (port 3000, 256 CPU, 512 MB)
+- **ALB** : Application Load Balancer avec HTTPS (443) et redirect HTTP (80)
+- **CloudFront** : Distribution avec origin ALB (`dev.kambriq.com`)
+- **ECR** : Repositories pour images Docker (API + Web)
 - **S3 Media** : Bucket pour médias/documents
-- **CloudFront** : Distribution pour frontend (URL par défaut ou `app-dev.kambriq.com`)
 
-#### Stack Prod (`envs/prod`)
+#### Stack Prod V2 (`envs/prod-v2`) - À créer
 - **RDS PostgreSQL** : t4g.micro, 20GB gp3, backups 30 jours
-- **Lambda API** : Node.js 20.x, 512MB, 30s timeout
-- **API Gateway** : HTTP API avec domaine personnalisé (`api.kambriq.com`)
-- **S3 Static** : Bucket pour frontend Next.js
+- **ECS Cluster** : Fargate avec Container Insights
+- **ECS Service API** : FastAPI
+- **ECS Service Web** : Next.js
+- **ALB** : Application Load Balancer
+- **CloudFront** : Distribution avec domaines personnalisés (`app.kambriq.com`, `api.kambriq.com`)
+- **ECR** : Repositories pour images Docker
 - **S3 Media** : Bucket pour médias/documents
-- **CloudFront** : Distribution avec domaine personnalisé (`app.kambriq.com`)
 
 ### Différences entre environnements
 
@@ -202,21 +216,20 @@ Les workflows Terraform sont configurés pour :
 
 ### Workflows Terraform
 
-#### 1. Workflow `terraform-dev-optimized.yml` ⭐ Optimisé (2025-12-15) - Environnement de développement
+#### 1. Workflow `terraform-validate-v2.yml` ⭐ V2 - Validation Terraform
 
-Gère le stack `dev` (infrastructure uniquement).
+Valide les configurations Terraform V2.
 
 **Triggers :**
-- **Pull Request** vers `develop` : Plan uniquement (pas d'apply)
-- **Push** vers `develop` : Plan + Apply automatique
-- **Workflow Dispatch** : Plan uniquement (manuel)
+- **Pull Request** vers `main` ou `develop` : Validation uniquement
+- **Push** vers `main` ou `develop` : Validation
+- **Workflow Dispatch** : Validation manuelle
 
 **Comportement :**
-- Format check et validation avant chaque plan
-- Plan généré et sauvegardé comme artifact
-- Apply automatique uniquement sur push vers `develop`
-- Gère uniquement l'infrastructure (Lambda, API Gateway, RDS, S3, CloudFront, SSM, IAM, VPC, etc.)
-- **Ne déploie pas le code applicatif** (fait par `deploy-app-dev.yml` dans le repo `kambriq`)
+- Format check (`terraform fmt -check`)
+- Validation (`terraform validate`)
+- Plan (`terraform plan`) pour vérifier les changements
+- Gère uniquement l'infrastructure V2 (ECS, ALB, CloudFront, RDS, etc.)
 
 **Secrets requis :**
 - `AWS_ACCESS_KEY_ID_DEV`
@@ -225,19 +238,17 @@ Gère le stack `dev` (infrastructure uniquement).
 
 **Note** : Les secrets applicatifs (DB password, JWT secrets) ne sont **pas** passés via GitHub Secrets. Ils sont gérés via SSM Parameter Store / Secrets Manager et configurés directement dans les variables d'environnement Lambda.
 
-#### 2. Workflow `terraform-prod-optimized.yml` ⭐ Optimisé (2025-12-15) - Environnement de production
+#### 2. Workflow `terraform-shared.yml` - Infrastructure partagée
 
-Gère le stack `prod` (infrastructure uniquement) avec sécurité renforcée.
+Gère le stack `shared` (VPC, Route53, SES, ACM, S3 logs).
 
 **Triggers :**
-- **Workflow Dispatch** : Déclenchement manuel uniquement
+- **Pull Request vers `main`** : Exécute `terraform fmt`, `validate` et `plan`
+- **Push vers `main`** : Exécute `terraform fmt`, `validate`, `plan` et `apply`
 
 **Comportement :**
-- Terraform init, validate, plan et apply dans `envs/prod/`
-- Protection via GitHub Environment `production` (approbation manuelle possible)
-- Plan sauvegardé comme artifact (rétention 30 jours)
-- Gère uniquement l'infrastructure (Lambda, API Gateway, RDS, S3, CloudFront, SSM, IAM, VPC, etc.)
-- **Ne déploie pas le code applicatif** (fait par `deploy-app-prod-optimized.yml` dans le repo `kambriq`)
+- Plan automatique sur les PRs (commentaire sur la PR)
+- Apply automatique sur push vers main (si fichiers modifiés dans `envs/shared/` ou `modules/`)
 
 **Secrets requis :**
 - `AWS_ACCESS_KEY_ID_PROD`
@@ -277,29 +288,27 @@ Gère le stack `shared` (VPC, Route53, SES, ACM, S3 logs).
 
 1. **Repository `kambriq-aws-iac-terraform` (ce repo)** :
    - Gère **uniquement l'infrastructure** via Terraform
-   - Crée et configure les ressources AWS (Lambda, API Gateway, RDS, S3, CloudFront, SSM, IAM, VPC, etc.)
+   - Crée et configure les ressources AWS (ECS, ALB, CloudFront, RDS, S3, SSM, IAM, VPC, etc.)
    - Ne déploie **pas** le code applicatif
 
 2. **Repository `kambriq`** :
-   - **`ci.yml`** : CI global (lint, test, check-types)
-   - **`build-artifacts.yml`** : Build et upload artefacts S3 (optionnel, pour consommation future)
-   - **`deploy-app-dev.yml`** : Déploiement applicatif direct en DEV
-     - Build API + Web, package en ZIP
-     - `aws lambda update-function-code` (API + SSR)
-     - Sync assets S3, invalidation CloudFront
-   - **`deploy-app-prod-optimized.yml`** : Déploiement applicatif direct en PROD (même logique, avec protection `production`)
+   - **`deploy-v2-dev.yml`** : Déploiement applicatif V2 en DEV
+     - Build Docker images (FastAPI + Next.js)
+     - Push vers ECR
+     - Update ECS services (rolling deployment)
+     - Smoke tests
 
 **Flux de déploiement :**
 
 1. **Infrastructure** (ce repo) :
    - Modifier le code Terraform si nécessaire
-   - Exécuter `terraform-dev-optimized.yml` ou `terraform-prod-optimized.yml` pour mettre à jour l'infrastructure
+   - Exécuter `terraform apply` dans `envs/dev-v2/` pour mettre à jour l'infrastructure
 
 2. **Application** (repo `kambriq`) :
-   - Modifier le code API ou Web
-   - Exécuter `deploy-app-dev.yml` ou `deploy-app-prod-optimized.yml` pour déployer le nouveau code
+   - Modifier le code API (FastAPI) ou Web (Next.js)
+   - Exécuter `deploy-v2-dev.yml` pour build, push ECR et déployer sur ECS
 
-Voir [`docs/integration/APP_INTEGRATION.md`](docs/integration/APP_INTEGRATION.md) pour les détails sur l'intégration. Voir aussi [`docs/setup/TERRAFORM_USAGE.md`](docs/setup/TERRAFORM_USAGE.md) pour un guide d'usage complet. Voir [`docs/architecture/CONTEXTE_WORKSPACE.md`](docs/architecture/CONTEXTE_WORKSPACE.md) pour une vue d'ensemble complète.
+Voir [`docs/ARCHITECTURE_V2.md`](docs/ARCHITECTURE_V2.md) pour l'architecture V2. Voir [`docs/BOOTSTRAP_V2.md`](docs/BOOTSTRAP_V2.md) pour le guide de bootstrap. Voir [`docs/ARCHITECTURE_V2_DETAILED.md`](docs/ARCHITECTURE_V2_DETAILED.md) pour l'architecture détaillée.
 
 #### Configuration des secrets GitHub
 
@@ -363,18 +372,18 @@ terraform plan
 terraform apply
 ```
 
-#### 2. Stack Dev
+#### 2. Stack Dev V2
 
 ```bash
-# 1. Se placer dans le répertoire dev
-cd envs/dev
+# 1. Se placer dans le répertoire dev-v2
+cd envs/dev-v2
 
 # 2. Créer le fichier terraform.tfvars à partir de l'exemple
 cp terraform.tfvars.example terraform.tfvars
 
 # 3. Éditer terraform.tfvars avec vos valeurs réelles
-#    - Remplacer CHANGE_ME_STRONG_PASSWORD par un mot de passe fort
-#    - Remplacer CHANGE_ME_JWT_SECRET_KEY par une clé secrète JWT
+#    - Remplacer CHANGE_ME_SECURE_PASSWORD par un mot de passe fort
+#    - Vérifier cloudfront_certificate_arn (déjà configuré par défaut)
 #    Utiliser un gestionnaire de secrets (Vault, LastPass, 1Password, etc.)
 #    ⚠️  Ne jamais commiter terraform.tfvars dans Git
 
@@ -388,11 +397,11 @@ terraform plan
 terraform apply
 ```
 
-#### 3. Stack Prod
+#### 3. Stack Prod V2 (À créer)
 
 ```bash
-# 1. Se placer dans le répertoire prod
-cd envs/prod
+# 1. Se placer dans le répertoire prod-v2 (créer si nécessaire)
+cd envs/prod-v2
 
 # 2. Créer le fichier terraform.tfvars à partir de l'exemple
 cp terraform.tfvars.example terraform.tfvars
@@ -400,9 +409,8 @@ cp terraform.tfvars.example terraform.tfvars
 # 3. Éditer terraform.tfvars avec vos valeurs réelles
 #    - ⚠️  EN PRODUCTION : Utiliser OBLIGATOIREMENT un gestionnaire de secrets
 #      (AWS Secrets Manager, HashiCorp Vault, etc.)
-#    - Remplacer CHANGE_ME_STRONG_PASSWORD par un mot de passe fort
-#    - Remplacer CHANGE_ME_JWT_SECRET_KEY par une clé secrète JWT
-#    - Optionnel : Configurer les domaines personnalisés (cloudfront_domain, api_domain)
+#    - Remplacer CHANGE_ME_SECURE_PASSWORD par un mot de passe fort
+#    - Configurer cloudfront_certificate_arn (certificat us-east-1)
 #    ⚠️  Ne jamais commiter terraform.tfvars dans Git
 
 # 4. Initialiser Terraform
@@ -463,38 +471,25 @@ terraform output
 - `logs_bucket_id` : ID du bucket S3 pour logs
 - `artifacts_bucket_id` : ID du bucket S3 pour artifacts
 
-#### Stack Dev/Prod (`envs/dev` et `envs/prod`)
+#### Stack Dev V2 (`envs/dev-v2`)
 
-**AWS Region :**
-- `region` : Région AWS (ex: `eu-central-1`)
+**CloudFront :**
+- `cloudfront_domain` : Domain CloudFront Distribution
 
-**Frontend :**
-- `frontend_cloudfront_url` : URL complète CloudFront (https://...)
-- `frontend_cloudfront_domain` : Nom de domaine CloudFront
-- `frontend_s3_bucket_name` : Nom du bucket S3 pour les assets OpenNext
+**ALB :**
+- `alb_dns_name` : DNS name de l'ALB
 
-**Media S3 :**
-- `media_s3_public_bucket_name` : Nom du bucket S3 pour les médias publics
-- `media_s3_private_bucket_name` : Nom du bucket S3 pour les médias privés
-- **Note** : Actuellement, les deux référencent le même bucket
-
-**API Gateway :**
-- `api_gateway_base_url` : URL complète de l'API Gateway (https://...)
-
-**Base de données :**
+**RDS :**
 - `rds_endpoint` : Endpoint complet RDS (host:port)
-- `rds_db_name` : Nom de la base de données
-- `rds_username` : Nom d'utilisateur de la base de données (**sensible**)
 
-**SES :**
-- `ses_domain_identity_arn` : ARN de l'identité domaine SES (depuis shared)
-- `ses_from_email` : Adresse email par défaut pour l'envoi (depuis shared)
+**ECR :**
+- `ecr_api_repo_uri` : URI ECR pour l'image API
+- `ecr_web_repo_uri` : URI ECR pour l'image Web
 
-**Lambda :**
-- `lambda_function_name` : Nom de la fonction Lambda API
-- `lambda_function_arn` : ARN de la fonction Lambda API
-- `lambda_handler` : Handler Lambda (ex: `dist/lambda.handler`)
-- `cloudfront_distribution_id` : ID de la distribution CloudFront (pour invalidation de cache)
+**ECS :**
+- `ecs_cluster_name` : Nom du cluster ECS
+- `ecs_service_api_name` : Nom du service ECS API
+- `ecs_service_web_name` : Nom du service ECS Web
 
 ### Utilisation dans le repo applicatif
 
@@ -523,33 +518,47 @@ La configuration est déjà définie dans `envs/*/backend.tf`.
 
 **Important** : Les stacks `dev` et `prod` consomment les outputs du stack `shared` via `terraform_remote_state`. Assurez-vous que le stack `shared` est déployé et que son état est accessible avant de déployer `dev` ou `prod`.
 
-## TODO
+## ✅ Migration V1 → V2 Complétée
 
-- [x] Migrer l'état Terraform vers S3 backend
-- [x] Créer une structure shared/dev/prod avec remote_state
-- [x] Créer des workflows GitHub Actions séparés par stack
-- [x] Séparer les secrets entre dev et prod
-- [x] Créer les workflows de déploiement applicatif (deploy-dev.yml)
-- [ ] Ajouter des alarmes CloudWatch pour monitoring
-- [ ] Configurer des backups automatiques pour RDS (déjà configuré : 7j dev, 30j prod)
-- [ ] Migrer les secrets vers AWS Secrets Manager (actuellement SSM Parameter Store)
-- [ ] Configurer des domaines personnalisés pour CloudFront et API Gateway (prod) - optionnel
-- [ ] Ajouter des règles de sécurité supplémentaires (WAF, etc.)
-- [ ] Optimiser les coûts avec Reserved Instances ou Savings Plans (si applicable)
-- [ ] Ajouter un certificat ACM pour CloudFront dans us-east-1 (si domaine personnalisé nécessaire)
+**Date de migration :** 2025-01-XX  
+**Status :** ✅ **COMPLÉTÉE**
 
-> **Note** : Pour le MVP (v1.0.0), l'architecture retenue est 100 % serverless AWS (Lambda + API Gateway + S3 + CloudFront + RDS). Une migration vers ECS/EKS pourra être envisagée plus tard en fonction de la montée en charge et des besoins spécifiques (WebSockets, long-running tasks, etc.).
+### Ce qui a été fait
 
-## Coûts estimés (MVP)
+- [x] ✅ Infrastructure V1 supprimée (Lambda, OpenNext, NestJS, API Gateway)
+- [x] ✅ Infrastructure V2 créée (ECS Fargate, ALB, CloudFront V2)
+- [x] ✅ Modules Terraform V2 créés (ecs-cluster, alb, cloudfront-v2, iam-roles-ecs, ecs-service)
+- [x] ✅ Configuration `envs/dev-v2/` créée
+- [x] ✅ FastAPI backend implémenté (apps/api)
+- [x] ✅ Next.js classic frontend (apps/web, no OpenNext)
+- [x] ✅ CI/CD workflows V2 créés
+- [x] ✅ Documentation V2 complète
 
-- RDS t4g.micro: ~$15-20/mois
-- Lambda: Pay-per-use (gratuit jusqu'à 1M requêtes/mois)
-- API Gateway: Pay-per-use (gratuit jusqu'à 1M requêtes/mois)
-- S3: ~$0.023/Go/mois
-- CloudFront: Pay-per-use (gratuit jusqu'à 1To/mois)
+### Prochaines étapes
+
+- [ ] Déployer infrastructure shared (si pas déjà fait)
+- [ ] Déployer infrastructure dev-v2
+- [ ] Build et push images Docker (FastAPI + Next.js)
+- [ ] Activer services ECS
+- [ ] Tests de validation
+- [ ] Créer configuration prod-v2
+- [ ] Migration progressive vers V2 (canary)
+
+Voir [`docs/V2_IMPLEMENTATION_COMPLETE.md`](docs/V2_IMPLEMENTATION_COMPLETE.md) pour les détails complets.
+
+## Coûts estimés (V2.0)
+
+**Architecture V2 (ECS Fargate + ALB) :**
+- ECS Fargate (2 tasks): ~$30-40/mois (256 CPU, 512 MB)
+- ALB: ~$16/mois
+- CloudFront: ~$5-10/mois
+- RDS t4g.micro: ~$15/mois
+- S3: ~$1-2/mois
 - SES: Gratuit jusqu'à 62,000 emails/mois
 
-Total estimé MVP: ~$20-30/mois (hors trafic)
+**Total estimé V2: ~$66-81/mois** (1k-5k users, 10 req/s peak)
+
+**Note :** V2 coûte plus cher que V1 mais offre meilleure performance (pas de cold start) et plus de flexibilité.
 
 ## Architecture technique
 
@@ -591,11 +600,11 @@ Chaque workflow :
 
 ## Notes importantes
 
-- **Gestion des secrets** : Les secrets applicatifs (DB password, JWT secrets) sont gérés via SSM Parameter Store / Secrets Manager, **pas** via GitHub Secrets ou Terraform variables. Les workflows Terraform ne manipulent que l'infrastructure.
-- **Stack shared en premier** : Le stack `shared` doit être déployé avant `dev` et `prod` car ces derniers dépendent de ses outputs.
-- **VPC dédiée** : Une VPC dédiée est créée dans le stack `shared` (plus de VPC par défaut).
+- **✅ Migration V1 → V2 complétée** : L'ancienne stack serverless a été supprimée. L'infrastructure V2 est maintenant opérationnelle.
+- **Gestion des secrets** : Les secrets applicatifs (DB password, JWT secrets) sont gérés via SSM Parameter Store, **pas** via GitHub Secrets ou Terraform variables.
+- **Stack shared en premier** : Le stack `shared` doit être déployé avant `dev-v2` et `prod-v2` car ces derniers dépendent de ses outputs.
+- **VPC dédiée** : Une VPC dédiée est créée dans le stack `shared`.
 - **NAT Gateway unique** : Un seul NAT Gateway est créé pour réduire les coûts (dans une AZ publique).
-- **Documentation organisée** : La documentation est organisée par usage dans `docs/setup/`, `docs/integration/`, et `docs/maintenance/`.
-- **Modules legacy** : Les anciens modules (`network`, `ses`) ont été déplacés dans `legacy/` et ne sont plus utilisés.
-- **Coûts** : Les ressources sont configurées pour minimiser les coûts tout en restant fonctionnelles.
+- **Documentation V2** : Voir `docs/ARCHITECTURE_V2.md`, `docs/ARCHITECTURE_V2_DETAILED.md`, et `docs/BOOTSTRAP_V2.md` pour la documentation V2.
+- **Modules legacy** : Les anciens modules V1 (`lambda-api`, `api-gateway`, `frontend`) ne sont plus utilisés. Utilisez les modules V2 (`ecs-cluster`, `alb`, `cloudfront-v2`, etc.).
 
