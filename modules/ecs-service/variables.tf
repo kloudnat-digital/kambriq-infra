@@ -106,3 +106,15 @@ variable "aws_region" {
   type        = string
 }
 
+variable "enable_init_container" {
+  description = "Enable init container for database migrations (API only)"
+  type        = bool
+  default     = false
+}
+
+variable "init_container_image" {
+  description = "Container image for init container (same as main container for migrations)"
+  type        = string
+  default     = ""
+}
+

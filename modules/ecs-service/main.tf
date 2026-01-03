@@ -30,46 +30,84 @@ resource "aws_ecs_task_definition" "main" {
   execution_role_arn       = var.task_execution_role_arn
   task_role_arn            = var.task_role_arn
 
-  container_definitions = jsonencode([
-    {
-      name      = var.service_name
-      image     = var.container_image
-      essential = true
+  container_definitions = jsonencode(concat(
+    # Init container for database migrations (only if enabled and for API service)
+    var.enable_init_container && var.service_name == "api" ? [
+      {
+        name      = "${var.service_name}-migrations"
+        image     = var.init_container_image != "" ? var.init_container_image : var.container_image
+        essential = false
 
-      portMappings = [
-        {
-          containerPort = var.container_port
-          protocol      = "tcp"
-        }
-      ]
+        environment = var.environment_variables
 
-      environment = var.environment_variables
+        secrets = var.secrets != null ? [
+          for key, secret_arn in var.secrets : {
+            name      = key
+            valueFrom = secret_arn
+          }
+        ] : []
 
-      secrets = var.secrets != null ? [
-        for key, secret_arn in var.secrets : {
-          name      = key
-          valueFrom = secret_arn
-        }
-      ] : []
+        command = ["python", "-m", "alembic", "upgrade", "head"]
 
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.service.name
-          "awslogs-region"        = var.aws_region
-          "awslogs-stream-prefix" = var.service_name
+        logConfiguration = {
+          logDriver = "awslogs"
+          options = {
+            "awslogs-group"         = aws_cloudwatch_log_group.service.name
+            "awslogs-region"        = var.aws_region
+            "awslogs-stream-prefix" = "${var.service_name}-migrations"
+          }
         }
       }
+    ] : [],
+    # Main application container
+    [
+      {
+        name      = var.service_name
+        image     = var.container_image
+        essential = true
 
-      healthCheck = var.health_check_path != "" ? {
-        command     = ["CMD-SHELL", "curl -f http://localhost:${var.container_port}${var.health_check_path} || exit 1"]
-        interval    = 30
-        timeout     = 5
-        retries     = 3
-        startPeriod = 60
-      } : null
-    }
-  ])
+        portMappings = [
+          {
+            containerPort = var.container_port
+            protocol      = "tcp"
+          }
+        ]
+
+        environment = var.environment_variables
+
+        secrets = var.secrets != null ? [
+          for key, secret_arn in var.secrets : {
+            name      = key
+            valueFrom = secret_arn
+          }
+        ] : []
+
+        logConfiguration = {
+          logDriver = "awslogs"
+          options = {
+            "awslogs-group"         = aws_cloudwatch_log_group.service.name
+            "awslogs-region"        = var.aws_region
+            "awslogs-stream-prefix" = var.service_name
+          }
+        }
+
+        healthCheck = var.health_check_path != "" ? {
+          command     = ["CMD-SHELL", "curl -f http://localhost:${var.container_port}${var.health_check_path} || exit 1"]
+          interval    = 30
+          timeout     = 5
+          retries     = 3
+          startPeriod = 60
+        } : null
+
+        dependsOn = var.enable_init_container && var.service_name == "api" ? [
+          {
+            containerName = "${var.service_name}-migrations"
+            condition     = "SUCCESS"
+          }
+        ] : []
+      }
+    ]
+  ))
 
   tags = {
     Name = local.name_prefix

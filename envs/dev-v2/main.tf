@@ -238,7 +238,11 @@ module "ecs_service_api" {
   subnet_ids              = data.terraform_remote_state.shared.outputs.private_subnet_ids
   security_group_ids      = [aws_security_group.ecs.id]
   target_group_arn        = module.alb.api_target_group_arn
-  assign_public_ip        = false
+  assign_public_ip         = false
+
+  # Enable init container for database migrations
+  enable_init_container   = true
+  init_container_image    = "${module.ecr_api.repository_url}:latest"
 
   environment_variables = {
     ENV         = local.env
