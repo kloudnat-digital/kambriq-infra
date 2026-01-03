@@ -10,7 +10,7 @@ Infrastructure Terraform modulaire pour l'application KAMBRIQ v2.0 sur AWS.
 
 - **[Guide d'usage Terraform](docs/setup/TERRAFORM_USAGE.md)** - Guide complet pour utiliser ce dépôt
 - **[Intégration avec l'application](docs/integration/APP_INTEGRATION.md)** - Comment l'app consomme les outputs Terraform
-- **[Résumé du nettoyage](docs/maintenance/CLEANUP_SUMMARY.md)** - Historique du nettoyage du dépôt
+- **[Architecture V2](docs/architecture/)** - Documentation complète de l'architecture ECS Fargate
 
 ## Structure du projet
 
@@ -34,12 +34,10 @@ Infrastructure Terraform modulaire pour l'application KAMBRIQ v2.0 sur AWS.
 │   ├── dev/             # ⚠️ LEGACY - Ancienne stack V1 (supprimée)
 │   └── prod/            # ⚠️ LEGACY - Ancienne stack V1 (à supprimer)
 ├── docs/                # Documentation organisée par usage
+│   ├── architecture/    # Architecture V2 (ECS Fargate, ALB, CloudFront) ⭐
 │   ├── setup/           # Guides de démarrage
 │   ├── integration/     # Guides d'intégration
-│   ├── ARCHITECTURE_V2.md           # Architecture V2 ⭐
-│   ├── ARCHITECTURE_V2_DETAILED.md  # Architecture V2 détaillée ⭐
-│   ├── BOOTSTRAP_V2.md              # Guide bootstrap V2 ⭐
-│   └── V2_IMPLEMENTATION_COMPLETE.md # Migration complétée ⭐
+│   └── deployment/      # Guides de déploiement
 └── versions.tf          # Contraintes de versions
 ```
 
@@ -308,7 +306,7 @@ Gère le stack `shared` (VPC, Route53, SES, ACM, S3 logs).
    - Modifier le code API (FastAPI) ou Web (Next.js)
    - Exécuter `deploy-v2-dev.yml` pour build, push ECR et déployer sur ECS
 
-Voir [`docs/ARCHITECTURE_V2.md`](docs/ARCHITECTURE_V2.md) pour l'architecture V2. Voir [`docs/BOOTSTRAP_V2.md`](docs/BOOTSTRAP_V2.md) pour le guide de bootstrap. Voir [`docs/ARCHITECTURE_V2_DETAILED.md`](docs/ARCHITECTURE_V2_DETAILED.md) pour l'architecture détaillée.
+Voir [`docs/architecture/`](docs/architecture/) pour la documentation complète de l'architecture V2.
 
 #### Configuration des secrets GitHub
 
@@ -544,7 +542,7 @@ La configuration est déjà définie dans `envs/*/backend.tf`.
 - [ ] Créer configuration prod-v2
 - [ ] Migration progressive vers V2 (canary)
 
-Voir [`docs/V2_IMPLEMENTATION_COMPLETE.md`](docs/V2_IMPLEMENTATION_COMPLETE.md) pour les détails complets.
+Voir [`docs/architecture/CONTEXTE_WORKSPACE.md`](docs/architecture/CONTEXTE_WORKSPACE.md) pour le contexte complet du workspace et l'architecture V2.
 
 ## Coûts estimés (V2.0)
 
@@ -605,6 +603,6 @@ Chaque workflow :
 - **Stack shared en premier** : Le stack `shared` doit être déployé avant `dev-v2` et `prod-v2` car ces derniers dépendent de ses outputs.
 - **VPC dédiée** : Une VPC dédiée est créée dans le stack `shared`.
 - **NAT Gateway unique** : Un seul NAT Gateway est créé pour réduire les coûts (dans une AZ publique).
-- **Documentation V2** : Voir `docs/ARCHITECTURE_V2.md`, `docs/ARCHITECTURE_V2_DETAILED.md`, et `docs/BOOTSTRAP_V2.md` pour la documentation V2.
+- **Documentation V2** : Voir `docs/architecture/` pour la documentation complète de l'architecture V2.
 - **Modules legacy** : Les anciens modules V1 (`lambda-api`, `api-gateway`, `frontend`) ne sont plus utilisés. Utilisez les modules V2 (`ecs-cluster`, `alb`, `cloudfront-v2`, etc.).
 

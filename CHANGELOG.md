@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2026-01-03] - Migration V2 complétée et nettoyage
+
+### Added
+- **HTTPS sur ALB** : Configuration HTTPS avec certificat ACM pour l'ALB
+- **Init Container ECS** : Support des migrations Alembic automatiques via init container
+- **Scripts de déploiement** : Scripts automatisés pour déploiement Terraform (shared, dev-v2)
+- **Documentation V2** : Architecture complète ECS Fargate documentée
+
+### Changed
+- **ALB Module** : Support conditionnel HTTPS (listener HTTPS si certificat présent)
+- **ECS Service Module** : Format environment variables corrigé (tableau de paires clé-valeur)
+- **ECR Repository Module** : Utilisation de data source pour référencer repositories existants
+- **CloudFront Module** : Correction des headers forwarded (retrait Cookie)
+- **Secrets Management** : SSM Parameter Store comme source unique de vérité
+- **Documentation** : Consolidation et nettoyage (~44% de réduction)
+
+### Removed
+- **Documentation obsolète** : Fichiers de migration, vérification temporaire, guides redondants
+- **Scripts obsolètes** : Scripts utilitaires non essentiels
+
 ## [2025-12-15] - Optimisations CI/CD
 
 ### Added
