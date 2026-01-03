@@ -1,6 +1,7 @@
 # ECS Fargate V2.0 - Checklist de Validation
 
 **Date :** 2025-01-XX  
+**Dernière mise à jour :** 2026-01-03  
 **Status :** ✅ **CHECKLIST COMPLÈTE**
 
 ---
@@ -18,21 +19,22 @@
 ### ✅ Task Definitions
 
 - [x] ✅ Task Definition API créée (`kambriq-dev-api`)
-  - [x] Image: ECR URI (`kambriq-api-dev:latest`)
+  - [x] Image: ECR URI (`kambriq-api:latest` - repository partagé dev/prod)
   - [x] CPU: 256 (0.25 vCPU)
   - [x] Memory: 512 MB
   - [x] Port: 8000
   - [x] Health check: `/api/health`
   - [x] Secrets: DATABASE_URL, JWT_SECRET (SSM)
-  - [x] Environment: ENV, AWS_REGION
+  - [x] Environment: ENV, AWS_REGION (format tableau de paires clé-valeur)
+  - [x] Init Container: Alembic migrations (`alembic upgrade head`)
 
 - [x] ✅ Task Definition Web créée (`kambriq-dev-web`)
-  - [x] Image: ECR URI (`kambriq-web-dev:latest`)
+  - [x] Image: ECR URI (`kambriq-web:latest` - repository partagé dev/prod)
   - [x] CPU: 256 (0.25 vCPU)
   - [x] Memory: 512 MB
   - [x] Port: 3000
   - [x] Health check: `/health`
-  - [x] Environment: ENV, NEXT_PUBLIC_SITE_URL, NEXT_PUBLIC_API_URL
+  - [x] Environment: ENV, NEXT_PUBLIC_SITE_URL, NEXT_PUBLIC_API_URL (format tableau de paires clé-valeur)
 
 ### ✅ ECS Services
 
@@ -124,8 +126,11 @@
 - [x] ✅ SSM Parameters créés:
   - [x] `/kambriq/dev/db/url` (SecureString)
   - [x] `/kambriq/dev/api/JWT_SECRET` (SecureString)
-  - [x] `/kambriq/dev/web/NEXT_PUBLIC_SITE_URL` (String)
-- [x] ✅ Secrets référencés dans Task Definitions
+  - [x] `/kambriq/dev/db/password` (SecureString - pour RDS)
+- [x] ✅ Secrets référencés dans Task Definitions (format ARN SSM)
+- [x] ✅ ECR Repositories partagés:
+  - [x] `kambriq-api` (partagé dev/prod, tags: vX.Y.Z, latest, dev-latest, prod-latest)
+  - [x] `kambriq-web` (partagé dev/prod, tags: vX.Y.Z, latest, dev-latest, prod-latest)
 
 ### ✅ Outputs Terraform
 

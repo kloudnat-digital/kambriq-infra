@@ -122,8 +122,9 @@ resource "aws_lb_target_group" "web" {
   }
 }
 
-# HTTPS Listener
+# HTTPS Listener (only if certificate is provided)
 resource "aws_lb_listener" "https" {
+  count             = var.certificate_arn != null && var.certificate_arn != "" ? 1 : 0
   load_balancer_arn = aws_lb.main.arn
   port              = "443"
   protocol          = "HTTPS"
@@ -140,8 +141,9 @@ resource "aws_lb_listener" "https" {
   }
 }
 
-# HTTP Listener (redirect to HTTPS)
-resource "aws_lb_listener" "http" {
+# HTTP Listener with redirect to HTTPS (only if certificate is provided)
+resource "aws_lb_listener" "http_redirect" {
+  count             = var.certificate_arn != null && var.certificate_arn != "" ? 1 : 0
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
@@ -156,9 +158,31 @@ resource "aws_lb_listener" "http" {
   }
 }
 
+# HTTP Listener without redirect (only if certificate is NOT provided)
+resource "aws_lb_listener" "http_forward" {
+  count             = var.certificate_arn == null || var.certificate_arn == "" ? 1 : 0
+  load_balancer_arn = aws_lb.main.arn
+  port              = "80"
+  protocol          = "HTTP"
+
+  default_action {
+    type = "fixed-response"
+    fixed_response {
+      content_type = "text/plain"
+      message_body = "No matching rule"
+      status_code  = "404"
+    }
+  }
+
+  lifecycle {
+    create_before_destroy = false
+  }
+}
+
 # Listener Rule: /api/* → FastAPI Target Group
+# Use HTTPS listener if certificate is available, otherwise HTTP listener
 resource "aws_lb_listener_rule" "api" {
-  listener_arn = aws_lb_listener.https.arn
+  listener_arn = var.certificate_arn != null && var.certificate_arn != "" ? aws_lb_listener.https[0].arn : aws_lb_listener.http_forward[0].arn
   priority     = 1
 
   action {
@@ -174,8 +198,9 @@ resource "aws_lb_listener_rule" "api" {
 }
 
 # Listener Rule: /* → Next.js Target Group (default)
+# Use HTTPS listener if certificate is available, otherwise HTTP listener
 resource "aws_lb_listener_rule" "web" {
-  listener_arn = aws_lb_listener.https.arn
+  listener_arn = var.certificate_arn != null && var.certificate_arn != "" ? aws_lb_listener.https[0].arn : aws_lb_listener.http_forward[0].arn
   priority     = 2
 
   action {

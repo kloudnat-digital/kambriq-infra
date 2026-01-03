@@ -54,15 +54,23 @@ store_ssm_parameter() {
     # Vérifier si le paramètre existe déjà
     if aws ssm get-parameter --name "$name" --region "$AWS_REGION" &>/dev/null; then
         echo -e "${YELLOW}  ⚠️  Parameter already exists. Updating...${NC}"
+        # AWS n'autorise pas --overwrite avec --tags, donc on fait deux opérations séparées
         aws ssm put-parameter \
             --name "$name" \
             --value "$value" \
             --type SecureString \
             --overwrite \
             --description "$description" \
-            --region "$AWS_REGION" \
-            --tags "Key=Environment,Value=$env" "Key=ManagedBy,Value=Terraform"
+            --region "$AWS_REGION" > /dev/null
+        
+        # Mettre à jour les tags séparément
+        aws ssm add-tags-to-resource \
+            --resource-type "Parameter" \
+            --resource-id "$name" \
+            --tags "Key=Environment,Value=$env" "Key=ManagedBy,Value=Terraform" \
+            --region "$AWS_REGION" > /dev/null 2>&1 || true
     else
+        # Créer le paramètre avec les tags
         aws ssm put-parameter \
             --name "$name" \
             --value "$value" \

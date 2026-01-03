@@ -1,7 +1,15 @@
 aws_region = "eu-central-1"
 
-db_username = "kambriq_admin"
-db_password = "CHANGE_ME_SECURE_PASSWORD"
+# ============================================================================
+# Database Configuration
+# ============================================================================
+# IMPORTANT: Les credentials de la base de données sont gérés UNIQUEMENT via SSM Parameter Store
+# 
+# Le mot de passe est récupéré depuis: /kambriq/dev/db/password
+# Le username est hardcodé à "kambriq_admin" (peut être déplacé vers SSM si nécessaire)
+#
+# Les secrets DOIVENT être créés AVANT le déploiement Terraform via:
+#   ./scripts/generate-and-store-secrets.sh dev
 
 # CloudFront certificate ARN (must be in us-east-1)
 # Already configured with your certificate

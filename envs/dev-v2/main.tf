@@ -45,6 +45,7 @@ module "ecr_api" {
 
   repository_name      = "kambriq-api"  # Repository partagé dev/prod
   env                  = local.env
+  aws_region           = var.aws_region
   image_tag_mutability = "MUTABLE"
   scan_on_push         = true
   image_retention_count = 10
@@ -55,6 +56,7 @@ module "ecr_web" {
 
   repository_name      = "kambriq-web"  # Repository partagé dev/prod
   env                  = local.env
+  aws_region           = var.aws_region
   image_tag_mutability = "MUTABLE"
   scan_on_push         = true
   image_retention_count = 10
@@ -153,7 +155,7 @@ module "alb" {
   env               = local.env
   vpc_id            = data.terraform_remote_state.shared.outputs.vpc_id
   public_subnet_ids = data.terraform_remote_state.shared.outputs.public_subnet_ids
-  certificate_arn   = data.terraform_remote_state.shared.outputs.api_certificate_arn
+  certificate_arn   = try(data.terraform_remote_state.shared.outputs.api_certificate_arn, null)
 
   api_port = 8000
   web_port = 3000
@@ -197,6 +199,24 @@ resource "aws_route53_record" "dev" {
 }
 
 # ============================================================================
+# SSM Parameter Store - Secrets
+# ============================================================================
+# IMPORTANT: SSM Parameter Store est la source unique de vérité pour tous les secrets
+# Les secrets doivent être créés AVANT le déploiement Terraform via:
+#   ./scripts/generate-and-store-secrets.sh dev
+
+# Database password from SSM Parameter Store
+data "aws_ssm_parameter" "db_password" {
+  name = "/kambriq/${local.env}/db/password"
+}
+
+# Database username (can be hardcoded or from SSM, using default for now)
+# If needed, can be moved to SSM: data.aws_ssm_parameter.db_username
+locals {
+  db_username = "kambriq_admin" # Default username, can be moved to SSM if needed
+}
+
+# ============================================================================
 # RDS PostgreSQL (reuse existing module)
 # ============================================================================
 
@@ -204,14 +224,15 @@ module "rds_postgres" {
   source = "../../modules/rds-postgres"
 
   env                = local.env
+  vpc_id             = data.terraform_remote_state.shared.outputs.vpc_id
   subnet_ids         = data.terraform_remote_state.shared.outputs.private_subnet_ids
   security_group_id  = aws_security_group.rds.id
   instance_class     = "db.t4g.micro"
   allocated_storage  = 20
   storage_type       = "gp3"
   db_name            = "kambriq"
-  db_username        = var.db_username
-  db_password        = var.db_password
+  db_username        = local.db_username
+  db_password        = data.aws_ssm_parameter.db_password.value
   backup_retention_period = 7
   skip_final_snapshot     = true
 }

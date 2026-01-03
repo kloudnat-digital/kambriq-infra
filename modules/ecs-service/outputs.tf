@@ -9,7 +9,7 @@ output "service_id" {
 
 output "service_arn" {
   description = "ECS Service ARN"
-  value       = aws_ecs_service.main.arn
+  value       = "arn:aws:ecs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:service/${var.cluster_id}/${aws_ecs_service.main.name}"
 }
 
 output "service_name" {

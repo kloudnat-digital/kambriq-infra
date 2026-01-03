@@ -77,3 +77,38 @@ asg_min_size     = 1
 asg_desired_size = 1
 asg_max_size     = 1
 
+# ============================================================================
+# ACM Certificates Configuration
+# ============================================================================
+# ACM certificates are created manually in AWS Console.
+# Provide the ARNs here after manual setup.
+# See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions.
+
+# ACM certificate for ALB (must be in eu-central-1)
+# This certificate is used for HTTPS on the Application Load Balancer
+api_acm_certificate_arn = "arn:aws:acm:eu-central-1:051551940370:certificate/6f8bbf35-3058-4083-a8dd-f393d5012300"
+
+# ACM certificate for CloudFront (must be in us-east-1)
+# This certificate is used for HTTPS on CloudFront distribution
+# Uncomment and configure after creating the certificate in us-east-1:
+# cloudfront_acm_certificate_arn = "arn:aws:acm:us-east-1:051551940370:certificate/..."
+
+# ============================================================================
+# SES Configuration (created manually in AWS Console)
+# ============================================================================
+# SES identities are created manually in AWS Console.
+# Provide the ARNs here after manual setup.
+# See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions.
+
+# SES domain identity ARN (created manually in AWS Console)
+# ses_domain_identity_arn = "arn:aws:ses:eu-central-1:051551940370:identity/kambriq.com"
+
+# SES email identity ARN (created manually in AWS Console)
+# ses_email_identity_arn = "arn:aws:ses:eu-central-1:051551940370:identity/noreply@kambriq.com"
+
+# SES domain name
+ses_domain = "kambriq.com"
+
+# SES region (where SES identities are created)
+ses_region = "eu-central-1"
+

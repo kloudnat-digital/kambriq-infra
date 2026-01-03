@@ -19,8 +19,9 @@ variable "public_subnet_ids" {
 }
 
 variable "certificate_arn" {
-  description = "ACM Certificate ARN for HTTPS listener"
+  description = "ACM Certificate ARN for HTTPS listener (optional, if null, HTTP only)"
   type        = string
+  default     = null
 }
 
 variable "api_port" {

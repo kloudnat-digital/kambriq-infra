@@ -1,6 +1,7 @@
 # ECS Fargate V2.0 - Architecture Summary
 
 **Date :** 2025-01-XX  
+**Dernière mise à jour :** 2026-01-03  
 **Status :** ✅ **ARCHITECTURE VALIDÉE ET PRÊTE**
 
 ---
@@ -12,11 +13,13 @@ L'architecture ECS Fargate KAMBRIQ v2.0 est **complète et correctement impléme
 - ✅ ECS Cluster (namespace logique)
 - ✅ Task Definitions (API + Web)
 - ✅ ECS Services (API + Web)
+- ✅ Init Container (migrations Alembic pour API)
 - ✅ IAM Roles (execution + task)
 - ✅ ALB avec routing rules
 - ✅ CloudFront avec behaviors
 - ✅ Security Groups (ALB → ECS → RDS)
 - ✅ Secrets SSM Parameter Store
+- ✅ ECR Repositories partagés (kambriq-api, kambriq-web)
 
 ---
 

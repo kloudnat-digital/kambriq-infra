@@ -63,6 +63,29 @@ fi
 echo -e "${GREEN}✓ Stack SHARED trouvé${NC}"
 echo ""
 
+# Vérifier que les secrets SSM existent
+echo -e "${YELLOW}Vérification des secrets SSM Parameter Store...${NC}"
+SSM_DB_PASSWORD="/kambriq/dev/db/password"
+if ! aws ssm get-parameter --name "$SSM_DB_PASSWORD" --region "$AWS_REGION" &> /dev/null; then
+    echo -e "${RED}✗ Le secret SSM $SSM_DB_PASSWORD n'existe pas${NC}"
+    echo ""
+    echo "   ⚠️  IMPORTANT: Les secrets DOIVENT être créés AVANT le déploiement Terraform"
+    echo ""
+    echo "   Créez les secrets avec:"
+    echo "   cd ../.."
+    echo "   ./scripts/generate-and-store-secrets.sh dev"
+    echo ""
+    echo "   Ou manuellement:"
+    echo "   aws ssm put-parameter \\"
+    echo "     --name /kambriq/dev/db/password \\"
+    echo "     --value \"YOUR_STRONG_PASSWORD\" \\"
+    echo "     --type SecureString \\"
+    echo "     --region $AWS_REGION"
+    exit 1
+fi
+echo -e "${GREEN}✓ Secret SSM $SSM_DB_PASSWORD trouvé${NC}"
+echo ""
+
 # Vérifier terraform.tfvars
 if [ ! -f "terraform.tfvars" ]; then
     echo -e "${YELLOW}⚠️  terraform.tfvars n'existe pas${NC}"

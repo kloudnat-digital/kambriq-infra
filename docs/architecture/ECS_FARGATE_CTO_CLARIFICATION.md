@@ -1,6 +1,7 @@
 # ECS Fargate Architecture - CTO Clarification
 
 **Date :** 2025-01-XX  
+**Dernière mise à jour :** 2026-01-03  
 **Auteur :** Principal Architect / CTO  
 **Status :** ✅ **ARCHITECTURE V2.0 VALIDÉE**
 
@@ -106,23 +107,57 @@ resource "aws_ecs_task_definition" "api" {
   execution_role_arn       = "..."
   task_role_arn            = "..."
   
-  container_definitions = jsonencode([{
-    name  = "api"
-    image = "123456789012.dkr.ecr.eu-central-1.amazonaws.com/kambriq-api-dev:latest"
-    portMappings = [{
-      containerPort = 8000
-      protocol      = "tcp"
-    }]
-    environment = [...]
-    secrets     = [...]
-  }])
+  container_definitions = jsonencode([
+    # Init container for database migrations
+    {
+      name      = "api-migrations"
+      image     = "123456789012.dkr.ecr.eu-central-1.amazonaws.com/kambriq-api:latest"
+      essential = false
+      environment = [
+        { name = "ENV", value = "dev" },
+        { name = "AWS_REGION", value = "eu-central-1" }
+      ]
+      secrets = [
+        { name = "DATABASE_URL", valueFrom = "arn:aws:ssm:eu-central-1:123456789012:parameter/kambriq/dev/db/url" }
+      ]
+      command = ["python", "-m", "alembic", "upgrade", "head"]
+    },
+    # Main application container
+    {
+      name  = "api"
+      image = "123456789012.dkr.ecr.eu-central-1.amazonaws.com/kambriq-api:latest"
+      portMappings = [{
+        containerPort = 8000
+        protocol      = "tcp"
+      }]
+      environment = [
+        { name = "ENV", value = "dev" },
+        { name = "AWS_REGION", value = "eu-central-1" }
+      ]
+      secrets = [
+        { name = "DATABASE_URL", valueFrom = "arn:aws:ssm:eu-central-1:123456789012:parameter/kambriq/dev/db/url" },
+        { name = "JWT_SECRET", valueFrom = "arn:aws:ssm:eu-central-1:123456789012:parameter/kambriq/dev/api/JWT_SECRET" }
+      ]
+      dependsOn = [{
+        containerName = "api-migrations"
+        condition     = "SUCCESS"
+      }]
+    }
+  ])
 }
 ```
+
+**Note importante :**
+- ✅ **Init Container** : Exécute les migrations Alembic avant le démarrage de l'API
+- ✅ **Repository ECR partagé** : `kambriq-api` (partagé entre dev et prod, tags: vX.Y.Z, latest, dev-latest, prod-latest)
+- ✅ **Environment variables** : Format tableau de paires `{name: "KEY", value: "VALUE"}` (requis par ECS)
 
 **Points clés :**
 - ✅ **FARGATE** : Spécifie que nous utilisons Fargate (pas EC2)
 - ✅ **awsvpc** : Mode réseau (chaque task a sa propre IP dans le VPC)
-- ✅ **CPU/Memory** :** Limites allouées (256 CPU = 0.25 vCPU, 512 MB RAM)
+- ✅ **CPU/Memory** : Limites allouées (256 CPU = 0.25 vCPU, 512 MB RAM)
+- ✅ **Init Container** : Exécute les migrations Alembic avant le démarrage de l'API (fail-fast)
+- ✅ **Environment variables** : Format tableau de paires `{name: "KEY", value: "VALUE"}` (requis par ECS API)
 
 ---
 
@@ -285,6 +320,7 @@ RDS PostgreSQL (private subnet)
 
 - [x] ✅ ECS Cluster créé (namespace logique)
 - [x] ✅ Task Definitions créées (API + Web)
+- [x] ✅ Init Container configuré (migrations Alembic pour API)
 - [x] ✅ ECS Services créés (API + Web)
 - [x] ✅ IAM Roles configurés (execution + task)
 - [x] ✅ ALB routing configuré (/api/* → API, /* → Web)
@@ -293,6 +329,7 @@ RDS PostgreSQL (private subnet)
 - [x] ✅ Health checks configurés (/api/health, /health)
 - [x] ✅ Secrets SSM configurés (DATABASE_URL, JWT_SECRET)
 - [x] ✅ CloudWatch Logs configurés
+- [x] ✅ ECR Repositories partagés (kambriq-api, kambriq-web)
 
 ---
 

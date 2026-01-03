@@ -8,6 +8,10 @@ locals {
   name_prefix = "${var.project_name}-${var.env}-${var.service_name}"
 }
 
+# Data sources for ARN construction
+data "aws_region" "current" {}
+data "aws_caller_identity" "current" {}
+
 # CloudWatch Log Group for service
 resource "aws_cloudwatch_log_group" "service" {
   name              = "/ecs/${local.name_prefix}"
@@ -38,7 +42,12 @@ resource "aws_ecs_task_definition" "main" {
         image     = var.init_container_image != "" ? var.init_container_image : var.container_image
         essential = false
 
-        environment = var.environment_variables
+        environment = [
+          for key, value in var.environment_variables : {
+            name  = key
+            value = tostring(value)
+          }
+        ]
 
         secrets = var.secrets != null ? [
           for key, secret_arn in var.secrets : {
@@ -73,7 +82,12 @@ resource "aws_ecs_task_definition" "main" {
           }
         ]
 
-        environment = var.environment_variables
+        environment = [
+          for key, value in var.environment_variables : {
+            name  = key
+            value = tostring(value)
+          }
+        ]
 
         secrets = var.secrets != null ? [
           for key, secret_arn in var.secrets : {
@@ -136,10 +150,8 @@ resource "aws_ecs_service" "main" {
     container_port   = var.container_port
   }
 
-  deployment_configuration {
-    maximum_percent         = 200
-    minimum_healthy_percent = 100
-  }
+  deployment_maximum_percent         = 200
+  deployment_minimum_healthy_percent = 100
 
   deployment_circuit_breaker {
     enable   = true
