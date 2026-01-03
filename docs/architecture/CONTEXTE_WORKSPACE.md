@@ -1,8 +1,8 @@
 # Contexte du Workspace KAMBRIQ
 
 **Date de création :** 2025-01-27  
-**Dernière mise à jour :** 2025-01-XX  
-**Version :** 4.0 (Migration V2 complétée - ECS Fargate + FastAPI + Next.js)
+**Dernière mise à jour :** 2026-01-03  
+**Version :** 4.1 (Migration V2 complétée - ECS Fargate + FastAPI + Next.js, nettoyage V1 effectué)
 
 ---
 
@@ -31,7 +31,7 @@ Infrastructure AWS gérée via Terraform pour la plateforme KAMBRIQ v2.0.
 - **Email** : SES (Simple Email Service, réutilisé)
 - **Réseau** : VPC avec subnets publics/privés + NAT Gateway (réutilisé)
 
-**✅ Migration V1 → V2 complétée (2025-01-XX) :**
+**✅ Migration V1 → V2 complétée (2026-01-03) :**
 - **Infrastructure V1 supprimée** : Lambda, API Gateway, OpenNext
 - **Infrastructure V2 créée** : ECS, ALB, CloudFront V2
 - **Application V2** : FastAPI + Next.js classic
@@ -69,7 +69,7 @@ Infrastructure AWS gérée via Terraform pour la plateforme KAMBRIQ v2.0.
 - ✅ ECS Service Web : Next.js (port 3000, 256 CPU, 512 MB)
 - ✅ ALB : Application Load Balancer avec routing rules
 - ✅ CloudFront V2 : Distribution avec origin ALB
-- ✅ ECR : Repositories pour images Docker (kambriq-api-dev, kambriq-web-dev)
+- ✅ ECR : Repositories pour images Docker (kambriq-api, kambriq-web - partagés dev/prod)
 - ✅ IAM : Rôles et policies ECS (SSM, RDS, CloudWatch Logs)
 - ✅ Security Groups : RDS + ECS + ALB
 
@@ -292,25 +292,26 @@ apps/api/
 
 **Rôle :** CI global pour validation du code avant merge
 
-#### `deploy-v2-dev.yml` ⭐ V2 - Déploiement DEV
+#### `deploy-dev.yml` ⭐ V2 - Déploiement DEV
 **Déclencheurs :**
-- Push sur `main` ou `develop` (si fichiers modifiés dans `apps/`)
+- Push sur `develop` (si fichiers modifiés dans `apps/`)
 - `workflow_dispatch` (manuel)
 
 **Jobs :**
-1. `build-and-push-api` : Build et push image Docker API vers ECR
-2. `build-and-push-web` : Build et push image Docker Web vers ECR
-3. `deploy-ecs` : Update ECS services (force new deployment)
-4. `smoke-tests` : Tests automatiques (health checks)
+1. `get-version` : Lit la version depuis `VERSION` ou input
+2. `build-and-push-api` : Build et push image Docker API vers ECR (tags: vX.Y.Z, latest, dev-latest)
+3. `build-and-push-web` : Build et push image Docker Web vers ECR (tags: vX.Y.Z, latest, dev-latest)
+4. `deploy` : Update ECS services (force new deployment) et attend stabilisation
 
 **Rôle :** Déploiement automatique vers ECS Fargate (dev)
 
-#### `deploy-v2-prod.yml` ⭐ V2 - Déploiement PROD
+#### `deploy-prod.yml` ⭐ V2 - Déploiement PROD
 **Déclencheurs :**
-- `workflow_dispatch` avec confirmation manuelle (input: "deploy-prod")
+- Push sur `main` (si fichiers modifiés dans `apps/`)
+- `workflow_dispatch` avec confirmation manuelle
 
 **Jobs :**
-- Identique à `deploy-v2-dev.yml` mais pour production
+- Identique à `deploy-dev.yml` mais pour production (tags: vX.Y.Z, latest, prod-latest)
 - Protection via GitHub Environment `production`
 
 **Rôle :** Déploiement manuel vers ECS Fargate (prod)
@@ -405,11 +406,11 @@ docker-compose -f docker-compose.local.yml down
 **Flux de déploiement :**
 
 1. **Application (repo `kambriq`) :**
-   - Workflows `deploy-v2-dev.yml` et `deploy-v2-prod.yml` : Déploiement direct du code applicatif (API + Web)
-   - Build Docker images → Push ECR → Update ECS services
+   - Workflows `deploy-dev.yml` et `deploy-prod.yml` : Déploiement direct du code applicatif (API + Web)
+   - Build Docker images → Push ECR (kambriq-api, kambriq-web) → Update ECS services
 
 2. **Infrastructure (repo `kambriq-aws-iac-terraform`) :**
-   - Workflows Terraform (`terraform-dev-v2.yml`) : Gestion de l'infrastructure uniquement
+   - Scripts Terraform (`scripts/terraform-deploy.sh`) : Gestion de l'infrastructure uniquement
    - Créent/modifient les ressources AWS (ECS, ALB, CloudFront, RDS, S3, SSM, IAM, VPC, etc.)
    - Génèrent les outputs nécessaires (noms ECS, buckets, IDs CloudFront, etc.)
 
@@ -553,37 +554,43 @@ cd kambriq-aws-iac-terraform
 ### 3. Application (repo `kambriq`)
 
 **Déploiement automatique (GitHub Actions) :**
-- Push sur `main` ou `develop` → Workflow `deploy-v2-dev.yml` se déclenche automatiquement
-- Build Docker images → Push ECR → Update ECS services
+- Push sur `develop` → Workflow `deploy-dev.yml` se déclenche automatiquement
+- Push sur `main` → Workflow `deploy-prod.yml` disponible (workflow_dispatch)
+- Build Docker images → Push ECR (kambriq-api, kambriq-web) → Update ECS services
 
 **Déploiement manuel :**
 ```bash
+# Utiliser le script de déploiement local
+cd kambriq
+ENVIRONMENT=dev ./scripts/deploy-local.sh
+
+# Ou manuellement :
 # Build et push API
 cd apps/api
-docker build -f Dockerfile -t kambriq-api-dev:latest .
-docker tag kambriq-api-dev:latest \
-  051551940370.dkr.ecr.eu-central-1.amazonaws.com/kambriq-api-dev:latest
+docker build -f Dockerfile -t kambriq-api:latest .
+docker tag kambriq-api:latest \
+  051551940370.dkr.ecr.eu-central-1.amazonaws.com/kambriq-api:latest
 docker push \
-  051551940370.dkr.ecr.eu-central-1.amazonaws.com/kambriq-api-dev:latest
+  051551940370.dkr.ecr.eu-central-1.amazonaws.com/kambriq-api:latest
 
 # Build et push Web
 cd ../web
-docker build -f Dockerfile -t kambriq-web-dev:latest .
-docker tag kambriq-web-dev:latest \
-  051551940370.dkr.ecr.eu-central-1.amazonaws.com/kambriq-web-dev:latest
+docker build -f Dockerfile -t kambriq-web:latest .
+docker tag kambriq-web:latest \
+  051551940370.dkr.ecr.eu-central-1.amazonaws.com/kambriq-web:latest
 docker push \
-  051551940370.dkr.ecr.eu-central-1.amazonaws.com/kambriq-web-dev:latest
+  051551940370.dkr.ecr.eu-central-1.amazonaws.com/kambriq-web:latest
 
 # Update ECS services
 aws ecs update-service \
   --cluster kambriq-dev-cluster \
-  --service kambriq-dev-api \
+  --service kambriq-api-dev \
   --force-new-deployment \
   --region eu-central-1
 
 aws ecs update-service \
   --cluster kambriq-dev-cluster \
-  --service kambriq-dev-web \
+  --service kambriq-web-dev \
   --force-new-deployment \
   --region eu-central-1
 ```
@@ -706,7 +713,7 @@ aws ecs update-service \
 |----------|-------------|---------|
 | `terraform-shared.yml` | PR vers `main` | `terraform plan` (commentaire PR) |
 | `terraform-shared.yml` | Push vers `main` | `terraform plan` + `apply` |
-| `terraform-dev-v2.yml` ⭐ V2 | PR vers `main` (plan), Push `main` (plan+apply), Workflow Dispatch (plan) | Infrastructure DEV V2 uniquement (ne déploie pas le code applicatif) |
+| `scripts/terraform-deploy.sh` ⭐ V2 | Script manuel | Infrastructure DEV/PROD V2 (ne déploie pas le code applicatif) |
 | `terraform-prod-optimized.yml` ⚠️ V1 | Workflow Dispatch | Infrastructure PROD V1 uniquement (ne déploie pas le code applicatif) + protection environnement `production` |
 
 ### Application (`kambriq`)
@@ -714,8 +721,8 @@ aws ecs update-service \
 | Workflow | Déclencheur | Actions |
 |----------|-------------|---------|
 | `ci.yml` | Push/PR sur `develop`, `main` | Lint, test, check-types (API + Web) |
-| `deploy-v2-dev.yml` ⭐ V2 | Push sur `main`/`develop` (auto), Workflow Dispatch (manuel) | Déploiement applicatif DEV V2 : build Docker, push ECR, update ECS services |
-| `deploy-v2-prod.yml` ⭐ V2 | Workflow Dispatch avec confirmation | Déploiement applicatif PROD V2 : même logique que dev, avec protection `production` |
+| `deploy-dev.yml` ⭐ V2 | Push sur `develop` (auto), Workflow Dispatch (manuel) | Déploiement applicatif DEV V2 : build Docker, push ECR (kambriq-api, kambriq-web), update ECS services |
+| `deploy-prod.yml` ⭐ V2 | Push sur `main` (auto), Workflow Dispatch avec confirmation | Déploiement applicatif PROD V2 : même logique que dev, avec protection `production` |
 
 ---
 
@@ -737,19 +744,19 @@ aws ecs update-service \
 ### Application
 - [ ] Configurer secrets GitHub Actions (AWS credentials pour workflows applicatifs)
 - [ ] Tester workflow `ci.yml` (lint, test, check-types)
-- [ ] Tester déploiement applicatif DEV (workflow `deploy-v2-dev.yml`)
-- [ ] Tester déploiement applicatif PROD (workflow `deploy-v2-prod.yml`)
+- [ ] Tester déploiement applicatif DEV (workflow `deploy-dev.yml`)
+- [ ] Tester déploiement applicatif PROD (workflow `deploy-prod.yml`)
 - [ ] Vérifier que l'application fonctionne avec l'infrastructure
 
 ### Intégration Infrastructure/Application
-- [ ] Vérifier que l'infrastructure est déployée (via `terraform-dev-v2.yml`)
+- [ ] Vérifier que l'infrastructure est déployée (via `scripts/terraform-deploy.sh`)
 - [ ] Vérifier que les ECS services existent (créés par Terraform)
-- [ ] Tester déploiement du code applicatif (via `deploy-v2-dev.yml` / `deploy-v2-prod.yml`)
+- [ ] Tester déploiement du code applicatif (via `deploy-dev.yml` / `deploy-prod.yml` ou `scripts/deploy-local.sh`)
 - [ ] Vérifier que les containers ECS utilisent le nouveau code
 - [ ] Vérifier que les health checks passent
 
 ---
 
-**Dernière mise à jour :** 2025-01-XX  
-**Version :** 4.0 (Migration V2 complétée - ECS Fargate + FastAPI + Next.js)  
+**Dernière mise à jour :** 2026-01-03  
+**Version :** 4.1 (Migration V2 complétée - ECS Fargate + FastAPI + Next.js, nettoyage V1 effectué)  
 **Maintenu par :** Équipe Infrastructure KAMBRIQ
