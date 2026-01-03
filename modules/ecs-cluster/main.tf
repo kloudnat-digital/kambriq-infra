@@ -108,3 +108,38 @@ resource "aws_iam_role_policy" "cloudwatch_logs" {
   })
 }
 
+# Policy for SSM Parameter Store (to read secrets)
+resource "aws_iam_role_policy" "ssm_secrets" {
+  name = "${local.name_prefix}-ssm-secrets"
+  role = aws_iam_role.task_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter",
+          "ssm:GetParameters",
+          "ssm:GetParametersByPath"
+        ]
+        Resource = [
+          "arn:aws:ssm:${var.aws_region}:*:parameter/kambriq/${var.env}/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "ssm.${var.aws_region}.amazonaws.com"
+          }
+        }
+      }
+    ]
+  })
+}
+

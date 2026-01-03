@@ -71,6 +71,7 @@ module "ecs_cluster" {
 
   project_name             = local.project_name
   env                      = local.env
+  aws_region               = var.aws_region
   enable_container_insights = true
   log_retention_days       = 7
 }
