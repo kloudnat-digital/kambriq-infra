@@ -72,10 +72,6 @@ enable_s3_artifacts = true
 enable_bastion        = true
 bastion_key_pair_name = "kambriq-bastion"
 allowed_ssh_cidr      = ["90.25.230.44/32", "90.53.182.41/32"]
-# ASG capacity: (0,0,0) to stop bastion, (1,1,1) to start
-asg_min_size     = 1
-asg_desired_size = 1
-asg_max_size     = 1
 
 # ============================================================================
 # ACM Certificates Configuration

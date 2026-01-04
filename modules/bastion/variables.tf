@@ -48,24 +48,6 @@ variable "instance_type" {
   default     = "t3.micro"
 }
 
-variable "asg_min_size" {
-  description = "Minimum number of instances in ASG (0 to stop bastion, 1 to start)"
-  type        = number
-  default     = 1
-}
-
-variable "asg_desired_size" {
-  description = "Desired number of instances in ASG (0 to stop bastion, 1 to start)"
-  type        = number
-  default     = 1
-}
-
-variable "asg_max_size" {
-  description = "Maximum number of instances in ASG (should be 1 for bastion)"
-  type        = number
-  default     = 1
-}
-
 variable "aws_region" {
   description = "AWS region"
   type        = string

@@ -42,3 +42,8 @@ output "ecs_service_web_name" {
   value       = module.ecs_service_web.service_name
 }
 
+output "rds_security_group_id" {
+  description = "RDS Security Group ID (for bastion access)"
+  value       = aws_security_group.rds.id
+}
+

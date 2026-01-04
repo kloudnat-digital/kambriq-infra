@@ -59,8 +59,9 @@ DNS (dev.kambriq.com)
    - Uses OAC for secure access
 
 **Important**: 
-- There is no `default_root_object = "index.html"` because OpenNext SSR handles all routes dynamically via Lambda, including the root path.
-- OpenNext is configured with `streaming: false` to match Lambda Function URL's default `BUFFERED` invoke mode. If streaming is enabled, the Function URL must use `invoke_mode = "RESPONSE_STREAM"`.
+- Architecture V2 uses ECS Fargate with Next.js standalone mode (no Lambda, no OpenNext)
+- All routes are handled by the Next.js container running in ECS
+- CloudFront caches static assets but forwards all requests to ALB for SSR
 
 Outputs are consumed via:
 1. **Direct Terraform outputs**: For non-sensitive values (URLs, bucket names, etc.)

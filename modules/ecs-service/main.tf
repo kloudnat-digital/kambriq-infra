@@ -38,9 +38,10 @@ resource "aws_ecs_task_definition" "main" {
     # Init container for database migrations (only if enabled and for API service)
     var.enable_init_container && var.service_name == "api" ? [
       {
-        name      = "${var.service_name}-migrations"
-        image     = var.init_container_image != "" ? var.init_container_image : var.container_image
-        essential = false
+        name             = "${var.service_name}-migrations"
+        image            = var.init_container_image != "" ? var.init_container_image : var.container_image
+        essential        = false
+        workingDirectory = "/app"
 
         environment = [
           for key, value in var.environment_variables : {
@@ -56,7 +57,11 @@ resource "aws_ecs_task_definition" "main" {
           }
         ] : []
 
-        command = ["python", "-m", "alembic", "upgrade", "head"]
+          command = [
+            "sh",
+            "-c",
+            "cd /app && python -m alembic upgrade head && python /app/scripts/seed_database.py || exit 1"
+          ]
 
         logConfiguration = {
           logDriver = "awslogs"

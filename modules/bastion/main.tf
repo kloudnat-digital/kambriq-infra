@@ -118,7 +118,7 @@ resource "aws_eip" "bastion" {
 }
 
 # ============================================================================
-# IAM Role for Bastion (to associate Elastic IP via AWS CLI)
+# IAM Role for Bastion (to access SSM Parameter Store)
 # ============================================================================
 
 resource "aws_iam_role" "bastion" {
@@ -141,27 +141,6 @@ resource "aws_iam_role" "bastion" {
     Name = "${local.name_prefix}-role"
     Env  = var.env
   }
-}
-
-resource "aws_iam_role_policy" "bastion_eip" {
-  name = "${local.name_prefix}-eip-policy"
-  role = aws_iam_role.bastion.id
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "ec2:AssociateAddress",
-          "ec2:DescribeAddresses",
-          "ec2:DescribeInstances",
-          "ec2:DescribeNetworkInterfaces"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
 }
 
 # IAM Policy for SSM Parameter Store access
@@ -211,20 +190,16 @@ resource "aws_iam_instance_profile" "bastion" {
 }
 
 # ============================================================================
-# Launch Template for Bastion
+# EC2 Instance (Simple, without ASG)
 # ============================================================================
 
-resource "aws_launch_template" "bastion" {
-  name_prefix   = "${local.name_prefix}-"
-  image_id      = data.aws_ami.ubuntu.id
-  instance_type = var.instance_type
-  key_name      = var.bastion_key_pair_name
-
+resource "aws_instance" "bastion" {
+  ami                    = data.aws_ami.ubuntu.id
+  instance_type          = var.instance_type
+  key_name               = var.bastion_key_pair_name
   vpc_security_group_ids = [aws_security_group.bastion.id]
-
-  iam_instance_profile {
-    name = aws_iam_instance_profile.bastion.name
-  }
+  subnet_id              = var.public_subnet_id
+  iam_instance_profile   = aws_iam_instance_profile.bastion.name
 
   user_data = base64encode(<<-EOF
     #!/bin/bash
@@ -244,7 +219,14 @@ resource "aws_launch_template" "bastion" {
       unzip \
       jq \
       git \
-      postgresql-client
+      netcat-openbsd
+    
+    # Install PostgreSQL Client 14
+    echo "Installing PostgreSQL Client 14..."
+    sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+    wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add -
+    apt-get update
+    apt-get install -y postgresql-client-14
     
     # Install AWS CLI v2
     cd /tmp
@@ -254,32 +236,12 @@ resource "aws_launch_template" "bastion" {
     rm -rf aws awscliv2.zip
     aws --version
     
-    # Install Node.js 22 (or fallback to 20 LTS)
-    if curl -fsSL https://deb.nodesource.com/setup_22.x | bash -; then
-      apt-get install -y nodejs
-    else
-      # Fallback to Node.js 20 LTS
-      curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-      apt-get install -y nodejs
-    fi
-    
-    # Enable corepack for pnpm
-    corepack enable
-    
-    # Install pnpm v9
-    corepack prepare pnpm@9 --activate
-    
     # Verify installations
-    node --version
-    pnpm --version
-    git --version
     psql --version
     aws --version
     
     # Configure environment variables for ubuntu user
     # Create a script that loads DATABASE_URL from SSM on login
-    # The bastion is shared between dev and prod, so allow switching environments
-    # Note: Using $$ to escape $ for Terraform (so shell interprets variables at runtime)
     cat > /home/ubuntu/.bashrc_bastion <<BASHRC_EOF
 # Bastion-specific environment variables
 # This bastion is shared between dev and prod environments
@@ -305,7 +267,7 @@ switch_env() {
 # DATABASE_URL is loaded from SSM Parameter Store based on ENV variable
 refresh_db_url() {
   export DATABASE_URL=$$(aws ssm get-parameter \\
-    --name "/kambriq/$${ENV}/api/DATABASE_URL" \\
+    --name "/kambriq/$${ENV}/db/url" \\
     --with-decryption \\
     --region eu-central-1 \\
     --query 'Parameter.Value' \\
@@ -335,25 +297,7 @@ BASHRC_EOF
     chown ubuntu:ubuntu /home/ubuntu/.bashrc_bastion
     chmod 644 /home/ubuntu/.bashrc_bastion
     
-    # Export DATABASE_URL for dev environment at startup (default)
-    # This ensures DATABASE_URL is available immediately, not just after login
-    export ENV=dev
-    export DATABASE_URL=$$(aws ssm get-parameter \\
-      --name "/kambriq/dev/api/DATABASE_URL" \\
-      --with-decryption \\
-      --region eu-central-1 \\
-      --query 'Parameter.Value' \\
-      --output text 2>/dev/null || echo "")
-    
-    # Also add to /etc/environment for system-wide availability
-    if [ -n "$$DATABASE_URL" ]; then
-      echo "DATABASE_URL=$$DATABASE_URL" >> /etc/environment
-      echo "ENV=dev" >> /etc/environment
-      echo "AWS_REGION=eu-central-1" >> /etc/environment
-    fi
-    
     # Associate Elastic IP to this instance
-    # Get instance ID from metadata
     INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
     REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
     
@@ -363,7 +307,7 @@ BASHRC_EOF
       local attempt=1
       local wait_time=15
       
-      # Get EIP allocation ID from tag (EIP is tagged with Name = "${local.name_prefix}-eip")
+      # Get EIP allocation ID from tag
       EIP_ALLOCATION_ID=$(aws ec2 describe-addresses \
         --filters "Name=tag:Name,Values=${local.name_prefix}-eip" \
         --query 'Addresses[0].AllocationId' \
@@ -377,7 +321,7 @@ BASHRC_EOF
       
       echo "📌 Found EIP Allocation ID: $$EIP_ALLOCATION_ID"
       
-      # Wait for instance to be fully ready (network interface must be available)
+      # Wait for instance to be fully ready
       echo "⏳ Waiting for instance to be ready..."
       sleep $$wait_time
       
@@ -408,7 +352,7 @@ BASHRC_EOF
         else
           echo "⚠️  EIP association attempt $$attempt failed, retrying in $${wait_time}s..."
           sleep $$wait_time
-          wait_time=$$((wait_time * 2)) # Exponential backoff
+          wait_time=$$((wait_time * 2))
           attempt=$$((attempt + 1))
         fi
       done
@@ -426,16 +370,15 @@ BASHRC_EOF
     echo "Instance ID: $INSTANCE_ID" >> /var/log/bastion-setup-complete.log
     echo "Region: $REGION" >> /var/log/bastion-setup-complete.log
     echo "EIP association initiated (check /var/log/eip-association.log for status)" >> /var/log/bastion-setup-complete.log
+    echo "PostgreSQL Client 14 installed" >> /var/log/bastion-setup-complete.log
+    echo "AWS CLI v2 installed" >> /var/log/bastion-setup-complete.log
   EOF
   )
 
-  tag_specifications {
-    resource_type = "instance"
-    tags = {
-      Name = local.name_prefix
-      Env  = var.env
-      Type = "bastion"
-    }
+  tags = {
+    Name = local.name_prefix
+    Env  = var.env
+    Type = "bastion"
   }
 
   lifecycle {
@@ -444,62 +387,10 @@ BASHRC_EOF
 }
 
 # ============================================================================
-# Auto Scaling Group for Bastion
+# Associate Elastic IP to Instance
 # ============================================================================
 
-resource "aws_autoscaling_group" "bastion" {
-  name                = local.name_prefix
-  vpc_zone_identifier = [var.public_subnet_id]
-  min_size            = var.asg_min_size
-  max_size            = var.asg_max_size
-  desired_capacity    = var.asg_desired_size
-
-  launch_template {
-    id      = aws_launch_template.bastion.id
-    version = "$Latest"
-  }
-
-  health_check_type         = "EC2"
-  health_check_grace_period = 300
-
-  # Prevent ASG from replacing instances unnecessarily
-  protect_from_scale_in = false
-
-  tag {
-    key                 = "Name"
-    value               = local.name_prefix
-    propagate_at_launch = true
-  }
-
-  tag {
-    key                 = "Env"
-    value               = var.env
-    propagate_at_launch = true
-  }
-
-  tag {
-    key                 = "Type"
-    value               = "bastion"
-    propagate_at_launch = true
-  }
+resource "aws_eip_association" "bastion" {
+  instance_id   = aws_instance.bastion.id
+  allocation_id = aws_eip.bastion.id
 }
-
-# ============================================================================
-# Lambda Function: Auto-stop Bastion - REMOVED
-# ============================================================================
-# Auto-stop functionality is now handled via ASG capacity (min/desired/max = 0,0,0)
-# No need for Lambda + EventBridge anymore
-#
-# To stop the bastion:
-#   aws autoscaling set-desired-capacity --auto-scaling-group-name <asg-name> --desired-capacity 0
-#   Or via Terraform: set asg_min_size, asg_desired_size, asg_max_size to 0
-#
-# To start the bastion:
-#   aws autoscaling set-desired-capacity --auto-scaling-group-name <asg-name> --desired-capacity 1
-#   Or via Terraform: set asg_min_size, asg_desired_size, asg_max_size to 1
-#
-# To update user-data:
-#   1. Modify the user_data in aws_launch_template.bastion
-#   2. Force ASG to refresh instances:
-#      aws autoscaling start-instance-refresh --auto-scaling-group-name <asg-name>
-#   Or via Terraform: taint the launch template and apply

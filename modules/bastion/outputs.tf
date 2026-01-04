@@ -3,19 +3,14 @@ output "bastion_public_ip" {
   value       = aws_eip.bastion.public_ip
 }
 
-output "bastion_asg_name" {
-  description = "Auto Scaling Group name for the bastion"
-  value       = aws_autoscaling_group.bastion.name
+output "bastion_instance_id" {
+  description = "EC2 Instance ID of the bastion host"
+  value       = aws_instance.bastion.id
 }
 
 output "bastion_security_group_id" {
   description = "Security Group ID of the bastion host"
   value       = aws_security_group.bastion.id
-}
-
-output "bastion_launch_template_id" {
-  description = "Launch Template ID for the bastion"
-  value       = aws_launch_template.bastion.id
 }
 
 output "bastion_ssh_command" {
@@ -24,16 +19,11 @@ output "bastion_ssh_command" {
 }
 
 output "bastion_stop_command" {
-  description = "Command to stop the bastion (set ASG capacity to 0)"
-  value       = "aws autoscaling set-desired-capacity --auto-scaling-group-name ${aws_autoscaling_group.bastion.name} --desired-capacity 0 --region ${var.aws_region}"
+  description = "Command to stop the bastion"
+  value       = "aws ec2 stop-instances --instance-ids ${aws_instance.bastion.id} --region ${var.aws_region}"
 }
 
 output "bastion_start_command" {
-  description = "Command to start the bastion (set ASG capacity to 1)"
-  value       = "aws autoscaling set-desired-capacity --auto-scaling-group-name ${aws_autoscaling_group.bastion.name} --desired-capacity 1 --region ${var.aws_region}"
-}
-
-output "bastion_refresh_command" {
-  description = "Command to refresh ASG instances (after updating Launch Template user-data)"
-  value       = "aws autoscaling start-instance-refresh --auto-scaling-group-name ${aws_autoscaling_group.bastion.name} --region ${var.aws_region}"
+  description = "Command to start the bastion"
+  value       = "aws ec2 start-instances --instance-ids ${aws_instance.bastion.id} --region ${var.aws_region}"
 }

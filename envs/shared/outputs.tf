@@ -98,9 +98,9 @@ output "bastion_public_ip" {
   value       = var.enable_bastion ? module.bastion[0].bastion_public_ip : null
 }
 
-output "bastion_asg_name" {
-  description = "Auto Scaling Group name for the bastion (shared between dev and prod)"
-  value       = var.enable_bastion ? module.bastion[0].bastion_asg_name : null
+output "bastion_instance_id" {
+  description = "EC2 Instance ID of the bastion (shared between dev and prod)"
+  value       = var.enable_bastion ? module.bastion[0].bastion_instance_id : null
 }
 
 output "bastion_ssh_command" {
@@ -109,16 +109,11 @@ output "bastion_ssh_command" {
 }
 
 output "bastion_stop_command" {
-  description = "Command to stop the bastion (set ASG capacity to 0)"
+  description = "Command to stop the bastion"
   value       = var.enable_bastion ? module.bastion[0].bastion_stop_command : null
 }
 
 output "bastion_start_command" {
-  description = "Command to start the bastion (set ASG capacity to 1)"
+  description = "Command to start the bastion"
   value       = var.enable_bastion ? module.bastion[0].bastion_start_command : null
-}
-
-output "bastion_refresh_command" {
-  description = "Command to refresh ASG instances (after updating Launch Template user-data)"
-  value       = var.enable_bastion ? module.bastion[0].bastion_refresh_command : null
 }

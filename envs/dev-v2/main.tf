@@ -301,9 +301,14 @@ module "ecs_service_web" {
   assign_public_ip        = false
 
   environment_variables = {
-    ENV                    = local.env
+    ENV                     = local.env
     NEXT_PUBLIC_SITE_URL    = "https://dev.kambriq.com"
-    NEXT_PUBLIC_API_URL     = "https://dev.kambriq.com/api"
+    NEXT_PUBLIC_API_BASE_URL = "https://dev.kambriq.com/api"
+  }
+
+  secrets = {
+    NEXTAUTH_SECRET = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/kambriq/${local.env}/web/NEXTAUTH_SECRET"
+    NEXTAUTH_URL    = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/kambriq/${local.env}/web/NEXTAUTH_URL"
   }
 
   health_check_path = "/health"
