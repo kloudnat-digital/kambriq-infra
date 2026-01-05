@@ -2,8 +2,8 @@
 # Application Load Balancer Module - KAMBRIQ v2.0
 # ============================================================================
 # Creates ALB with HTTPS listener and routing rules:
-# - /api/* → FastAPI Target Group
-# - /* → Next.js Target Group
+# - /api/v1/* → FastAPI Target Group (FastAPI backend routes)
+# - /* → Next.js Target Group (Next.js API routes, SSR pages, static assets)
 # ============================================================================
 
 locals {
@@ -55,8 +55,8 @@ resource "aws_lb" "main" {
   security_groups    = [aws_security_group.alb.id]
   subnets            = var.public_subnet_ids
 
-  enable_deletion_protection = var.enable_deletion_protection
-  enable_http2                = true
+  enable_deletion_protection       = var.enable_deletion_protection
+  enable_http2                     = true
   enable_cross_zone_load_balancing = true
 
   tags = {
@@ -80,7 +80,7 @@ resource "aws_lb_target_group" "api" {
     unhealthy_threshold = 3
     timeout             = 5
     interval            = 30
-    path                = "/api/health"
+    path                = "/api/v1/health"
     matcher             = "200"
     protocol            = "HTTP"
   }
@@ -179,13 +179,13 @@ resource "aws_lb_listener" "http_forward" {
   }
 }
 
-# Listener Rule: /api/auth/login → FastAPI Target Group
-# CRITICAL: FastAPI login endpoint must be routed to FastAPI, not NextAuth
-# Priority 10 (highest priority for API endpoints)
+# Listener Rule: /api/v1/* → FastAPI Target Group
+# Priority 1 (highest priority - specific FastAPI routes)
 # Use HTTPS listener if certificate is available, otherwise HTTP listener
-resource "aws_lb_listener_rule" "api_auth_login" {
+# Note: Only /api/v1/* routes go to FastAPI. All other /api/* routes (like /api/countries, /api/verify/*, /api/kbs/*) go to Next.js
+resource "aws_lb_listener_rule" "api_v1" {
   listener_arn = var.certificate_arn != null && var.certificate_arn != "" ? aws_lb_listener.https[0].arn : aws_lb_listener.http_forward[0].arn
-  priority     = 10
+  priority     = 1
 
   action {
     type             = "forward"
@@ -194,100 +194,7 @@ resource "aws_lb_listener_rule" "api_auth_login" {
 
   condition {
     path_pattern {
-      values = ["/api/auth/login"]
-    }
-  }
-}
-
-# Listener Rule: /api/auth/register → FastAPI Target Group
-# Priority 11
-resource "aws_lb_listener_rule" "api_auth_register" {
-  listener_arn = var.certificate_arn != null && var.certificate_arn != "" ? aws_lb_listener.https[0].arn : aws_lb_listener.http_forward[0].arn
-  priority     = 11
-
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.api.arn
-  }
-
-  condition {
-    path_pattern {
-      values = ["/api/auth/register"]
-    }
-  }
-}
-
-# Listener Rule: /api/auth/refresh → FastAPI Target Group
-# Priority 12
-resource "aws_lb_listener_rule" "api_auth_refresh" {
-  listener_arn = var.certificate_arn != null && var.certificate_arn != "" ? aws_lb_listener.https[0].arn : aws_lb_listener.http_forward[0].arn
-  priority     = 12
-
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.api.arn
-  }
-
-  condition {
-    path_pattern {
-      values = ["/api/auth/refresh"]
-    }
-  }
-}
-
-# Listener Rule: /api/auth/logout → FastAPI Target Group
-# Priority 13
-resource "aws_lb_listener_rule" "api_auth_logout" {
-  listener_arn = var.certificate_arn != null && var.certificate_arn != "" ? aws_lb_listener.https[0].arn : aws_lb_listener.http_forward[0].arn
-  priority     = 13
-
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.api.arn
-  }
-
-  condition {
-    path_pattern {
-      values = ["/api/auth/logout"]
-    }
-  }
-}
-
-# Listener Rule: /api/auth/* → Next.js Target Group (NextAuth routes)
-# CRITICAL: NextAuth callback routes must go to Next.js
-# Priority 15 (after FastAPI auth endpoints)
-# Use HTTPS listener if certificate is available, otherwise HTTP listener
-resource "aws_lb_listener_rule" "nextauth" {
-  listener_arn = var.certificate_arn != null && var.certificate_arn != "" ? aws_lb_listener.https[0].arn : aws_lb_listener.http_forward[0].arn
-  priority     = 15
-
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.web.arn
-  }
-
-  condition {
-    path_pattern {
-      values = ["/api/auth/*"]
-    }
-  }
-}
-
-# Listener Rule: /api/* → FastAPI Target Group
-# Priority 20 (after NextAuth rule)
-# Use HTTPS listener if certificate is available, otherwise HTTP listener
-resource "aws_lb_listener_rule" "api" {
-  listener_arn = var.certificate_arn != null && var.certificate_arn != "" ? aws_lb_listener.https[0].arn : aws_lb_listener.http_forward[0].arn
-  priority     = 20
-
-  action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.api.arn
-  }
-
-  condition {
-    path_pattern {
-      values = ["/api/*"]
+      values = ["/api/v1/*"]
     }
   }
 }

@@ -61,6 +61,7 @@ resource "aws_cloudfront_distribution" "main" {
   }
 
   # Default Cache Behavior: /* (cache static, no cache SSR)
+  # CRITICAL: Forward all headers required for Next.js App Router (Server Actions, RSC)
   default_cache_behavior {
     target_origin_id       = "alb-origin"
     viewer_protocol_policy = "redirect-to-https"
@@ -69,15 +70,17 @@ resource "aws_cloudfront_distribution" "main" {
 
     forwarded_values {
       query_string = true
-      headers      = ["Host", "Accept", "Accept-Language", "Accept-Encoding", "Authorization"]
+      # Forward ALL headers for Next.js App Router compatibility
+      # This ensures Server Actions, RSC, and all navigation headers work correctly
+      headers = ["*"]
       cookies {
         forward = "all"
       }
     }
 
-    min_ttl     = 0
-    default_ttl = 3600  # Cache static assets
-    max_ttl     = 86400
+    min_ttl     = 0      # No cache for SSR pages
+    default_ttl = 0      # No cache for SSR pages (changed from 3600)
+    max_ttl     = 86400  # Allow long cache for static assets via Cache-Control
     compress    = true
   }
 

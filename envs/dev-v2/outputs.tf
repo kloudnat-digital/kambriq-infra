@@ -47,3 +47,8 @@ output "rds_security_group_id" {
   value       = aws_security_group.rds.id
 }
 
+output "cloudfront_distribution_id" {
+  description = "CloudFront Distribution ID"
+  value       = module.cloudfront_v2.distribution_id
+}
+
