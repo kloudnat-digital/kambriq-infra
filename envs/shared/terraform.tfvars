@@ -62,16 +62,6 @@ enable_s3_logs = true
 # Activer le bucket S3 pour les artifacts
 enable_s3_artifacts = true
 
-# ============================================================================
-# Bastion Configuration (shared between dev and prod)
-# ============================================================================
-# Bastion host for manual Prisma database migrations
-# The bastion is shared between dev and prod environments
-# See docs/integration/BASTION_SHARED_DEV_PROD.md for usage instructions
-
-enable_bastion        = true
-bastion_key_pair_name = "kambriq-bastion"
-allowed_ssh_cidr      = ["90.25.230.44/32", "90.53.182.41/32"]
 
 # ============================================================================
 # ACM Certificates Configuration

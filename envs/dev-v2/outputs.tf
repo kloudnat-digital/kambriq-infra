@@ -43,7 +43,7 @@ output "ecs_service_web_name" {
 }
 
 output "rds_security_group_id" {
-  description = "RDS Security Group ID (for bastion access)"
+  description = "RDS Security Group ID"
   value       = aws_security_group.rds.id
 }
 

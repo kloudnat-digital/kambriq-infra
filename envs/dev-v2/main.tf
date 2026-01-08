@@ -200,6 +200,24 @@ resource "aws_route53_record" "dev" {
 }
 
 # ============================================================================
+# Route53 Record for API Subdomain (bypass CloudFront)
+# ============================================================================
+# api.dev.kambriq.com points directly to ALB to bypass CloudFront for auth endpoints
+# This ensures stable cookie behavior and avoids CloudFront caching issues
+
+resource "aws_route53_record" "api_dev" {
+  zone_id = data.terraform_remote_state.shared.outputs.route53_zone_id
+  name    = "api.dev.kambriq.com"
+  type    = "A"
+
+  alias {
+    name                   = module.alb.alb_dns_name
+    zone_id                = module.alb.alb_zone_id
+    evaluate_target_health = true
+  }
+}
+
+# ============================================================================
 # SSM Parameter Store - Secrets
 # ============================================================================
 # IMPORTANT: SSM Parameter Store est la source unique de vérité pour tous les secrets
@@ -256,7 +274,10 @@ module "ecs_service_api" {
   container_port          = 8000
   cpu                     = 256
   memory                  = 512
-  desired_count           = 1
+  desired_count           = 2  # OPTIMIZATION: Increased from 1 to 2 for better availability and performance
+  min_capacity            = 2  # OPTIMIZATION: Minimum 2 tasks to avoid cold starts
+  max_capacity            = 10 # OPTIMIZATION: Allow scaling up to 10 tasks
+  cpu_target_value        = 60.0 # OPTIMIZATION: Scale when CPU > 60%
   subnet_ids              = data.terraform_remote_state.shared.outputs.private_subnet_ids
   security_group_ids      = [aws_security_group.ecs.id]
   target_group_arn        = module.alb.api_target_group_arn
@@ -294,7 +315,10 @@ module "ecs_service_web" {
   container_port          = 3000
   cpu                     = 256
   memory                  = 512
-  desired_count           = 1
+  desired_count           = 2  # OPTIMIZATION: Increased from 1 to 2 for better availability and performance
+  min_capacity            = 2  # OPTIMIZATION: Minimum 2 tasks to avoid cold starts
+  max_capacity            = 10 # OPTIMIZATION: Allow scaling up to 10 tasks
+  cpu_target_value        = 60.0 # OPTIMIZATION: Scale when CPU > 60%
   subnet_ids              = data.terraform_remote_state.shared.outputs.private_subnet_ids
   security_group_ids      = [aws_security_group.ecs.id]
   target_group_arn        = module.alb.web_target_group_arn
@@ -303,7 +327,7 @@ module "ecs_service_web" {
   environment_variables = {
     ENV                     = local.env
     NEXT_PUBLIC_SITE_URL    = "https://dev.kambriq.com"
-    NEXT_PUBLIC_API_BASE_URL = "https://dev.kambriq.com/api"
+    NEXT_PUBLIC_API_BASE_URL = "https://api.dev.kambriq.com"
   }
 
   secrets = {

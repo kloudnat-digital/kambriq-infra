@@ -1,18 +1,18 @@
-name: Terraform Dev (Optimized)
+name: Terraform Dev V2 (Optimized)
 
 on:
   pull_request:
-    branches: [ develop ]
+    branches: [ develop, main ]
     paths:
       - "envs/dev-v2/**"
       - "modules/**"
-      - ".github/workflows/terraform-dev*.yml"
+      - ".github/workflows/terraform-dev-v2*.yml"
   push:
-    branches: [ develop ]
+    branches: [ develop, main ]
     paths:
       - "envs/dev-v2/**"
       - "modules/**"
-      - ".github/workflows/terraform-dev*.yml"
+      - ".github/workflows/terraform-dev-v2*.yml"
   workflow_dispatch:
     inputs:
       skip_apply:
@@ -21,7 +21,7 @@ on:
         default: false
 
 jobs:
-  terraform-dev:
+  terraform-dev-v2:
     runs-on: ubuntu-latest
     env:
       AWS_REGION: eu-central-1
@@ -73,7 +73,7 @@ jobs:
         working-directory: ${{ env.WORKING_DIR }}
         run: |
           terraform show -no-color terraform.tfplan > plan.txt 2>/dev/null || echo "No plan available" > plan.txt
-          echo "## Terraform Plan Output (DEV)" >> $GITHUB_STEP_SUMMARY
+          echo "## Terraform Plan Output (DEV V2)" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           head -n 500 plan.txt >> $GITHUB_STEP_SUMMARY || echo "Plan output not available" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
@@ -162,3 +162,4 @@ jobs:
           path: ${{ env.WORKING_DIR }}/terraform-outputs.json
           retention-days: 7
           if-no-files-found: ignore
+

@@ -118,3 +118,33 @@ variable "init_container_image" {
   default     = ""
 }
 
+variable "min_capacity" {
+  description = "Minimum number of tasks for autoscaling"
+  type        = number
+  default     = 1
+}
+
+variable "max_capacity" {
+  description = "Maximum number of tasks for autoscaling"
+  type        = number
+  default     = 10
+}
+
+variable "cpu_target_value" {
+  description = "Target CPU utilization percentage for autoscaling"
+  type        = number
+  default     = 60.0
+}
+
+variable "scale_in_cooldown" {
+  description = "Cooldown period in seconds before scaling in"
+  type        = number
+  default     = 300
+}
+
+variable "scale_out_cooldown" {
+  description = "Cooldown period in seconds before scaling out"
+  type        = number
+  default     = 60
+}
+

@@ -179,6 +179,26 @@ resource "aws_lb_listener" "http_forward" {
   }
 }
 
+# Listener Rule: Host header api.dev.kambriq.com → FastAPI Target Group
+# Priority 10 (high priority - matches before path-based rules)
+# This bypasses CloudFront for API calls, ensuring stable cookie behavior
+# Use HTTPS listener if certificate is available, otherwise HTTP listener
+resource "aws_lb_listener_rule" "api_host_header" {
+  listener_arn = var.certificate_arn != null && var.certificate_arn != "" ? aws_lb_listener.https[0].arn : aws_lb_listener.http_forward[0].arn
+  priority     = 10
+
+  action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.api.arn
+  }
+
+  condition {
+    host_header {
+      values = ["api.dev.kambriq.com"]
+    }
+  }
+}
+
 # Listener Rule: /api/v1/* → FastAPI Target Group
 # Priority 1 (highest priority - specific FastAPI routes)
 # Use HTTPS listener if certificate is available, otherwise HTTP listener
