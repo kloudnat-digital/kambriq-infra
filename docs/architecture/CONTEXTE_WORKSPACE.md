@@ -1,8 +1,8 @@
 # Contexte du Workspace KAMBRIQ
 
 **Date de création :** 2025-01-27  
-**Dernière mise à jour :** 2026-01-03  
-**Version :** 4.1 (Migration V2 complétée - ECS Fargate + FastAPI + Next.js, nettoyage V1 effectué)
+**Dernière mise à jour :** 2026-01-08  
+**Version :** 4.2 (Optimisations de performance, autoscaling ECS, corrections client-side)
 
 ---
 
@@ -66,7 +66,11 @@ Infrastructure AWS gérée via Terraform pour la plateforme KAMBRIQ v2.0.
 - ✅ RDS PostgreSQL : t4g.micro, 20GB gp3
 - ✅ ECS Cluster : Fargate avec Container Insights
 - ✅ ECS Service API : FastAPI (port 8000, 256 CPU, 512 MB)
+  - **Autoscaling** : min 2, max 10 tasks, CPU > 60%
+  - **Desired count** : 2 (élimination des cold starts)
 - ✅ ECS Service Web : Next.js (port 3000, 256 CPU, 512 MB)
+  - **Autoscaling** : min 2, max 10 tasks, CPU > 60%
+  - **Desired count** : 2 (élimination des cold starts)
 - ✅ ALB : Application Load Balancer avec routing rules
 - ✅ CloudFront V2 : Distribution avec origin ALB
 - ✅ ECR : Repositories pour images Docker (kambriq-api, kambriq-web - partagés dev/prod)
@@ -211,10 +215,11 @@ kambriq/
 
 **Technologies :**
 - FastAPI (Python 3.11)
-- SQLAlchemy ORM pour PostgreSQL
+- SQLAlchemy ORM pour PostgreSQL (connection pooling: pool_size=10, max_overflow=20)
 - Alembic pour migrations
 - Pydantic pour validation
 - JWT authentication (HttpOnly cookies)
+- Distributed tracing (x-request-id middleware)
 
 **Structure :**
 ```
@@ -262,6 +267,15 @@ apps/api/
 - **KAMBRIQ Verify** : Verify land title authenticity (48-72h service)
 - **KBS (KAMBRIQ Business School)** : Certified training in Cameroonian land transactions
 - **KAMNET** : Network of certified land agents
+
+**Optimisations de Performance (2026-01-08) :**
+- ✅ Optimistic UI pour affichage immédiat après login
+- ✅ Navigation immédiate avec `window.location.href`
+- ✅ Cache client-side amélioré (staleTime: 30 min)
+- ✅ Endpoint `/me` optimisé (requêtes SQL optimisées, < 200ms p95)
+- ✅ Middleware `/health` bypass pour health checks ALB
+- ✅ Distributed tracing avec `x-request-id`
+- ✅ Performance budgets et tests Playwright automatisés
 
 **Configuration Next.js :**
 - **Mode :** Standalone (pour Docker/ECS)
@@ -757,6 +771,33 @@ aws ecs update-service \
 
 ---
 
-**Dernière mise à jour :** 2026-01-03  
-**Version :** 4.1 (Migration V2 complétée - ECS Fargate + FastAPI + Next.js, nettoyage V1 effectué)  
+## 🚀 Évolutions Récentes (2026-01-08)
+
+### Optimisations de Performance
+- ✅ **Autoscaling ECS** : Configuration min 2, max 10 tasks avec CPU > 60% (élimination des cold starts)
+- ✅ **Optimisation endpoint `/me`** : Requêtes SQL optimisées (select() au lieu de query()), latence < 200ms p95
+- ✅ **Connection pooling DB** : pool_size=10, max_overflow=20, pool_pre_ping=True
+- ✅ **Optimistic UI** : Affichage immédiat après login sans attendre le refetch API
+- ✅ **Navigation immédiate** : Utilisation de `window.location.href` pour navigation instantanée
+- ✅ **Cache client-side** : staleTime augmenté à 30 minutes, réduction des refetch inutiles
+
+### Corrections de Bugs
+- ✅ **Health checks** : Endpoint `/health` bypass middleware pour retourner 200 (au lieu de 308)
+- ✅ **Erreurs client-side** : Corrections UserMenu avec null safety et try-catch
+- ✅ **Middleware** : Protection contre redirects pour `/health` endpoint
+
+### Instrumentation & Monitoring
+- ✅ **Distributed tracing** : Middleware `x-request-id` pour traçage end-to-end (Next.js → API → CloudWatch)
+- ✅ **Performance logging** : Logs détaillés dans login, `/me`, refresh avec durées mesurées
+- ✅ **Tests de performance** : Playwright tests avec budgets automatisés (`session-perf-budget.spec.ts`)
+- ✅ **Scripts de validation** : Scripts bash pour mesurer latences, vérifier ECS state, CloudWatch metrics
+
+### Documentation
+- ✅ **Rapports de performance** : `PERF_REPORT_DEV.md`, `PERF_ROOT_CAUSE_FINAL.md`, `PERF_FIXES_APPLIED_FINAL.md`
+- ✅ **Tests E2E** : Tests Playwright pour validation de performance et stabilité
+
+---
+
+**Dernière mise à jour :** 2026-01-08  
+**Version :** 4.2 (Optimisations de performance, autoscaling ECS, corrections client-side)  
 **Maintenu par :** Équipe Infrastructure KAMBRIQ
