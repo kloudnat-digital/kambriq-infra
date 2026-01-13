@@ -2,7 +2,7 @@
 
 **✅ Migration V1 → V2 complétée** : L'ancienne stack serverless (Lambda + OpenNext + NestJS) a été supprimée.
 
-**⚠️ Important** : Ce document explique comment l'infrastructure Terraform V2 et l'application Kambriq V2 s'intègrent. Les déploiements applicatifs (mise à jour du code API + Web) sont gérés par le workflow `deploy-v2-dev.yml` dans le repository `kambriq`.
+**⚠️ Important** : Ce document explique comment l'infrastructure Terraform v3.0 et les applications Kambriq v3.0 s'intègrent. Les déploiements applicatifs (mise à jour du code API + Web) sont gérés par les scripts de déploiement dans les repositories `kambriq-api` et `kambriq-web`.
 
 Ce document explique :
 - Comment les outputs Terraform V2 sont utilisés par l'application
@@ -268,7 +268,7 @@ aws ssm put-parameter \
 
 ## CI/CD Integration
 
-**⚠️ Important** : Depuis 2025-12-07, les déploiements applicatifs sont gérés par les workflows `deploy-app-dev-optimized.yml` et `deploy-app-prod-optimized.yml` dans le repository `kambriq`. Ces workflows effectuent directement :
+**⚠️ Important** : Les déploiements applicatifs sont gérés par les scripts de déploiement dans les repositories `kambriq-api` et `kambriq-web`. Ces scripts effectuent directement :
 - Build API + Web
 - Update Lambda code (`aws lambda update-function-code`)
 - Sync S3 assets
@@ -278,7 +278,7 @@ Les secrets applicatifs sont lus depuis SSM Parameter Store au runtime par l'app
 
 ### Workflows de Déploiement Applicatif
 
-#### `deploy-app-dev-optimized.yml` et `deploy-app-prod-optimized.yml`
+#### Scripts de déploiement (`deploy-api.sh`, `deploy-web.sh`)
 
 Ces workflows dans le repository `kambriq` effectuent :
 
@@ -376,7 +376,7 @@ Next.js requires environment variables to be prefixed with `NEXT_PUBLIC_` to be 
 
 Les variables `NEXT_PUBLIC_*` sont fournies par les workflows GitHub Actions lors du build :
 
-**Dans `deploy-app-dev-optimized.yml` et `deploy-app-prod-optimized.yml`** :
+**Dans les scripts `deploy-api.sh` et `deploy-web.sh`** :
 - Les variables `NEXT_PUBLIC_*` peuvent être définies via les secrets GitHub (si nécessaire)
 - Généralement, ces valeurs sont non sensibles (URLs, domaines, etc.)
 - Le build OpenNext est effectué avec ces variables
@@ -442,7 +442,7 @@ Les secrets sont lus depuis SSM au runtime par l'application, pas injectés dans
 - Permissions pour créer/modifier les ressources AWS (Lambda, API Gateway, RDS, S3, CloudFront, SSM structure, IAM, VPC, etc.)
 - Pas besoin de permissions pour lire/écrire les secrets applicatifs dans SSM (gérés manuellement)
 
-**Pour les workflows de déploiement applicatif** (`deploy-app-dev-optimized.yml`, `deploy-app-prod-optimized.yml`) :
+**Pour les scripts de déploiement applicatif** (`deploy-api.sh`, `deploy-web.sh`) :
 - Permissions pour `lambda:UpdateFunctionCode` (mise à jour du code Lambda)
 - Permissions pour `s3:PutObject`, `s3:DeleteObject` (sync assets)
 - Permissions pour `cloudfront:CreateInvalidation` (invalidation cache)
@@ -664,7 +664,7 @@ module "frontend" {
   env                = local.env
   api_gateway_url    = module.api_gateway.api_gateway_base_url
   # Les variables artifact_bucket_name et ssr_bundle_s3_key ne sont plus utilisées
-  # Le code applicatif est déployé via deploy-app-dev-optimized.yml / deploy-app-prod-optimized.yml
+  # Le code applicatif est déployé via les scripts deploy-api.sh et deploy-web.sh dans kambriq-api et kambriq-web
   # ... other variables
 }
 ```
@@ -719,8 +719,7 @@ output "distribution_hosted_zone_id" {
 
 ## Related Documentation
 
-- [Environment Variables Documentation](../../kambriq/docs/configuration/ENVIRONMENT_VARIABLES.md) - Complete mapping and usage guide
-- [Lambda Deployment Guide](../../kambriq/docs/deployment/lambda-deployment.md) - Backend deployment details
-- [Frontend S3/CloudFront Deployment](../../kambriq/docs/deployment/frontend-s3-cloudfront.md) - Frontend deployment details
+- [DEPLOYMENT_SCRIPTS.md](../DEPLOYMENT_SCRIPTS.md) - Scripts de déploiement depuis local
+- [SSM_PARAMETER_STORE_STRATEGY.md](../security/SSM_PARAMETER_STORE_STRATEGY.md) - Stratégie de gestion des secrets
 - [Terraform Current State](../architecture/TERRAFORM_CURRENT_STATE.md) - Current architecture state vs target
 

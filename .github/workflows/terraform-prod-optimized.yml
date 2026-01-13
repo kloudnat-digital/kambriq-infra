@@ -1,4 +1,17 @@
-name: Terraform Prod (Optimized)
+name: Terraform Prod (Infrastructure)
+
+# ============================================================================
+# Workflow pour déploiement infrastructure PROD
+# ============================================================================
+# ⚠️ NOTE: L'environnement PROD utilise encore l'architecture V1 (Lambda + API Gateway).
+# Ce workflow gère l'infrastructure V1 pour PROD.
+# 
+# Pour migrer vers V3.0 (ECS Fargate), créer un nouveau stack envs/prod-v2.
+#
+# Architecture v3.0:
+# - 3 repos séparés: kambriq-aws-iac-terraform, kambriq-api, kambriq-web
+# - Infrastructure: ECS Fargate + ALB + CloudFront + RDS
+# ============================================================================
 
 on:
   workflow_dispatch:

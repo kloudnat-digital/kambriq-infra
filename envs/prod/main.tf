@@ -15,25 +15,26 @@
 #    - Backup retention : 30 jours
 #    - skip_final_snapshot = false (toujours créer un snapshot final)
 #
-# 3. frontend (modules/frontend) - NOUVEAU
+# 3. frontend (modules/frontend) - V1 (Lambda + OpenNext)
 #    - S3 bucket pour assets statiques OpenNext
 #    - CloudFront distribution
 #    - Lambda functions pour SSR (OpenNext)
-#    - Lambda SSR code deployed via deploy-app-prod.yml
+#    - ⚠️ V1 Architecture - À migrer vers V3.0 (ECS Fargate)
 #
 # 4. s3-media (modules/s3-media)
 #    - Bucket S3 pour les médias et documents
 #
 # 5. iam (modules/iam)
-#    - Rôles et policies IAM pour Lambda
+#    - Rôles et policies IAM pour Lambda (V1)
 #
-# 6. lambda-api (modules/lambda-api)
+# 6. lambda-api (modules/lambda-api) - V1
 #    - Fonction Lambda pour l'API NestJS
-#    - Lambda API code deployed via deploy-app-prod.yml
+#    - ⚠️ V1 Architecture - À migrer vers V3.0 (ECS Fargate + FastAPI)
 #    - Handler: dist/lambda.handler (NestJS Lambda adapter)
 #
-# 7. api-gateway (modules/api-gateway)
+# 7. api-gateway (modules/api-gateway) - V1
 #    - API Gateway HTTP API
+#    - ⚠️ V1 Architecture - À migrer vers V3.0 (ALB)
 #    - Support des domaines personnalisés
 #
 # Différences avec DEV :
@@ -44,9 +45,14 @@
 # ============================================================================
 # Application Code Deployment:
 # ============================================================================
-# Application code (API + Web) is deployed via workflows deploy-app-dev.yml and
-# deploy-app-prod.yml in the kambriq repository. Terraform only creates the
-# Lambda function structure with dummy placeholder code.
+# ⚠️ V1 Architecture (Lambda) - À migrer vers V3.0 (ECS Fargate)
+# 
+# Pour V3.0, le code applicatif sera déployé via:
+# - kambriq-api/scripts/deploy-api.sh prod
+# - kambriq-web/scripts/deploy-web.sh prod
+#
+# Actuellement (V1), application code is deployed via workflows dans l'ancien repo.
+# Terraform only creates the Lambda function structure with dummy placeholder code.
 #
 # Ces variables peuvent être passées via :
 #   - Workflow GitHub Actions (terraform-dev.yml, terraform-prod.yml)

@@ -59,7 +59,7 @@ kambriq-aws-iac-terraform/
   - Plan (`terraform plan`) pour vérifier les changements
   - Déclenchement : Pull Request, Push, ou Workflow Dispatch
 
-**⚠️ Important** : Les workflows Terraform gèrent uniquement l'infrastructure. Le code applicatif est déployé via `deploy-v2-dev.yml` dans le repository `kambriq`.
+**⚠️ Important** : Les workflows Terraform gèrent uniquement l'infrastructure. Le code applicatif est déployé via les scripts `deploy-api.sh` et `deploy-web.sh` dans les repositories `kambriq-api` et `kambriq-web`.
 
 ## 3. Ordre de lecture des docs existants
 
@@ -185,7 +185,7 @@ Une fois l'infrastructure shared déployée, vous pouvez déployer l'infrastruct
    - Les outputs non-sensibles sont affichés dans le résumé GitHub Actions
    - Pour voir tous les outputs : `terraform output` (localement) ou `terraform output -json` (dans le workflow)
 
-**⚠️ Note** : Le workflow Terraform ne déploie pas le code applicatif. Pour déployer le code API + Web, utiliser les workflows `deploy-app-dev.yml` et `deploy-app-prod-optimized.yml` dans le repository `kambriq`.
+**⚠️ Note** : Le workflow Terraform ne déploie pas le code applicatif. Pour déployer le code API + Web, utiliser les scripts `deploy-api.sh` et `deploy-web.sh` dans les repositories `kambriq-api` et `kambriq-web`.
 
 ### ⚠️ Important : Gestion des secrets
 
@@ -257,7 +257,7 @@ L'infrastructure prod suit le même principe que dev, mais avec des garde-fous s
 
 ## 7. Relation avec le repo applicatif (kambriq)
 
-**⚠️ Important** : Ce dépôt Terraform gère **uniquement l'infrastructure** (création/modification des ressources AWS). Le code applicatif est dans le dépôt `kambriq` et est déployé via les workflows `deploy-app-dev.yml` et `deploy-app-prod-optimized.yml`.
+**⚠️ Important** : Ce dépôt Terraform gère **uniquement l'infrastructure** (création/modification des ressources AWS). Le code applicatif est dans les dépôts `kambriq-api` et `kambriq-web` et est déployé via les scripts `deploy-api.sh` et `deploy-web.sh`.
 
 ### Séparation des Responsabilités
 
@@ -268,7 +268,7 @@ L'infrastructure prod suit le même principe que dev, mais avec des garde-fous s
 
 **Repository `kambriq` :**
 - Gère le code applicatif (API + Web)
-- Déploie le code via les workflows `deploy-app-dev.yml` et `deploy-app-prod-optimized.yml`
+- Déploie le code via les scripts `deploy-api.sh` et `deploy-web.sh` dans kambriq-api et kambriq-web
 - Effectue directement : build, package, `aws lambda update-function-code`, sync S3, invalidation CloudFront
 
 ### Flux de Déploiement
@@ -279,7 +279,7 @@ L'infrastructure prod suit le même principe que dev, mais avec des garde-fous s
    - Terraform génère des outputs (S3 bucket, CloudFront domain, API Gateway URL, Lambda function names)
 
 2. **Déployer l'application** (repo `kambriq`) :
-   - Les workflows `deploy-app-dev.yml` et `deploy-app-prod-optimized.yml` :
+   - Les scripts `deploy-api.sh` et `deploy-web.sh` :
      - Build API + Web
      - Package en ZIP
      - `aws lambda update-function-code` (API + SSR) - utilise les noms de fonctions depuis les secrets GitHub
@@ -288,7 +288,7 @@ L'infrastructure prod suit le même principe que dev, mais avec des garde-fous s
 
 ### Secrets GitHub pour les Workflows Applicatifs
 
-Les workflows `deploy-app-dev.yml` et `deploy-app-prod-optimized.yml` nécessitent les secrets suivants (dans le repository `kambriq`) :
+Les scripts `deploy-api.sh` et `deploy-web.sh` nécessitent les credentials AWS configurés localement (via `aws configure`) :
 
 | Secret | Description | Source |
 |--------|-------------|--------|

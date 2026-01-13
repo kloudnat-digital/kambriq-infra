@@ -4,7 +4,7 @@ Infrastructure Terraform modulaire pour l'application KAMBRIQ v2.0 sur AWS.
 
 **✅ Migration V1 → V2 complétée** : L'ancienne stack serverless (Lambda + OpenNext + NestJS + API Gateway) a été supprimée. L'infrastructure actuelle utilise **ECS Fargate + ALB + CloudFront + FastAPI + Next.js**.
 
-**⚠️ Important** : Ce repository gère **uniquement l'infrastructure AWS** (ECS, ALB, CloudFront, RDS, S3, SSM, IAM, VPC, etc.). Les déploiements applicatifs (mise à jour du code API + Web) sont gérés par les workflows `deploy-v2-dev.yml` dans le repository `kambriq`.
+**⚠️ Important** : Ce repository gère **uniquement l'infrastructure AWS** (ECS, ALB, CloudFront, RDS, S3, SSM, IAM, VPC, etc.). Les déploiements applicatifs (mise à jour du code API + Web) sont gérés par les scripts de déploiement dans les repositories `kambriq-api` et `kambriq-web`.
 
 ## 📚 Documentation
 
@@ -205,7 +205,7 @@ Trois workflows GitHub Actions gèrent le déploiement de l'infrastructure :
 
 #### Vue d'ensemble
 
-**⚠️ Important** : Les workflows Terraform gèrent **uniquement l'infrastructure** (création/modification des ressources AWS). Ils ne déploient **pas** le code applicatif. Les déploiements applicatifs sont effectués par les workflows `deploy-app-dev.yml` et `deploy-app-prod-optimized.yml` dans le repository `kambriq`.
+**⚠️ Important** : Les workflows Terraform gèrent **uniquement l'infrastructure** (création/modification des ressources AWS). Ils ne déploient **pas** le code applicatif. Les déploiements applicatifs sont effectués par les scripts `deploy-api.sh` et `deploy-web.sh` dans les repositories `kambriq-api` et `kambriq-web`.
 
 Les workflows Terraform sont configurés pour :
 - **Développement** : Plan/Apply sur push vers `develop` ou déclenchement manuel
@@ -290,7 +290,8 @@ Gère le stack `shared` (VPC, Route53, SES, ACM, S3 logs).
    - Ne déploie **pas** le code applicatif
 
 2. **Repository `kambriq`** :
-   - **`deploy-v2-dev.yml`** : Déploiement applicatif V2 en DEV
+   - **`deploy-api.sh`** (kambriq-api) : Déploiement API vers ECS DEV
+   - **`deploy-web.sh`** (kambriq-web) : Déploiement Web vers ECS DEV
      - Build Docker images (FastAPI + Next.js)
      - Push vers ECR
      - Update ECS services (rolling deployment)
@@ -304,7 +305,8 @@ Gère le stack `shared` (VPC, Route53, SES, ACM, S3 logs).
 
 2. **Application** (repo `kambriq`) :
    - Modifier le code API (FastAPI) ou Web (Next.js)
-   - Exécuter `deploy-v2-dev.yml` pour build, push ECR et déployer sur ECS
+   - Exécuter `./scripts/deploy-api.sh dev` (kambriq-api) pour build, push ECR et déployer sur ECS
+   - Exécuter `./scripts/deploy-web.sh dev` (kambriq-web) pour build, push ECR et déployer sur ECS
 
 Voir [`docs/architecture/`](docs/architecture/) pour la documentation complète de l'architecture V2.
 
