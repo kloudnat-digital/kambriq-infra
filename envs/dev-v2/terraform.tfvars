@@ -36,7 +36,7 @@ env = "dev"
 # Le username est hardcodé à "kambriq_admin" (peut être déplacé vers SSM si nécessaire)
 #
 # Les secrets DOIVENT être créés AVANT le déploiement Terraform via:
-#   cd kambriq-aws-iac-terraform
+#   cd kambriq-infra
 #   ./scripts/generate-and-store-secrets.sh dev
 #
 # Ou manuellement:

@@ -293,7 +293,7 @@ curl -f https://dev.kambriq.com/api/
 Utiliser le script de validation :
 
 ```bash
-cd kambriq-aws-iac-terraform
+cd kambriq-infra
 ./scripts/validate-ecs-v2.sh dev
 ```
 

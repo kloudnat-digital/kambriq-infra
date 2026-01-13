@@ -271,7 +271,7 @@ Gère le stack `shared` (VPC, Route53, SES, ACM, S3 logs).
 
 **Séparation des responsabilités :**
 
-1. **Repository `kambriq-aws-iac-terraform` (ce repo)** :
+1. **Repository `kambriq-infra` (ce repo)** :
    - Gère **uniquement l'infrastructure** via Terraform
    - Crée et configure les ressources AWS (ECS, ALB, CloudFront, RDS, S3, SSM, IAM, VPC, etc.)
    - Ne déploie **pas** le code applicatif

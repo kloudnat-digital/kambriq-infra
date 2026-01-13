@@ -124,7 +124,7 @@ RDS PostgreSQL (private subnet)
 ### Script Automatique
 
 ```bash
-cd kambriq-aws-iac-terraform
+cd kambriq-infra
 ./scripts/validate-ecs-v2.sh dev
 ```
 
@@ -159,7 +159,7 @@ Voir [`ECS_V2_VALIDATION_CHECKLIST.md`](./ECS_V2_VALIDATION_CHECKLIST.md) pour l
 - ✅ Pas de Lambda / OpenNext / API Gateway / NextAuth
 - ✅ Host canonical `dev.kambriq.com`
 - ✅ ALB unique avec routing rules
-- ✅ Multi-repo structure (kambriq-api, kambriq-web, kambriq-aws-iac-terraform)
+- ✅ Multi-repo structure (kambriq-api, kambriq-web, kambriq-infra)
 - ✅ IaC Terraform
 - ✅ ECS Fargate (serverless containers)
 

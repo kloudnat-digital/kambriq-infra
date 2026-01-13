@@ -8,7 +8,7 @@
 
 ## 🎯 Objectif
 
-Nettoyer complètement le repository `kambriq-aws-iac-terraform` pour supprimer toutes les références obsolètes et adapter les workflows GitHub Actions à la nouvelle architecture v3.0 (3 repos séparés).
+Nettoyer complètement le repository `kambriq-infra` pour supprimer toutes les références obsolètes et adapter les workflows GitHub Actions à la nouvelle architecture v3.0 (3 repos séparés).
 
 ---
 

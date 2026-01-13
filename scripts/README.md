@@ -123,7 +123,7 @@ Valide la configuration Terraform (testing).
 ### 1. Stack Shared (OBLIGATOIRE EN PREMIER)
 
 ```bash
-cd kambriq-aws-iac-terraform
+cd kambriq-infra
 ./scripts/deploy-terraform.sh shared
 ```
 

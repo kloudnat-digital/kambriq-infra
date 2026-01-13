@@ -19,7 +19,7 @@ Ce document décrit les scripts de déploiement disponibles pour déployer l'inf
 
 **Usage :**
 ```bash
-cd kambriq-aws-iac-terraform
+cd kambriq-infra
 ./scripts/deploy-terraform.sh [shared|dev-v2|prod|all]
 ```
 
@@ -207,7 +207,7 @@ cd kambriq-web
 
 ```bash
 # 1. Déployer shared
-cd kambriq-aws-iac-terraform
+cd kambriq-infra
 ./scripts/deploy-terraform.sh shared
 
 # 2. Configurer manuellement (après shared) :
@@ -301,7 +301,7 @@ aws ecs describe-services \
 
 **Solution :** Déployez d'abord l'infrastructure avec Terraform :
 ```bash
-cd kambriq-aws-iac-terraform
+cd kambriq-infra
 ./scripts/deploy-terraform.sh dev-v2
 ```
 

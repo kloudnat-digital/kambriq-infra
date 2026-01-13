@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Références PROD V1** : Nettoyage de toutes les références à l'ancienne infrastructure PROD
 
 ### Added
-- **Architecture v3.0** : Migration vers 3 repos séparés (kambriq-aws-iac-terraform, kambriq-api, kambriq-web)
+- **Architecture v3.0** : Migration vers 3 repos séparés (kambriq-infra, kambriq-api, kambriq-web)
 - **Script unifié de déploiement** : `scripts/deploy-terraform.sh` avec auto-approve et validation
 - **Module SSM app parameters** : Création automatique des paramètres SSM pour applications
 - **Documentation sécurité CTO-GRADE** : 

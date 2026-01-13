@@ -26,7 +26,7 @@ Ce dépôt gère l'infrastructure AWS pour la plateforme KAMBRIQ v2.0 via Terraf
 ## 2. Structure du repo
 
 ```
-kambriq-aws-iac-terraform/
+kambriq-infra/
 ├── modules/              # Modules Terraform réutilisables
 │   ├── shared/          # Ressources partagées (VPC, Route53, SES, ACM)
 │   ├── rds-postgres/    # Base de données PostgreSQL
@@ -82,7 +82,7 @@ L'infrastructure partagée doit être déployée **EN PREMIER** avant les enviro
 1. **Cloner le repo** :
    ```bash
    git clone <repo-url>
-   cd kambriq-aws-iac-terraform
+   cd kambriq-infra
    ```
 
 2. **Vérifier la configuration du backend Terraform** :
@@ -261,7 +261,7 @@ L'infrastructure prod suit le même principe que dev, mais avec des garde-fous s
 
 ### Séparation des Responsabilités
 
-**Repository `kambriq-aws-iac-terraform` (ce repo) :**
+**Repository `kambriq-infra` (ce repo) :**
 - Gère l'infrastructure via Terraform
 - Crée et configure les ressources AWS (Lambda functions, API Gateway, RDS, S3, CloudFront, SSM structure, IAM, VPC, etc.)
 - Ne déploie **pas** le code applicatif

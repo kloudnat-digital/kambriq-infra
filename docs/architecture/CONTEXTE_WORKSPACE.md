@@ -10,7 +10,7 @@
 
 Le workspace KAMBRIQ contient **3 repositories distincts** qui travaillent ensemble pour déployer une plateforme complète sur AWS :
 
-1. **`kambriq-aws-iac-terraform`** - Infrastructure as Code (Terraform)
+1. **`kambriq-infra`** - Infrastructure as Code (Terraform)
 2. **`kambriq-api`** - Backend API (FastAPI + SQLAlchemy + Alembic) - **Refait from scratch**
 3. **`kambriq-web`** - Frontend (Next.js sans NextAuth) - **Refait from scratch**
 
@@ -18,7 +18,7 @@ Le workspace KAMBRIQ contient **3 repositories distincts** qui travaillent ensem
 
 ---
 
-## 🏗️ Repository 1 : `kambriq-aws-iac-terraform`
+## 🏗️ Repository 1 : `kambriq-infra`
 
 ### Description
 Infrastructure AWS gérée via Terraform pour la plateforme KAMBRIQ v3.0.
@@ -358,7 +358,7 @@ npm run test:e2e
 
 ### 1. Séparation des Responsabilités
 
-**Repository `kambriq-aws-iac-terraform` :**
+**Repository `kambriq-infra` :**
 - Gère **uniquement l'infrastructure** via Terraform
 - Crée et configure les ressources AWS (ECS, ALB, CloudFront, RDS, S3, SSM, IAM, VPC, etc.)
 - Ne déploie **pas** le code applicatif
@@ -375,7 +375,7 @@ npm run test:e2e
 
 ### 2. Flux de Déploiement
 
-**Infrastructure (repo `kambriq-aws-iac-terraform`) :**
+**Infrastructure (repo `kambriq-infra`) :**
 1. Modifier le code Terraform si nécessaire
 2. Exécuter `scripts/deploy-terraform.sh` pour mettre à jour l'infrastructure
 3. Terraform crée/modifie les ressources AWS (ECS Cluster, Services, ALB, CloudFront, RDS, etc.)
@@ -582,7 +582,7 @@ npm run test:e2e
 
 ## 📚 Documentation Complémentaire
 
-### Repo Infrastructure (`kambriq-aws-iac-terraform`)
+### Repo Infrastructure (`kambriq-infra`)
 - `README.md` - Vue d'ensemble
 - `docs/architecture/CONTEXTE_WORKSPACE.md` - Ce document
 - `docs/setup/TERRAFORM_USAGE.md` - Guide d'usage Terraform
