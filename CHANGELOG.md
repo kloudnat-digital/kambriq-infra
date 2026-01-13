@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2026-01-13] - Migration v3.0 - Architecture 3 repos séparés
 
+### Removed
+- **Stack PROD V1** : Suppression complète de `envs/prod/` (architecture Lambda obsolète)
+- **Workflow PROD V1** : Suppression de `terraform-prod-optimized.yml` (workflow obsolète)
+- **Références PROD V1** : Nettoyage de toutes les références à l'ancienne infrastructure PROD
+
 ### Added
 - **Architecture v3.0** : Migration vers 3 repos séparés (kambriq-aws-iac-terraform, kambriq-api, kambriq-web)
 - **Script unifié de déploiement** : `scripts/deploy-terraform.sh` avec auto-approve et validation
@@ -17,7 +22,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Documentation déploiement** :
   - `docs/DEPLOYMENT_SCRIPTS.md` - Guide scripts de déploiement
   - `docs/DEPLOYMENT_STATUS.md` - Statut déploiement
-  - `docs/SETUP_COMPLETE.md` - Setup complet
   - `docs/CLEANUP_COMPLETE.md` - Rapport de nettoyage
 
 ### Changed
@@ -33,10 +37,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Workflows obsolètes** :
   - `terraform-dev-optimized.yml` (doublon)
   - `terraform-validate-v2.yml` (redondant)
+  - `terraform-prod-optimized.yml` (PROD V1 obsolète)
 - **Scripts obsolètes** :
   - `terraform-deploy-dev-v2.sh` (remplacé par `deploy-terraform.sh`)
   - `terraform-deploy-shared.sh` (remplacé par `deploy-terraform.sh`)
   - `validate-ecs-v2.sh` (validation via workflows)
+- **Stacks obsolètes** :
+  - `envs/prod/` (PROD V1 - architecture Lambda obsolète)
 - **Documentation obsolète** :
   - `docs/archive/DEPLOYMENT_FIX_SUMMARY.md` (références ancien monorepo)
 - **Références NextAuth** : Supprimées du module SSM (nouveau repo n'utilise pas NextAuth)

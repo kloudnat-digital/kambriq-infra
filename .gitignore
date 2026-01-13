@@ -79,17 +79,4 @@ dummy.zip
 .DS_Store
 Thumbs.db
 
-# ============================================================================
-# Node.js (pour pre-commit hooks)
-# ============================================================================
-
-# Dependencies (générées automatiquement)
-node_modules/
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Optionnel : package-lock.json peut être commité pour reproductibilité
-# Si vous préférez ne pas le commiter, décommentez la ligne suivante :
-# package-lock.json
 

@@ -4,5 +4,5 @@ This directory contains documentation about repository maintenance, cleanup, and
 
 ## Contents
 
-- **[CLEANUP_SUMMARY.md](./CLEANUP_SUMMARY.md)** - Summary of repository cleanup activities, including what was moved to legacy and what remains active.
+- **[CLEANUP_COMPLETE.md](../CLEANUP_COMPLETE.md)** - Complete report of repository cleanup activities (v3.0 migration).
 

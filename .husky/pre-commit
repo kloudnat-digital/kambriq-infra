@@ -1,8 +1,0 @@
-#!/usr/bin/env sh
-. "$(dirname -- "$0")/_/husky.sh"
-
-# Auto-update context docs (can modify *.md and re-stage)
-node scripts/update-contexte-workspace.js
-
-# Validate markdown consistency after regeneration
-node scripts/check-markdown.js

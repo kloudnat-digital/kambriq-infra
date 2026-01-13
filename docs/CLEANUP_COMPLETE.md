@@ -191,7 +191,6 @@ docs/
 ├── setup/                          ✅ Guides setup (mis à jour)
 ├── DEPLOYMENT_SCRIPTS.md          ✅ Scripts de déploiement
 ├── DEPLOYMENT_STATUS.md           ✅ Statut déploiement
-├── SETUP_COMPLETE.md              ✅ Setup complet
 └── CLEANUP_COMPLETE.md            ✅ Ce document
 ```
 

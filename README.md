@@ -149,7 +149,7 @@ terraform plan  # Lit les outputs de shared via remote_state
 terraform apply
 ```
 
-**⚠️ Note** : Les anciens stacks `envs/dev` et `envs/prod` (V1) ont été supprimés. Utilisez uniquement `envs/dev-v2` et `envs/prod-v2`.
+**⚠️ Note** : Les anciens stacks `envs/dev` et `envs/prod` (V1) ont été supprimés. Utilisez uniquement `envs/dev-v2`. Le stack `envs/prod-v2` sera créé lors de la migration de la production vers V3.0.
 
 ### Ressources par stack
 
@@ -209,7 +209,7 @@ Trois workflows GitHub Actions gèrent le déploiement de l'infrastructure :
 
 Les workflows Terraform sont configurés pour :
 - **Développement** : Plan/Apply sur push vers `develop` ou déclenchement manuel
-- **Production** : Déploiement manuel uniquement pour sécurité maximale
+- **Production** : Workflow à créer pour prod-v2 (quand prod-v2 sera créé)
 - **Validation** : Format check, validation, et plan avant chaque apply
 
 ### Workflows Terraform
@@ -249,13 +249,11 @@ Gère le stack `shared` (VPC, Route53, SES, ACM, S3 logs).
 - Apply automatique sur push vers main (si fichiers modifiés dans `envs/shared/` ou `modules/`)
 
 **Secrets requis :**
-- `AWS_ACCESS_KEY_ID_PROD`
-- `AWS_SECRET_ACCESS_KEY_PROD`
-- `AWS_REGION_PROD`
+- `AWS_ACCESS_KEY_ID_PROD` (quand prod-v2 sera créé)
+- `AWS_SECRET_ACCESS_KEY_PROD` (quand prod-v2 sera créé)
+- `AWS_REGION_PROD` (quand prod-v2 sera créé)
 
-**Note** : Les secrets applicatifs (DB password, JWT secrets) ne sont **pas** passés via GitHub Secrets. Ils sont gérés via SSM Parameter Store / Secrets Manager et configurés directement dans les variables d'environnement Lambda.
-
-> **⚠️ Sécurité** : Le workflow prod nécessite une action explicite pour appliquer les changements. Toujours revoir le plan avant d'appliquer en production.
+**Note** : Les secrets applicatifs (DB password, JWT secrets) ne sont **pas** passés via GitHub Secrets. Ils sont gérés via SSM Parameter Store et configurés directement dans les variables d'environnement ECS.
 
 #### 3. Workflow `terraform-shared.yml` - Infrastructure partagée
 
@@ -268,17 +266,6 @@ Gère le stack `shared` (VPC, Route53, SES, ACM, S3 logs).
 **Comportement :**
 - Plan automatique sur les PRs (commentaire sur la PR)
 - Apply automatique sur push vers main (si fichiers modifiés dans `envs/shared/` ou `modules/`)
-
-**Pour lancer un apply en production :**
-
-1. Aller dans l'onglet "Actions" du repository
-2. Sélectionner "Terraform Prod (infra only)"
-3. Cliquer sur "Run workflow"
-4. Choisir la branche
-5. ⚠️ Approbation manuelle requise (si configurée dans GitHub Environment `production`)
-6. Cliquer sur "Run workflow"
-
-⚠️ **Note** : Pour la production, il est recommandé d'activer l'approbation manuelle dans GitHub (Settings → Environments → production).
 
 ### Intégration avec le repo applicatif
 
@@ -588,7 +575,7 @@ Le repository utilise **3 workflows séparés** pour une meilleure organisation 
 
 1. **`terraform-shared.yml`** : Gère uniquement le stack shared
 2. **`terraform-dev-optimized.yml`** : Gère uniquement le stack dev
-3. **`terraform-prod-optimized.yml`** : Gère uniquement le stack prod (déclenchement manuel)
+3. **`terraform-prod.yml`** : À créer pour gérer le stack prod-v2 (quand prod-v2 sera créé)
 
 Chaque workflow :
 - Vérifie le format avec `terraform fmt -check`
