@@ -7,11 +7,10 @@
 - **Cause**: Images Docker construites pour ARM64 (Mac M1/M2) alors qu'ECS Fargate utilise AMD64
 - **Solution**: Ajout de `--platform linux/amd64` dans tous les Dockerfiles et scripts de build
 - **Fichiers modifiés**:
-  - `kambriq/apps/api/Dockerfile`
-  - `kambriq/apps/web/Dockerfile`
-  - `kambriq/scripts/deploy-local.sh`
-  - `kambriq/.github/workflows/deploy-dev.yml`
-  - `kambriq/.github/workflows/deploy-prod.yml`
+  - `kambriq-api/Dockerfile` (nouveau repo)
+  - `kambriq-web/Dockerfile` (nouveau repo)
+  - `kambriq-api/scripts/deploy-api.sh` (nouveau repo)
+  - `kambriq-web/scripts/deploy-web.sh` (nouveau repo)
 
 ### 2. **Erreur d'Authentification PostgreSQL** ✅ CORRIGÉ
 - **Symptôme**: `password authentication failed for user "kambriq_admin"`
@@ -31,8 +30,8 @@
 - **Cause**: Le code supprimait tous les paramètres de requête de l'URL, y compris `sslmode=require`
 - **Solution**: Modification du code pour préserver `sslmode` tout en supprimant uniquement `schema=public`
 - **Fichiers modifiés**:
-  - `kambriq/apps/api/app/config.py` (méthodes `__init__` et `_load_from_ssm`)
-  - `kambriq/apps/api/app/infrastructure/database/session.py` (fonction `_create_engine`)
+  - `kambriq-api/src/infrastructure/config/` (nouveau repo - architecture DDD)
+  - `kambriq-api/src/infrastructure/database/` (nouveau repo - architecture DDD)
 
 ### 4. **URL de Base de Données dans SSM** ✅ CORRIGÉ
 - **Action**: Mise à jour de `/kambriq/dev/db/url` pour inclure `?sslmode=require`

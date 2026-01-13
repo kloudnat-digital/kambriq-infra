@@ -159,7 +159,7 @@ Voir [`ECS_V2_VALIDATION_CHECKLIST.md`](./ECS_V2_VALIDATION_CHECKLIST.md) pour l
 - ✅ Pas de Lambda / OpenNext / API Gateway / NextAuth
 - ✅ Host canonical `dev.kambriq.com`
 - ✅ ALB unique avec routing rules
-- ✅ Monorepo structure
+- ✅ Multi-repo structure (kambriq-api, kambriq-web, kambriq-aws-iac-terraform)
 - ✅ IaC Terraform
 - ✅ ECS Fargate (serverless containers)
 

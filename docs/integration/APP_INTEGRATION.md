@@ -39,8 +39,8 @@ DNS (dev.kambriq.com)
         → /api/* → FastAPI Target Group (port 8000)
         → /* → Next.js Target Group (port 3000)
           → ECS Services (Fargate)
-            → FastAPI container (apps/api)
-            → Next.js container (apps/web)
+            → FastAPI container (kambriq-api repository)
+            → Next.js container (kambriq-web repository)
 ```
 
 1. **CloudFront Distribution** - CDN + SSL termination:

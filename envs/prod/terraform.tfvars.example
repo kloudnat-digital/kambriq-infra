@@ -24,15 +24,31 @@
 # Région AWS où déployer l'infrastructure
 aws_region = "eu-central-1"
 
-# Mot de passe maître de la base de données PostgreSQL
-# ⚠️  PRODUCTION : Utiliser AWS Secrets Manager ou un autre gestionnaire de secrets
-# ⚠️  Utiliser un mot de passe fort (min. 16 caractères, majuscules, minuscules, chiffres, symboles)
-db_password = "CHANGE_ME_STRONG_PASSWORD"
-
-# Secret JWT pour l'authentification de l'API
-# ⚠️  PRODUCTION : Utiliser AWS Secrets Manager ou un autre gestionnaire de secrets
-# ⚠️  Utiliser une clé secrète forte et aléatoire (min. 32 caractères recommandés)
-jwt_secret = "CHANGE_ME_JWT_SECRET_KEY"
+# ============================================================================
+# IMPORTANT: Les secrets sont gérés UNIQUEMENT via SSM Parameter Store
+# ============================================================================
+# 
+# Les secrets DOIVENT être créés dans SSM AVANT le déploiement Terraform :
+#   ./scripts/generate-and-store-secrets.sh prod
+#
+# Ou manuellement :
+#   aws ssm put-parameter \
+#     --name /kambriq/prod/db/password \
+#     --value "YOUR_STRONG_PASSWORD" \
+#     --type SecureString \
+#     --region eu-central-1
+#
+#   aws ssm put-parameter \
+#     --name /kambriq/prod/api/jwt_secret \
+#     --value "YOUR_JWT_SECRET" \
+#     --type SecureString \
+#     --region eu-central-1
+#
+# Terraform lira automatiquement ces secrets depuis SSM.
+# Voir docs/security/SSM_PARAMETER_STORE_STRATEGY.md pour plus de détails.
+#
+# ⚠️  NE JAMAIS stocker de secrets dans ce fichier terraform.tfvars
+# ============================================================================
 
 # ============================================================================
 # SES Configuration

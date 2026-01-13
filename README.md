@@ -527,8 +527,8 @@ La configuration est déjà définie dans `envs/*/backend.tf`.
 - [x] ✅ Infrastructure V2 créée (ECS Fargate, ALB, CloudFront V2)
 - [x] ✅ Modules Terraform V2 créés (ecs-cluster, alb, cloudfront-v2, iam-roles-ecs, ecs-service)
 - [x] ✅ Configuration `envs/dev-v2/` créée
-- [x] ✅ FastAPI backend implémenté (apps/api)
-- [x] ✅ Next.js classic frontend (apps/web, no OpenNext)
+- [x] ✅ FastAPI backend implémenté (kambriq-api repository)
+- [x] ✅ Next.js classic frontend (kambriq-web repository, no NextAuth)
 - [x] ✅ CI/CD workflows V2 créés
 - [x] ✅ Documentation V2 complète
 

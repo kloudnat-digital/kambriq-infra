@@ -288,16 +288,18 @@ module "ecs_service_api" {
   init_container_image    = "${module.ecr_api.repository_url}:latest"
 
   environment_variables = {
-    ENV         = local.env
-    AWS_REGION  = var.aws_region
+    ENV           = local.env
+    AWS_REGION    = var.aws_region
+    FRONTEND_URL  = "https://dev.kambriq.com"
+    CORS_ORIGINS  = "https://dev.kambriq.com,https://api.dev.kambriq.com"
   }
 
   secrets = {
-    DATABASE_URL = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/kambriq/${local.env}/db/url"
+    DATABASE_URL = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/kambriq/${local.env}/api/DATABASE_URL"
     JWT_SECRET   = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/kambriq/${local.env}/api/JWT_SECRET"
   }
 
-  health_check_path = "/api/health"
+  health_check_path = "/health"
   aws_region        = var.aws_region
 }
 
@@ -330,10 +332,8 @@ module "ecs_service_web" {
     NEXT_PUBLIC_API_BASE_URL = "https://api.dev.kambriq.com"
   }
 
-  secrets = {
-    NEXTAUTH_SECRET = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/kambriq/${local.env}/web/NEXTAUTH_SECRET"
-    NEXTAUTH_URL    = "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/kambriq/${local.env}/web/NEXTAUTH_URL"
-  }
+  # No NextAuth secrets needed - using JWT with HttpOnly cookies
+  secrets = {}
 
   health_check_path = "/health"
   aws_region        = var.aws_region
@@ -341,4 +341,67 @@ module "ecs_service_web" {
 
 # Data source for account ID
 data "aws_caller_identity" "current" {}
+
+# ============================================================================
+# SSM Application Parameters
+# ============================================================================
+# Create SSM parameters for application runtime configuration
+# These parameters are read by the application at runtime from SSM
+
+# JWT secret from SSM (legacy lowercase path)
+data "aws_ssm_parameter" "jwt_secret" {
+  name = "/kambriq/${local.env}/api/jwt_secret"
+}
+
+module "ssm_app_parameters" {
+  source = "../../modules/ssm-app-parameters"
+
+  env = local.env
+
+  # Database connection details
+  db_host     = module.rds_postgres.db_host
+  db_port     = module.rds_postgres.db_port
+  db_name     = module.rds_postgres.db_name
+  db_username = local.db_username
+  db_password = data.aws_ssm_parameter.db_password.value
+
+  # JWT secret (read from existing SSM - will create /kambriq/{env}/api/JWT_SECRET from /kambriq/{env}/api/jwt_secret)
+  jwt_secret = data.aws_ssm_parameter.jwt_secret.value
+
+  # Frontend URL from CloudFront
+  frontend_url = "https://dev.kambriq.com"
+
+  # SES sender email
+  ses_from_email = "noreply@kambriq.com"
+
+  # Additional API KV (String) - Default values for dev
+  default_visitor_role_id                    = "550e8400-e29b-41d4-a716-446655440002"
+  password_reset_token_expiration_hours      = 24
+  referral_code_expiration_hours             = 24
+  referral_invitation_token_expiration_hours = 24
+  jwt_expires_in                             = 900
+  jwt_refresh_expires_in                     = 604800
+  jwt_algorithm                              = "HS256"
+  cookie_secure                              = "true"
+  cookie_same_site                           = "strict"
+  cookie_domain                              = ".kambriq.com"
+  verification_cost                          = 99
+  aws_ses_to_admin_contact                   = "contact@kambriq.com"
+  contact_whatsapp_number                    = "+237670000000"
+  paypal_environment                         = "sandbox"
+
+  # Web KV (public) - stored under /kambriq/dev/web/*
+  api_gateway_base_url                   = "https://api.dev.kambriq.com"
+  frontend_cloudfront_domain             = module.cloudfront_v2.distribution_domain_name
+  next_public_jwt_expires_in             = 900
+  next_public_jwt_refresh_buffer_seconds = 180
+  next_public_stale_time                 = 300
+  next_public_refetch_interval           = 300
+  next_public_paypal_client_id           = "" # Keep empty by default (set manually in SSM later)
+
+  # Web runtime parameters (SSR) - Not used in new architecture (no NextAuth)
+  # nextauth_url and nextauth_secret variables removed - not used in new architecture
+  api_base_url = "https://api.dev.kambriq.com"
+  # jwt_expires_in is already defined above in Additional API KV section
+}
 
