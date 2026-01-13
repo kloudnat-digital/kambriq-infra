@@ -60,7 +60,7 @@ resource "aws_ecs_task_definition" "main" {
           command = [
             "sh",
             "-c",
-            "cd /app && python -m alembic upgrade head && python /app/scripts/seed_database.py || exit 1"
+            "cd /app && python -m alembic upgrade head && python /app/scripts/seed_database.py && (python /app/scripts/fix_test_users_roles.py || echo 'Warning: fix_test_users_roles.py failed, continuing...')"
           ]
 
         logConfiguration = {
