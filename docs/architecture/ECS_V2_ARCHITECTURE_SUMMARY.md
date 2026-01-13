@@ -124,7 +124,7 @@ RDS PostgreSQL (private subnet)
 ### Script Automatique
 
 ```bash
-cd kambriq-aws-iac-terraform
+cd kambriq-infra
 ./scripts/validate-ecs-v2.sh dev
 ```
 

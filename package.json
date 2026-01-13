@@ -1,5 +1,5 @@
 {
-  "name": "kambriq-aws-iac-terraform",
+  "name": "kambriq-infra",
   "version": "1.0.0",
   "private": true,
   "description": "KAMBRIQ AWS Infrastructure as Code (Terraform)",

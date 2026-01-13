@@ -103,7 +103,7 @@ Vérification de la connexion au RDS via bastion.
 ### 1. Stack Shared (OBLIGATOIRE EN PREMIER)
 
 ```bash
-cd kambriq-aws-iac-terraform
+cd kambriq-infra
 ./scripts/terraform-deploy-shared.sh
 ```
 

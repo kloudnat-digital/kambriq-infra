@@ -21,7 +21,7 @@ AWS_REGION="${AWS_REGION:-eu-central-1}"
 # Vérifier que nous sommes dans le bon répertoire
 if [ ! -d "$TERRAFORM_DIR" ]; then
     echo -e "${RED}✗ Répertoire $TERRAFORM_DIR introuvable${NC}"
-    echo "   Exécutez ce script depuis la racine du repo kambriq-aws-iac-terraform"
+    echo "   Exécutez ce script depuis la racine du repo kambriq-infra"
     exit 1
 fi
 

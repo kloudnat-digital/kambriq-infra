@@ -9,7 +9,7 @@ echo ""
 
 # Check if we're in the right directory
 if [ ! -d "envs/shared" ]; then
-    echo "❌ Error: This script must be run from kambriq-aws-iac-terraform directory"
+    echo "❌ Error: This script must be run from kambriq-infra directory"
     exit 1
 fi
 

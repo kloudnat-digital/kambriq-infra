@@ -10,12 +10,12 @@
 
 Le workspace KAMBRIQ contient **2 repositories distincts** qui travaillent ensemble pour déployer une plateforme complète sur AWS :
 
-1. **`kambriq-aws-iac-terraform`** - Infrastructure as Code (Terraform)
+1. **`kambriq-infra`** - Infrastructure as Code (Terraform)
 2. **`kambriq`** - Application monorepo (API + Web)
 
 ---
 
-## 🏗️ Repository 1 : `kambriq-aws-iac-terraform`
+## 🏗️ Repository 1 : `kambriq-infra`
 
 ### Description
 Infrastructure AWS gérée via Terraform pour la plateforme KAMBRIQ v2.0.
@@ -342,7 +342,7 @@ docker-compose -f docker-compose.local.yml down
 
 ### 1. Séparation des Responsabilités
 
-**Repository `kambriq-aws-iac-terraform` :**
+**Repository `kambriq-infra` :**
 - Gère **uniquement l'infrastructure** via Terraform
 - Crée et configure les ressources AWS (ECS, ALB, CloudFront, RDS, S3, SSM, IAM, VPC, etc.)
 - Ne déploie **pas** le code applicatif
@@ -354,7 +354,7 @@ docker-compose -f docker-compose.local.yml down
 
 ### 2. Flux de Déploiement
 
-**Infrastructure (repo `kambriq-aws-iac-terraform`) :**
+**Infrastructure (repo `kambriq-infra`) :**
 1. Modifier le code Terraform si nécessaire
 2. Exécuter `terraform-dev-v2.yml` pour mettre à jour l'infrastructure
 3. Terraform crée/modifie les ressources AWS (ECS Cluster, Services, ALB, CloudFront, RDS, etc.)
@@ -409,7 +409,7 @@ docker-compose -f docker-compose.local.yml down
    - Workflows `deploy-dev.yml` et `deploy-prod.yml` : Déploiement direct du code applicatif (API + Web)
    - Build Docker images → Push ECR (kambriq-api, kambriq-web) → Update ECS services
 
-2. **Infrastructure (repo `kambriq-aws-iac-terraform`) :**
+2. **Infrastructure (repo `kambriq-infra`) :**
    - Scripts Terraform (`scripts/terraform-deploy.sh`) : Gestion de l'infrastructure uniquement
    - Créent/modifient les ressources AWS (ECS, ALB, CloudFront, RDS, S3, SSM, IAM, VPC, etc.)
    - Génèrent les outputs nécessaires (noms ECS, buckets, IDs CloudFront, etc.)
@@ -514,13 +514,13 @@ docker-compose -f docker-compose.local.yml down
 
 ## 🚀 Flux de Déploiement Complet
 
-### 1. Infrastructure (repo `kambriq-aws-iac-terraform`)
+### 1. Infrastructure (repo `kambriq-infra`)
 
 **Ordre obligatoire :**
 
 ```bash
 # 1. Déployer shared (EN PREMIER)
-cd kambriq-aws-iac-terraform/envs/shared
+cd kambriq-infra/envs/shared
 terraform init
 terraform plan
 terraform apply
@@ -547,7 +547,7 @@ terraform apply
 
 ```bash
 # Générer et stocker les secrets
-cd kambriq-aws-iac-terraform
+cd kambriq-infra
 ./scripts/generate-and-store-secrets.sh all
 ```
 
@@ -666,7 +666,7 @@ aws ecs update-service \
 
 ## 📚 Documentation Complémentaire
 
-### Repo Infrastructure (`kambriq-aws-iac-terraform`)
+### Repo Infrastructure (`kambriq-infra`)
 - `README.md` - Vue d'ensemble
 - `docs/architecture/ARCHITECTURE_V2_DETAILED.md` - Architecture détaillée V2
 - `docs/architecture/ECS_FARGATE_CTO_CLARIFICATION.md` - Clarification ECS Fargate
@@ -707,7 +707,7 @@ aws ecs update-service \
 
 ## 🔄 Workflows GitHub Actions - Résumé
 
-### Infrastructure (`kambriq-aws-iac-terraform`)
+### Infrastructure (`kambriq-infra`)
 
 | Workflow | Déclencheur | Actions |
 |----------|-------------|---------|
