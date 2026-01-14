@@ -1,17 +1,20 @@
 # Contexte du Workspace KAMBRIQ
 
 **Date de création :** 2025-01-27  
-**Dernière mise à jour :** 2026-01-03  
-**Version :** 4.1 (Migration V2 complétée - ECS Fargate + FastAPI + Next.js, nettoyage V1 effectué)
+**Dernière mise à jour :** 2026-01-13  
+**Version :** 5.0 (Architecture 3 repos séparés - kambriq-infra, kambriq-api, kambriq-web)
 
 ---
 
 ## 📋 Vue d'ensemble
 
-Le workspace KAMBRIQ contient **2 repositories distincts** qui travaillent ensemble pour déployer une plateforme complète sur AWS :
+Le workspace KAMBRIQ contient **3 repositories distincts** qui travaillent ensemble pour déployer une plateforme complète sur AWS :
 
 1. **`kambriq-infra`** - Infrastructure as Code (Terraform)
-2. **`kambriq`** - Application monorepo (API + Web)
+2. **`kambriq-api`** - Backend API (FastAPI + SQLAlchemy + Alembic) - **Refait from scratch**
+3. **`kambriq-web`** - Frontend (Next.js sans NextAuth) - **Refait from scratch**
+
+**⚠️ IMPORTANT :** Les repos `kambriq-api` et `kambriq-web` sont **complètement nouveaux** et **refaits from scratch**. Aucun lien avec l'ancien code monorepo `kambriq`.
 
 ---
 
@@ -153,7 +156,7 @@ Voir `envs/prod/MIGRATION_TO_V2.md` pour le plan de migration.
 - **Fichiers surveillés :** `envs/dev-v2/**`, `modules/**`
 - **Caractéristiques :** 
   - Gère **uniquement l'infrastructure** (ECS, ALB, CloudFront, RDS, ECR, SSM, IAM, VPC, etc.)
-  - **Ne déploie pas le code applicatif** (fait par `deploy-v2-dev.yml` dans le repo `kambriq`)
+  - **Ne déploie pas le code applicatif** (fait par les scripts `deploy-api.sh` et `deploy-web.sh` dans les repos `kambriq-api` et `kambriq-web`)
   - Plan sauvegardé comme artifact
 
 #### `terraform-prod-optimized.yml` ⚠️ V1 (À migrer)
@@ -164,7 +167,7 @@ Voir `envs/prod/MIGRATION_TO_V2.md` pour le plan de migration.
   - Protection via GitHub Environment `production` (approbation manuelle possible)
   - Plan sauvegardé comme artifact (rétention 30 jours)
   - Gère **uniquement l'infrastructure** (Lambda, API Gateway, RDS, S3, CloudFront, SSM, IAM, VPC, etc.)
-  - **Ne déploie pas le code applicatif** (fait par `deploy-app-prod-optimized.yml` dans le repo `kambriq`)
+  - **Ne déploie pas le code applicatif** (fait par les scripts `deploy-api.sh` et `deploy-web.sh` dans les repos `kambriq-api` et `kambriq-web`)
 
 ### Backend Terraform
 - **Type :** S3 backend
@@ -192,149 +195,89 @@ Voir `envs/prod/MIGRATION_TO_V2.md` pour le plan de migration.
 
 ---
 
-## 💻 Repository 2 : `kambriq`
+## 💻 Repository 2 : `kambriq-api`
 
 ### Description
-Monorepo contenant l'application KAMBRIQ v2.0 avec backend et frontend.
+Backend API KAMBRIQ v3.0 - FastAPI avec architecture DDD (Domain-Driven Design).
 
-### Structure
-```
-kambriq/
-├── apps/
-│   ├── api/        # Backend FastAPI + SQLAlchemy
-│   └── web/        # Frontend Next.js (standalone)
-├── docs/           # Documentation additionnelle
-└── scripts/        # Scripts utilitaires
-```
+**⚠️ IMPORTANT :** Ce repository est **complètement nouveau** et **refait from scratch**. Aucun lien avec l'ancien code monorepo `kambriq`.
 
-### API (`apps/api/`) - Backend FastAPI
-
-**Technologies :**
-- FastAPI (Python 3.11)
+### Technologies
+- FastAPI (Python 3.11+)
 - SQLAlchemy ORM pour PostgreSQL
 - Alembic pour migrations
 - Pydantic pour validation
 - JWT authentication (HttpOnly cookies)
+- Architecture DDD (Domain-Driven Design)
 
-**Structure :**
+### Structure
 ```
-apps/api/
-├── app/
-│   ├── main.py           # Application FastAPI
-│   ├── models/           # SQLAlchemy models
-│   ├── schemas/          # Pydantic schemas
-│   ├── routers/          # API routes
-│   ├── services/         # Business logic
-│   └── core/             # Configuration, security, database
-├── alembic/              # Alembic migrations
-├── requirements.txt      # Python dependencies
+kambriq-api/
+├── src/
+│   ├── domain/          # Entities, repositories (interfaces)
+│   ├── application/     # Use cases, DTOs
+│   ├── infrastructure/  # Repositories implémentations, external services
+│   └── presentation/    # FastAPI routers, guards, filters
+├── alembic/             # Alembic migrations
+├── tests/               # Tests (unit, integration, e2e)
+├── scripts/             # Scripts de déploiement
+│   ├── deploy-api.sh    # Script de déploiement
+│   └── run-tests.sh     # Script de tests
+├── requirements.txt     # Python dependencies
 └── Dockerfile           # Multi-stage Docker build
 ```
 
-**Déploiement :**
-- **Local :** `uvicorn app.main:app --reload --port 8000`
+### Déploiement
+- **Local :** `uvicorn src.main:app --reload --port 8000`
 - **Docker :** Image Docker multi-stage, port 8000
 - **ECS Fargate :** Container sur ECS Service, port 8000
 
-**Scripts principaux :**
-- `uvicorn app.main:app --reload` - Démarre en mode watch (http://localhost:8000)
+### Scripts principaux
+- `./scripts/deploy-api.sh [dev|prod]` - Déploiement vers ECS
+- `./scripts/run-tests.sh [unit|integration|e2e|all]` - Lance les tests
 - `alembic upgrade head` - Applique les migrations
-- `alembic revision --autogenerate -m "Description"` - Crée une nouvelle migration
 - `pytest` - Lance les tests
 
-**Docker Image :**
-- Build : `docker build -f apps/api/Dockerfile -t kambriq-api:latest .`
-- Push ECR : Automatique via GitHub Actions workflow `deploy-v2-dev.yml`
+---
 
-### Web (`apps/web/`) - Frontend Next.js
+## 🌐 Repository 3 : `kambriq-web`
 
-**Technologies :**
+### Description
+Frontend KAMBRIQ v3.0 - Next.js 16 avec React 19.
+
+**⚠️ IMPORTANT :** Ce repository est **complètement nouveau** et **refait from scratch**. Aucun lien avec l'ancien code monorepo `kambriq`.
+
+### Technologies
 - Next.js 16 (App Router, standalone mode)
 - React 19
 - TypeScript
-- Tailwind CSS 4
-- i18next & react-i18next (FR/EN)
-- React Query (@tanstack/react-query)
-- shadcn/ui
+- Tailwind CSS
+- Pas de NextAuth (JWT avec cookies HttpOnly côté API)
 
-**Fonctionnalités :**
-- **KAMBRIQ Lands** : Browse and purchase verified land titles in Cameroon
-- **KAMBRIQ Verify** : Verify land title authenticity (48-72h service)
-- **KBS (KAMBRIQ Business School)** : Certified training in Cameroonian land transactions
-- **KAMNET** : Network of certified land agents
-
-**Configuration Next.js :**
-- **Mode :** Standalone (pour Docker/ECS)
-- **Output :** `standalone` (pas d'OpenNext)
-- **Port :** 3000
-- **Image optimization :** Activée (pas de Lambda@Edge)
-
-**Scripts principaux :**
-- `pnpm dev` - Serveur de dev (http://localhost:3000)
-- `pnpm build` - Build Next.js (standalone mode)
-- `pnpm start` - Démarre le serveur Next.js en mode production
-- `pnpm lint` - Lint du code
-- `pnpm check-types` - Vérification TypeScript
-
-**Docker Image :**
-- Build : `docker build -f apps/web/Dockerfile -t kambriq-web:latest .`
-- Push ECR : Automatique via GitHub Actions workflow `deploy-v2-dev.yml`
-
-### CI/CD - GitHub Actions
-
-#### `ci.yml` - CI Global
-**Déclencheurs :**
-- `push` et `pull_request` sur `develop` et `main`
-
-**Actions :**
-- **Job `api`** : Install, lint, test (pytest)
-- **Job `web`** : Install, lint, check-types
-
-**Rôle :** CI global pour validation du code avant merge
-
-#### `deploy-dev.yml` ⭐ V2 - Déploiement DEV
-**Déclencheurs :**
-- Push sur `develop` (si fichiers modifiés dans `apps/`)
-- `workflow_dispatch` (manuel)
-
-**Jobs :**
-1. `get-version` : Lit la version depuis `VERSION` ou input
-2. `build-and-push-api` : Build et push image Docker API vers ECR (tags: vX.Y.Z, latest, dev-latest)
-3. `build-and-push-web` : Build et push image Docker Web vers ECR (tags: vX.Y.Z, latest, dev-latest)
-4. `deploy` : Update ECS services (force new deployment) et attend stabilisation
-
-**Rôle :** Déploiement automatique vers ECS Fargate (dev)
-
-#### `deploy-prod.yml` ⭐ V2 - Déploiement PROD
-**Déclencheurs :**
-- Push sur `main` (si fichiers modifiés dans `apps/`)
-- `workflow_dispatch` avec confirmation manuelle
-
-**Jobs :**
-- Identique à `deploy-dev.yml` mais pour production (tags: vX.Y.Z, latest, prod-latest)
-- Protection via GitHub Environment `production`
-
-**Rôle :** Déploiement manuel vers ECS Fargate (prod)
-
-### Scripts Utilitaires
-
-#### Déploiement Local (Docker Compose)
-```bash
-# Démarrer tous les services (PostgreSQL + API + Web)
-docker-compose -f docker-compose.local.yml up -d
-
-# Voir les logs
-docker-compose -f docker-compose.local.yml logs -f
-
-# Arrêter
-docker-compose -f docker-compose.local.yml down
+### Structure
+```
+kambriq-web/
+├── app/                 # Next.js App Router
+├── src/                 # Code source (components, lib, etc.)
+├── public/              # Assets statiques
+├── scripts/             # Scripts de déploiement
+│   ├── deploy-web.sh    # Script de déploiement
+│   └── run-tests.sh     # Script de tests
+├── e2e/                 # Tests E2E (Playwright)
+└── package.json         # Node.js dependencies
 ```
 
-**URLs locales :**
-- Frontend : http://localhost:3000
-- API : http://localhost:8000
-- API Docs : http://localhost:8000/docs
-- PostgreSQL : localhost:5432
+### Déploiement
+- **Local :** `pnpm dev` (http://localhost:3000)
+- **Docker :** Image Docker multi-stage, port 3000
+- **ECS Fargate :** Container sur ECS Service, port 3000
+
+### Scripts principaux
+- `./scripts/deploy-web.sh [dev|prod]` - Déploiement vers ECS
+- `./scripts/run-tests.sh [lint|types|e2e|all]` - Lance les tests
+- `pnpm dev` - Serveur de développement
+- `pnpm build` - Build Next.js (standalone mode)
+- `pnpm lint` - Lint du code
 
 ---
 
@@ -347,10 +290,15 @@ docker-compose -f docker-compose.local.yml down
 - Crée et configure les ressources AWS (ECS, ALB, CloudFront, RDS, S3, SSM, IAM, VPC, etc.)
 - Ne déploie **pas** le code applicatif
 
-**Repository `kambriq` :**
-- Gère le code applicatif (API + Web)
-- Déploie le code via les workflows `deploy-v2-dev.yml` et `deploy-v2-prod.yml`
-- Effectue directement : build Docker, push ECR, update ECS services
+**Repository `kambriq-api` :**
+- Gère le code backend API (FastAPI)
+- Déploie via script `scripts/deploy-api.sh [dev|prod]`
+- Effectue : build Docker, push ECR, update ECS service API
+
+**Repository `kambriq-web` :**
+- Gère le code frontend (Next.js)
+- Déploie via script `scripts/deploy-web.sh [dev|prod]`
+- Effectue : build Docker, push ECR, update ECS service Web
 
 ### 2. Flux de Déploiement
 
@@ -359,14 +307,15 @@ docker-compose -f docker-compose.local.yml down
 2. Exécuter `terraform-dev-v2.yml` pour mettre à jour l'infrastructure
 3. Terraform crée/modifie les ressources AWS (ECS Cluster, Services, ALB, CloudFront, RDS, etc.)
 
-**Application (repo `kambriq`) :**
-1. Modifier le code API ou Web
-2. Exécuter `deploy-v2-dev.yml` ou `deploy-v2-prod.yml` pour déployer le nouveau code
-3. Les workflows effectuent directement :
-   - Build Docker images (API + Web)
+**Application (repos `kambriq-api` et `kambriq-web`) :**
+1. Modifier le code API ou Web dans le repository correspondant
+2. Exécuter les scripts de déploiement :
+   - `kambriq-api/scripts/deploy-api.sh [dev|prod]`
+   - `kambriq-web/scripts/deploy-web.sh [dev|prod]`
+3. Les scripts effectuent directement :
+   - Build Docker image
    - Push vers ECR
-   - Update ECS services (force new deployment)
-   - Smoke tests
+   - Update ECS service (force new deployment)
 
 ### 3. Terraform Outputs → Variables d'environnement applicatif
 
@@ -405,19 +354,19 @@ docker-compose -f docker-compose.local.yml down
 
 **Flux de déploiement :**
 
-1. **Application (repo `kambriq`) :**
-   - Workflows `deploy-dev.yml` et `deploy-prod.yml` : Déploiement direct du code applicatif (API + Web)
-   - Build Docker images → Push ECR (kambriq-api, kambriq-web) → Update ECS services
+1. **Application (repos `kambriq-api` et `kambriq-web`) :**
+   - Scripts de déploiement : `deploy-api.sh` et `deploy-web.sh`
+   - Build Docker images → Push ECR → Update ECS services
 
 2. **Infrastructure (repo `kambriq-infra`) :**
-   - Scripts Terraform (`scripts/terraform-deploy.sh`) : Gestion de l'infrastructure uniquement
+   - Scripts Terraform (`scripts/deploy-terraform.sh`) : Gestion de l'infrastructure uniquement
    - Créent/modifient les ressources AWS (ECS, ALB, CloudFront, RDS, S3, SSM, IAM, VPC, etc.)
    - Génèrent les outputs nécessaires (noms ECS, buckets, IDs CloudFront, etc.)
 
 **Ordre recommandé :**
 1. Déployer infrastructure `shared` → `dev-v2` → `prod-v2` (quand migré)
 2. Créer les secrets dans SSM Parameter Store
-3. Déployer application via workflows `deploy-v2-dev.yml` / `deploy-v2-prod.yml`
+3. Déployer application via scripts `deploy-api.sh` et `deploy-web.sh`
 
 ---
 
@@ -551,48 +500,22 @@ cd kambriq-infra
 ./scripts/generate-and-store-secrets.sh all
 ```
 
-### 3. Application (repo `kambriq`)
+### 3. Application (repos `kambriq-api` et `kambriq-web`)
 
-**Déploiement automatique (GitHub Actions) :**
-- Push sur `develop` → Workflow `deploy-dev.yml` se déclenche automatiquement
-- Push sur `main` → Workflow `deploy-prod.yml` disponible (workflow_dispatch)
-- Build Docker images → Push ECR (kambriq-api, kambriq-web) → Update ECS services
+**Déploiement via scripts :**
+- Utiliser les scripts de déploiement dans chaque repository
+- Build Docker images → Push ECR → Update ECS services
 
-**Déploiement manuel :**
+**Déploiement API :**
 ```bash
-# Utiliser le script de déploiement local
-cd kambriq
-ENVIRONMENT=dev ./scripts/deploy-local.sh
+cd kambriq-api
+./scripts/deploy-api.sh [dev|prod]
+```
 
-# Ou manuellement :
-# Build et push API
-cd apps/api
-docker build -f Dockerfile -t kambriq-api:latest .
-docker tag kambriq-api:latest \
-  051551940370.dkr.ecr.eu-central-1.amazonaws.com/kambriq-api:latest
-docker push \
-  051551940370.dkr.ecr.eu-central-1.amazonaws.com/kambriq-api:latest
-
-# Build et push Web
-cd ../web
-docker build -f Dockerfile -t kambriq-web:latest .
-docker tag kambriq-web:latest \
-  051551940370.dkr.ecr.eu-central-1.amazonaws.com/kambriq-web:latest
-docker push \
-  051551940370.dkr.ecr.eu-central-1.amazonaws.com/kambriq-web:latest
-
-# Update ECS services
-aws ecs update-service \
-  --cluster kambriq-dev-cluster \
-  --service kambriq-api-dev \
-  --force-new-deployment \
-  --region eu-central-1
-
-aws ecs update-service \
-  --cluster kambriq-dev-cluster \
-  --service kambriq-web-dev \
-  --force-new-deployment \
-  --region eu-central-1
+**Déploiement Web :**
+```bash
+cd kambriq-web
+./scripts/deploy-web.sh [dev|prod]
 ```
 
 ---
@@ -676,12 +599,15 @@ aws ecs update-service \
 - `docs/setup/ACM_SES_MANUAL_SETUP.md` - Configuration manuelle SES/ACM
 - `docs/setup/ROUTE53_DNS_SETUP.md` - Configuration DNS Route53
 
-### Repo Application (`kambriq`)
-- `README.md` - Vue d'ensemble monorepo
-- `docs/deployment/DEPLOYMENT_ENVIRONMENTS.md` - Guide déploiement multi-environnements
-- `docs/deployment/QUICK_START.md` - Guide démarrage rapide
-- `docs/deployment/PIPELINE_OVERVIEW_V2.md` - Vue d'ensemble CI/CD V2
-- `docs/architecture/` - Guides d'architecture V2
+### Repo API (`kambriq-api`)
+- `README.md` - Vue d'ensemble backend API
+- `scripts/deploy-api.sh` - Script de déploiement
+- `scripts/run-tests.sh` - Script de tests
+
+### Repo Web (`kambriq-web`)
+- `README.md` - Vue d'ensemble frontend
+- `scripts/deploy-web.sh` - Script de déploiement
+- `scripts/run-tests.sh` - Script de tests
 
 ---
 
@@ -716,13 +642,11 @@ aws ecs update-service \
 | `scripts/terraform-deploy.sh` ⭐ V2 | Script manuel | Infrastructure DEV/PROD V2 (ne déploie pas le code applicatif) |
 | `terraform-prod-optimized.yml` ⚠️ V1 | Workflow Dispatch | Infrastructure PROD V1 uniquement (ne déploie pas le code applicatif) + protection environnement `production` |
 
-### Application (`kambriq`)
+### Application (`kambriq-api` et `kambriq-web`)
 
-| Workflow | Déclencheur | Actions |
-|----------|-------------|---------|
-| `ci.yml` | Push/PR sur `develop`, `main` | Lint, test, check-types (API + Web) |
-| `deploy-dev.yml` ⭐ V2 | Push sur `develop` (auto), Workflow Dispatch (manuel) | Déploiement applicatif DEV V2 : build Docker, push ECR (kambriq-api, kambriq-web), update ECS services |
-| `deploy-prod.yml` ⭐ V2 | Push sur `main` (auto), Workflow Dispatch avec confirmation | Déploiement applicatif PROD V2 : même logique que dev, avec protection `production` |
+**Déploiement :**
+- Scripts de déploiement dans chaque repository : `deploy-api.sh` et `deploy-web.sh`
+- Build Docker images → Push ECR → Update ECS services
 
 ---
 
@@ -742,21 +666,22 @@ aws ecs update-service \
 - [ ] Vérifier que les secrets sont dans SSM Parameter Store
 
 ### Application
-- [ ] Configurer secrets GitHub Actions (AWS credentials pour workflows applicatifs)
-- [ ] Tester workflow `ci.yml` (lint, test, check-types)
-- [ ] Tester déploiement applicatif DEV (workflow `deploy-dev.yml`)
-- [ ] Tester déploiement applicatif PROD (workflow `deploy-prod.yml`)
+- [ ] Configurer secrets GitHub Actions (AWS credentials pour scripts de déploiement)
+- [ ] Tester déploiement API DEV (`kambriq-api/scripts/deploy-api.sh dev`)
+- [ ] Tester déploiement Web DEV (`kambriq-web/scripts/deploy-web.sh dev`)
+- [ ] Tester déploiement API PROD (`kambriq-api/scripts/deploy-api.sh prod`)
+- [ ] Tester déploiement Web PROD (`kambriq-web/scripts/deploy-web.sh prod`)
 - [ ] Vérifier que l'application fonctionne avec l'infrastructure
 
 ### Intégration Infrastructure/Application
-- [ ] Vérifier que l'infrastructure est déployée (via `scripts/terraform-deploy.sh`)
+- [ ] Vérifier que l'infrastructure est déployée (via `scripts/deploy-terraform.sh`)
 - [ ] Vérifier que les ECS services existent (créés par Terraform)
-- [ ] Tester déploiement du code applicatif (via `deploy-dev.yml` / `deploy-prod.yml` ou `scripts/deploy-local.sh`)
+- [ ] Tester déploiement du code applicatif (via `deploy-api.sh` et `deploy-web.sh`)
 - [ ] Vérifier que les containers ECS utilisent le nouveau code
 - [ ] Vérifier que les health checks passent
 
 ---
 
-**Dernière mise à jour :** 2026-01-03  
-**Version :** 4.1 (Migration V2 complétée - ECS Fargate + FastAPI + Next.js, nettoyage V1 effectué)  
+**Dernière mise à jour :** 2026-01-13  
+**Version :** 5.0 (Architecture 3 repos séparés - kambriq-infra, kambriq-api, kambriq-web)  
 **Maintenu par :** Équipe Infrastructure KAMBRIQ
