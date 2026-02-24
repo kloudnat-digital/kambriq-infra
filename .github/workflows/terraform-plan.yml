@@ -53,4 +53,24 @@ jobs:
         run: terraform -chdir="envs/${{ steps.env.outputs.env_name }}" init -reconfigure
 
       - name: Terraform plan
-        run: terraform -chdir="envs/${{ steps.env.outputs.env_name }}" plan
+        run: |
+          set -euo pipefail
+          terraform -chdir="envs/${{ steps.env.outputs.env_name }}" plan -no-color | tee plan.txt
+
+      - name: Plan summary
+        if: always()
+        run: |
+          {
+            echo "## Terraform plan (${{ steps.env.outputs.env_name }})"
+            echo
+            echo '```'
+            cat plan.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload plan output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-${{ steps.env.outputs.env_name }}
+          path: plan.txt
