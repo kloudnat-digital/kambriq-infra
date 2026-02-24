@@ -21,7 +21,7 @@ module "ecs_service_api" {
   task_execution_role_arn = module.ecs_cluster.task_execution_role_arn
   task_role_arn           = module.iam_roles_ecs.task_api_role_arn
   container_image         = "${module.ecr_api.repository_url}:latest"
-  container_port          = 8000
+  container_port          = 3000
   cpu                     = 256
   memory                  = 512
   subnet_ids              = data.terraform_remote_state.shared.outputs.private_subnet_ids
@@ -34,7 +34,8 @@ module "ecs_service_api" {
   }
   
   secrets = {
-    DATABASE_URL = "arn:aws:ssm:eu-central-1:xxx:parameter/kambriq/dev/db/url"
+    DATABASE_URL_CORE = "arn:aws:ssm:eu-central-1:xxx:parameter/kambriq/dev/api/DATABASE_URL_CORE"
+    DATABASE_URL_KBS  = "arn:aws:ssm:eu-central-1:xxx:parameter/kambriq/dev/api/DATABASE_URL_KBS"
   }
 }
 ```

@@ -6,6 +6,11 @@
 
 locals {
   name_prefix = "${var.project_name}-${var.env}-${var.service_name}"
+  default_init_container_command = [
+    "sh",
+    "-c",
+    "npx prisma migrate deploy --schema prisma/core/schema.prisma && npx prisma migrate deploy --schema prisma/kbs/schema.prisma",
+  ]
 }
 
 # Data sources for ARN construction
@@ -57,11 +62,7 @@ resource "aws_ecs_task_definition" "main" {
           }
         ] : []
 
-          command = [
-            "sh",
-            "-c",
-            "cd /app && python -m alembic upgrade head && python /app/scripts/seed_database.py || exit 1"
-          ]
+        command = length(var.init_container_command) > 0 ? var.init_container_command : local.default_init_container_command
 
         logConfiguration = {
           logDriver = "awslogs"

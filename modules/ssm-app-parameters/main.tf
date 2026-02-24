@@ -4,30 +4,113 @@
 # This module creates SSM Parameter Store parameters for application runtime
 # configuration. Values are constructed from Terraform outputs and variables.
 #
-# Parameters created:
-# - /kambriq/{env}/api/DATABASE_URL (SecureString) - Constructed from RDS outputs
-# - /kambriq/{env}/api/JWT_SECRET (SecureString) - From SSM or variable
-# - /kambriq/{env}/api/FRONTEND_URL (String) - From CloudFront output
-# - /kambriq/{env}/api/SES_FROM_EMAIL (String) - From SES variable
+# Parameters created (API):
+# - /kambriq/{env}/api/DATABASE_URL_CORE (SecureString)
+# - /kambriq/{env}/api/DATABASE_URL_KBS (SecureString)
+# - /kambriq/{env}/api/JWT_SECRET (SecureString)
+# - /kambriq/{env}/api/FRONTEND_URL (String)
+# - /kambriq/{env}/api/SES_FROM_EMAIL (String)
+# - Additional runtime parameters required by the NestJS API
 # ============================================================================
 
 locals {
-  # Construct DATABASE_URL from RDS components
+  # Construct DATABASE_URLs from RDS components
   # Format: postgresql://{username}:{password}@{host}:{port}/{database}?schema=public
-  database_url = "postgresql://${var.db_username}:${var.db_password}@${var.db_host}:${var.db_port}/${var.db_name}?schema=public"
+  database_url_core = "postgresql://${var.db_username}:${var.db_password}@${var.db_host}:${var.db_port}/${var.db_core_name}?schema=public"
+  database_url_kbs  = "postgresql://${var.db_username}:${var.db_password}@${var.db_host}:${var.db_port}/${var.db_kbs_name}?schema=public"
+
+  database_url_kamnet    = var.db_kamnet_name != "" ? "postgresql://${var.db_username}:${var.db_password}@${var.db_host}:${var.db_port}/${var.db_kamnet_name}?schema=public" : ""
+  database_url_lands     = var.db_lands_name != "" ? "postgresql://${var.db_username}:${var.db_password}@${var.db_host}:${var.db_port}/${var.db_lands_name}?schema=public" : ""
+  database_url_verify    = var.db_verify_name != "" ? "postgresql://${var.db_username}:${var.db_password}@${var.db_host}:${var.db_port}/${var.db_verify_name}?schema=public" : ""
+  database_url_valuation = var.db_valuation_name != "" ? "postgresql://${var.db_username}:${var.db_password}@${var.db_host}:${var.db_port}/${var.db_valuation_name}?schema=public" : ""
 }
 
 # ============================================================================
-# DATABASE_URL - Complete PostgreSQL connection string
+# DATABASE_URL_CORE - Core PostgreSQL connection string
 # ============================================================================
-resource "aws_ssm_parameter" "database_url" {
-  name  = "/kambriq/${var.env}/api/DATABASE_URL"
+resource "aws_ssm_parameter" "database_url_core" {
+  name  = "/kambriq/${var.env}/api/DATABASE_URL_CORE"
   type  = "SecureString"
-  value = local.database_url
+  value = local.database_url_core
 
-  description = "Complete PostgreSQL connection string for ${var.env} environment"
+  description = "Core PostgreSQL connection string for ${var.env} environment"
   tags = {
-    Name        = "kambriq-api-database-url-${var.env}"
+    Name        = "kambriq-api-database-url-core-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+}
+
+# ============================================================================
+# DATABASE_URL_KBS - KBS PostgreSQL connection string
+# ============================================================================
+resource "aws_ssm_parameter" "database_url_kbs" {
+  name  = "/kambriq/${var.env}/api/DATABASE_URL_KBS"
+  type  = "SecureString"
+  value = local.database_url_kbs
+
+  description = "KBS PostgreSQL connection string for ${var.env} environment"
+  tags = {
+    Name        = "kambriq-api-database-url-kbs-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+}
+
+# ============================================================================
+# Optional domain databases (created only when names are provided)
+# ============================================================================
+resource "aws_ssm_parameter" "database_url_kamnet" {
+  count = var.db_kamnet_name != "" ? 1 : 0
+  name  = "/kambriq/${var.env}/api/DATABASE_URL_KAMNET"
+  type  = "SecureString"
+  value = local.database_url_kamnet
+
+  description = "Kamnet PostgreSQL connection string for ${var.env} environment"
+  tags = {
+    Name        = "kambriq-api-database-url-kamnet-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+}
+
+resource "aws_ssm_parameter" "database_url_lands" {
+  count = var.db_lands_name != "" ? 1 : 0
+  name  = "/kambriq/${var.env}/api/DATABASE_URL_LANDS"
+  type  = "SecureString"
+  value = local.database_url_lands
+
+  description = "Lands PostgreSQL connection string for ${var.env} environment"
+  tags = {
+    Name        = "kambriq-api-database-url-lands-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+}
+
+resource "aws_ssm_parameter" "database_url_verify" {
+  count = var.db_verify_name != "" ? 1 : 0
+  name  = "/kambriq/${var.env}/api/DATABASE_URL_VERIFY"
+  type  = "SecureString"
+  value = local.database_url_verify
+
+  description = "Verify PostgreSQL connection string for ${var.env} environment"
+  tags = {
+    Name        = "kambriq-api-database-url-verify-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+}
+
+resource "aws_ssm_parameter" "database_url_valuation" {
+  count = var.db_valuation_name != "" ? 1 : 0
+  name  = "/kambriq/${var.env}/api/DATABASE_URL_VALUATION"
+  type  = "SecureString"
+  value = local.database_url_valuation
+
+  description = "Valuation PostgreSQL connection string for ${var.env} environment"
+  tags = {
+    Name        = "kambriq-api-database-url-valuation-${var.env}"
     Environment = var.env
     Service     = "api"
   }
@@ -51,7 +134,7 @@ resource "aws_ssm_parameter" "jwt_secret" {
   type = "SecureString"
   # Use provided value, or try to read from existing SSM (lowercase), or placeholder
   value = var.jwt_secret != "" ? var.jwt_secret : (
-    length(data.aws_ssm_parameter.jwt_secret_existing) > 0
+    var.use_existing_jwt_secret && length(data.aws_ssm_parameter.jwt_secret_existing) > 0
     ? data.aws_ssm_parameter.jwt_secret_existing[0].value
     : "CHANGE-ME-GENERATE-A-SECRET-MIN-32-CHARS"
   )
@@ -69,6 +152,232 @@ resource "aws_ssm_parameter" "jwt_secret" {
   }
 }
 
+# ============================================================================
+# Core API runtime parameters (NestJS)
+# ============================================================================
+resource "aws_ssm_parameter" "node_env" {
+  name  = "/kambriq/${var.env}/api/NODE_ENV"
+  type  = "String"
+  value = var.node_env
+
+  description = "Runtime environment for ${var.env}"
+  tags = {
+    Name        = "kambriq-api-node-env-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+}
+
+resource "aws_ssm_parameter" "port" {
+  name  = "/kambriq/${var.env}/api/PORT"
+  type  = "String"
+  value = tostring(var.port)
+
+  description = "API listening port for ${var.env}"
+  tags = {
+    Name        = "kambriq-api-port-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+}
+
+resource "aws_ssm_parameter" "api_prefix" {
+  name  = "/kambriq/${var.env}/api/API_PREFIX"
+  type  = "String"
+  value = var.api_prefix
+
+  description = "API prefix for ${var.env}"
+  tags = {
+    Name        = "kambriq-api-prefix-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+}
+
+resource "aws_ssm_parameter" "jwt_access_expiration" {
+  name  = "/kambriq/${var.env}/api/JWT_ACCESS_EXPIRATION"
+  type  = "String"
+  value = var.jwt_access_expiration
+
+  description = "JWT access token lifetime for ${var.env}"
+  tags = {
+    Name        = "kambriq-api-jwt-access-expiration-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+}
+
+resource "aws_ssm_parameter" "jwt_refresh_expiration" {
+  name  = "/kambriq/${var.env}/api/JWT_REFRESH_EXPIRATION"
+  type  = "String"
+  value = var.jwt_refresh_expiration
+
+  description = "JWT refresh token lifetime for ${var.env}"
+  tags = {
+    Name        = "kambriq-api-jwt-refresh-expiration-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+}
+
+resource "aws_ssm_parameter" "cors_origins" {
+  name  = "/kambriq/${var.env}/api/CORS_ORIGINS"
+  type  = "String"
+  value = var.cors_origins
+
+  description = "CORS allowed origins for ${var.env}"
+  tags = {
+    Name        = "kambriq-api-cors-origins-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+}
+
+resource "aws_ssm_parameter" "throttle_ttl" {
+  name  = "/kambriq/${var.env}/api/THROTTLE_TTL"
+  type  = "String"
+  value = tostring(var.throttle_ttl)
+
+  description = "Rate limit window (ms) for ${var.env}"
+  tags = {
+    Name        = "kambriq-api-throttle-ttl-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+}
+
+resource "aws_ssm_parameter" "throttle_limit" {
+  name  = "/kambriq/${var.env}/api/THROTTLE_LIMIT"
+  type  = "String"
+  value = tostring(var.throttle_limit)
+
+  description = "Rate limit max requests for ${var.env}"
+  tags = {
+    Name        = "kambriq-api-throttle-limit-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+}
+
+resource "aws_ssm_parameter" "redis_host" {
+  name  = "/kambriq/${var.env}/api/REDIS_HOST"
+  type  = "String"
+  value = var.redis_host
+
+  description = "Redis host for ${var.env}"
+  tags = {
+    Name        = "kambriq-api-redis-host-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+}
+
+resource "aws_ssm_parameter" "redis_port" {
+  name  = "/kambriq/${var.env}/api/REDIS_PORT"
+  type  = "String"
+  value = tostring(var.redis_port)
+
+  description = "Redis port for ${var.env}"
+  tags = {
+    Name        = "kambriq-api-redis-port-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+}
+
+resource "aws_ssm_parameter" "aws_s3_bucket" {
+  name  = "/kambriq/${var.env}/api/AWS_S3_BUCKET"
+  type  = "String"
+  value = var.aws_s3_bucket
+
+  description = "S3 bucket for uploads in ${var.env}"
+  tags = {
+    Name        = "kambriq-api-aws-s3-bucket-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+}
+
+resource "aws_ssm_parameter" "aws_region" {
+  name  = "/kambriq/${var.env}/api/AWS_REGION"
+  type  = "String"
+  value = var.aws_region
+
+  description = "AWS region for SDK in ${var.env}"
+  tags = {
+    Name        = "kambriq-api-aws-region-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+}
+
+resource "aws_ssm_parameter" "email_from" {
+  name  = "/kambriq/${var.env}/api/EMAIL_FROM"
+  type  = "String"
+  value = var.email_from
+
+  description = "Email sender address for ${var.env}"
+  tags = {
+    Name        = "kambriq-api-email-from-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+}
+
+resource "aws_ssm_parameter" "email_from_name" {
+  name  = "/kambriq/${var.env}/api/EMAIL_FROM_NAME"
+  type  = "String"
+  value = var.email_from_name
+
+  description = "Email sender display name for ${var.env}"
+  tags = {
+    Name        = "kambriq-api-email-from-name-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+}
+
+resource "aws_ssm_parameter" "salt_rounds" {
+  name  = "/kambriq/${var.env}/api/SALT_ROUNDS"
+  type  = "String"
+  value = tostring(var.salt_rounds)
+
+  description = "bcrypt salt rounds for ${var.env}"
+  tags = {
+    Name        = "kambriq-api-salt-rounds-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+}
+
+resource "aws_ssm_parameter" "aws_access_key_id" {
+  count = var.aws_access_key_id != "" ? 1 : 0
+  name  = "/kambriq/${var.env}/api/AWS_ACCESS_KEY_ID"
+  type  = "SecureString"
+  value = var.aws_access_key_id
+
+  description = "AWS access key for ${var.env} (optional, prefer IAM roles)"
+  tags = {
+    Name        = "kambriq-api-aws-access-key-id-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+}
+
+resource "aws_ssm_parameter" "aws_secret_access_key" {
+  count = var.aws_secret_access_key != "" ? 1 : 0
+  name  = "/kambriq/${var.env}/api/AWS_SECRET_ACCESS_KEY"
+  type  = "SecureString"
+  value = var.aws_secret_access_key
+
+  description = "AWS secret key for ${var.env} (optional, prefer IAM roles)"
+  tags = {
+    Name        = "kambriq-api-aws-secret-access-key-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+}
+
 # Data source to read existing JWT secret if not provided
 # Try lowercase first (legacy naming)
 # NOTE: This data source will fail during terraform plan/apply if the parameter
@@ -80,7 +389,7 @@ resource "aws_ssm_parameter" "jwt_secret" {
 #    OR
 # 3. The parameter will be created with a placeholder that you must update manually
 data "aws_ssm_parameter" "jwt_secret_existing" {
-  count = var.jwt_secret == "" ? 1 : 0
+  count = var.jwt_secret == "" && var.use_existing_jwt_secret ? 1 : 0
   name  = "/kambriq/${var.env}/api/jwt_secret" # Try lowercase first (legacy)
 }
 

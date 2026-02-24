@@ -4,7 +4,7 @@ variable "project_name" {
 }
 
 variable "env" {
-  description = "Environment name (dev, prod)"
+  description = "Environment name (dev, prd)"
   type        = string
 }
 
@@ -116,5 +116,11 @@ variable "init_container_image" {
   description = "Container image for init container (same as main container for migrations)"
   type        = string
   default     = ""
+}
+
+variable "init_container_command" {
+  description = "Init container command (list of strings). If empty, a Prisma default is used for API."
+  type        = list(string)
+  default     = []
 }
 

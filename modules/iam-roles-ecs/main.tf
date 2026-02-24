@@ -8,7 +8,7 @@ locals {
   name_prefix = "${var.project_name}-${var.env}"
 }
 
-# IAM Role for ECS Task (API - FastAPI)
+# IAM Role for ECS Task (API - NestJS)
 resource "aws_iam_role" "task_api" {
   name = "${local.name_prefix}-ecs-task-api"
 

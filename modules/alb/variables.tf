@@ -4,7 +4,7 @@ variable "project_name" {
 }
 
 variable "env" {
-  description = "Environment name (dev, prod)"
+  description = "Environment name (dev, prd)"
   type        = string
 }
 
@@ -25,9 +25,9 @@ variable "certificate_arn" {
 }
 
 variable "api_port" {
-  description = "Port for FastAPI target group"
+  description = "Port for NestJS API target group"
   type        = number
-  default     = 8000
+  default     = 3000
 }
 
 variable "web_port" {

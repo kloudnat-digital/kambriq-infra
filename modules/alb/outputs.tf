@@ -19,7 +19,7 @@ output "alb_zone_id" {
 }
 
 output "api_target_group_arn" {
-  description = "FastAPI Target Group ARN"
+  description = "API Target Group ARN"
   value       = aws_lb_target_group.api.arn
 }
 

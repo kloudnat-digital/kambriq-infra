@@ -23,6 +23,12 @@ variable "availability_zones" {
   default     = []
 }
 
+variable "nat_per_az" {
+  description = "Create one NAT Gateway per AZ"
+  type        = bool
+  default     = false
+}
+
 # Route53 Configuration
 # Note: Route53 hosted zone is created manually in AWS Console.
 # Provide the zone_id here after manual setup.
@@ -38,6 +44,12 @@ variable "route53_zone_id" {
   description = "Route53 hosted zone ID (created manually in AWS Console, e.g., Z035969434MOMAYZATZ1D)"
   type        = string
   default     = ""
+}
+
+variable "enable_route53_lookup" {
+  description = "Enable Route53 hosted zone lookup"
+  type        = bool
+  default     = true
 }
 
 # SES Configuration

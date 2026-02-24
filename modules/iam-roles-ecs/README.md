@@ -4,7 +4,7 @@ Creates IAM roles for ECS tasks (API and Web) with appropriate permissions.
 
 ## Resources Created
 
-- IAM Role for ECS Task (API - FastAPI)
+- IAM Role for ECS Task (API - NestJS)
 - IAM Role for ECS Task (Web - Next.js)
 - Policies for SSM Parameter Store access
 - Policy for RDS access (API only)
