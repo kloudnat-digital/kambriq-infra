@@ -18,6 +18,10 @@ fi
 
 OUTPUT_JSON="$(terraform -chdir="${TF_DIR}" output -json)"
 
+if [[ -z "${ROLE_ARN}" ]]; then
+  ROLE_ARN="$(echo "${OUTPUT_JSON}" | jq -r '.github_actions_role_arn.value // empty')"
+fi
+
 AWS_REGION="${AWS_REGION:-}"
 if [[ -z "${AWS_REGION}" && -f "${TF_DIR}/terraform.tfvars" ]]; then
   AWS_REGION="$(awk -F'=' '/^aws_region/ { gsub(/["[:space:]]/, "", $2); print $2 }' "${TF_DIR}/terraform.tfvars")"

@@ -1,5 +1,6 @@
 aws_region = "eu-central-1"
 env        = "shared"
+github_repo_infra = "kloudnat-digital/kambriq-infra"
 
 domain_name     = "kambriq.com"
 route53_zone_id = "Z00411721R2YKO3VFIPU4"

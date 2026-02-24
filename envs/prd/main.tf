@@ -17,7 +17,8 @@ provider "aws" {
 }
 
 locals {
-  name_prefix = "${var.project_name}-${var.env}"
+  name_prefix        = "${var.project_name}-${var.env}"
+  alb_ingress_ports  = distinct([var.api_port, var.web_port])
 }
 
 data "terraform_remote_state" "shared" {
@@ -66,20 +67,15 @@ resource "aws_security_group" "ecs" {
   description = "Security group for ECS tasks"
   vpc_id      = data.terraform_remote_state.shared.outputs.vpc_id
 
-  ingress {
-    description     = "API from ALB"
-    from_port       = var.api_port
-    to_port         = var.api_port
-    protocol        = "tcp"
-    security_groups = [module.alb.alb_security_group_id]
-  }
-
-  ingress {
-    description     = "Web from ALB"
-    from_port       = var.web_port
-    to_port         = var.web_port
-    protocol        = "tcp"
-    security_groups = [module.alb.alb_security_group_id]
+  dynamic "ingress" {
+    for_each = toset(local.alb_ingress_ports)
+    content {
+      description     = "ALB to ECS on ${ingress.value}"
+      from_port       = ingress.value
+      to_port         = ingress.value
+      protocol        = "tcp"
+      security_groups = [module.alb.alb_security_group_id]
+    }
   }
 
   egress {
@@ -148,6 +144,96 @@ resource "aws_security_group" "redis" {
     Name = "${local.name_prefix}-redis-sg"
     Env  = var.env
   }
+}
+
+data "aws_iam_policy_document" "github_actions_assume_role" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [data.terraform_remote_state.shared.outputs.github_oidc_provider_arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringLike"
+      variable = "token.actions.githubusercontent.com:sub"
+      values   = ["repo:${var.github_repo}:environment:${var.env}"]
+    }
+  }
+}
+
+resource "aws_iam_role" "github_actions" {
+  name               = "${local.name_prefix}-github-actions"
+  assume_role_policy = data.aws_iam_policy_document.github_actions_assume_role.json
+
+  tags = {
+    Name = "${local.name_prefix}-github-actions"
+    Env  = var.env
+  }
+}
+
+data "aws_iam_policy_document" "github_actions_permissions" {
+  statement {
+    sid = "EcrAuth"
+    actions = [
+      "ecr:GetAuthorizationToken",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid = "EcrPushPull"
+    actions = [
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:BatchGetImage",
+      "ecr:CompleteLayerUpload",
+      "ecr:GetDownloadUrlForLayer",
+      "ecr:InitiateLayerUpload",
+      "ecr:PutImage",
+      "ecr:UploadLayerPart",
+    ]
+    resources = [module.ecr_api.repository_arn]
+  }
+
+  statement {
+    sid = "EcsDeploy"
+    actions = [
+      "ecs:DescribeServices",
+      "ecs:DescribeTaskDefinition",
+      "ecs:DescribeTasks",
+      "ecs:ListTasks",
+      "ecs:RegisterTaskDefinition",
+      "ecs:RunTask",
+      "ecs:StopTask",
+      "ecs:UpdateService",
+      "ecs:Wait",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid = "IamPassRole"
+    actions = [
+      "iam:PassRole",
+    ]
+    resources = [
+      module.ecs_cluster.task_execution_role_arn,
+      module.iam_roles_ecs.task_api_role_arn,
+    ]
+  }
+}
+
+resource "aws_iam_role_policy" "github_actions" {
+  name   = "${local.name_prefix}-github-actions"
+  role   = aws_iam_role.github_actions.id
+  policy = data.aws_iam_policy_document.github_actions_permissions.json
 }
 
 module "rds" {

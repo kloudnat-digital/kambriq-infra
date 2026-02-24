@@ -73,6 +73,11 @@ output "jwt_secret_parameter_arn" {
   value       = module.ssm_app_parameters.jwt_secret_parameter_arn
 }
 
+output "github_actions_role_arn" {
+  description = "GitHub Actions role ARN for deployments"
+  value       = aws_iam_role.github_actions.arn
+}
+
 output "ecr_api_repository_url" {
   description = "ECR repository URL for API"
   value       = module.ecr_api.repository_url

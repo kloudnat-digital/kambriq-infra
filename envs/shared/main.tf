@@ -32,3 +32,65 @@ module "shared" {
   enable_s3_logs                 = var.enable_s3_logs
   enable_s3_artifacts            = var.enable_s3_artifacts
 }
+
+resource "aws_iam_openid_connect_provider" "github" {
+  url             = "https://token.actions.githubusercontent.com"
+  client_id_list  = ["sts.amazonaws.com"]
+  thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
+
+  tags = {
+    Name = "${var.project_name}-github-oidc"
+    Type = "shared"
+  }
+}
+
+data "aws_iam_policy_document" "github_actions_infra_assume_role" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringLike"
+      variable = "token.actions.githubusercontent.com:sub"
+      values = [
+        "repo:${var.github_repo_infra}:environment:shared",
+        "repo:${var.github_repo_infra}:environment:dev",
+        "repo:${var.github_repo_infra}:environment:prd",
+      ]
+    }
+  }
+}
+
+resource "aws_iam_role" "github_actions_infra" {
+  name               = "${var.project_name}-infra-github-actions"
+  assume_role_policy = data.aws_iam_policy_document.github_actions_infra_assume_role.json
+
+  tags = {
+    Name = "${var.project_name}-infra-github-actions"
+    Type = "shared"
+  }
+}
+
+data "aws_iam_policy_document" "github_actions_infra_permissions" {
+  statement {
+    sid     = "TerraformAdmin"
+    actions = ["*"]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy" "github_actions_infra" {
+  name   = "${var.project_name}-infra-github-actions"
+  role   = aws_iam_role.github_actions_infra.id
+  policy = data.aws_iam_policy_document.github_actions_infra_permissions.json
+}

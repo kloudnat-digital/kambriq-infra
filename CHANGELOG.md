@@ -6,7 +6,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 ### Added
+ - Shared `envs/` structure with `shared`, `dev`, and `prd` stacks.
+ - Remote state backends and shared VPC/NAT stack.
+ - ElastiCache Redis module and outputs.
+ - GitHub variables helper script and docs.
 ### Changed
+ - Align ALB routing and health checks for NestJS API.
+ - Update ECS init container defaults to Prisma migrations.
+ - Expand SSM parameters to match API runtime config.
+ - Standardize environment naming to `dev`/`prd` and use shared state.
 ### Deprecated
 ### Removed
 ### Fixed

@@ -16,6 +16,11 @@ variable "aws_region" {
   default     = "eu-central-1"
 }
 
+variable "github_repo" {
+  description = "GitHub org/repo for Actions OIDC (e.g. org/repo)"
+  type        = string
+}
+
 variable "shared_state_bucket" {
   description = "S3 bucket for shared remote state"
   type        = string

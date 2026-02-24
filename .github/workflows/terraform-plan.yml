@@ -1,0 +1,56 @@
+name: Terraform Plan
+
+on:
+  pull_request:
+    paths:
+      - "envs/**"
+      - "modules/**"
+      - ".github/workflows/terraform-*.yml"
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "Environment to plan"
+        type: choice
+        options:
+          - shared
+          - dev
+          - prd
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.env || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Resolve environment
+        id: env
+        run: |
+          set -euo pipefail
+          ENV_NAME="${{ inputs.env }}"
+          if [[ -z "${ENV_NAME}" ]]; then
+            ENV_NAME="dev"
+          fi
+          echo "env_name=${ENV_NAME}" >> "$GITHUB_OUTPUT"
+          AWS_REGION="$(awk -F'=' '/^aws_region/ { gsub(/["[:space:]]/, "", $2); print $2 }' "envs/${ENV_NAME}/terraform.tfvars")"
+          echo "AWS_REGION=${AWS_REGION}" >> "$GITHUB_ENV"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Terraform init
+        run: terraform -chdir="envs/${{ steps.env.outputs.env_name }}" init -reconfigure
+
+      - name: Terraform plan
+        run: terraform -chdir="envs/${{ steps.env.outputs.env_name }}" plan

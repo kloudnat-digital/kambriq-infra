@@ -16,6 +16,11 @@ variable "aws_region" {
   default     = "eu-central-1"
 }
 
+variable "github_repo_infra" {
+  description = "GitHub org/repo for infra Actions OIDC (e.g. org/repo)"
+  type        = string
+}
+
 variable "vpc_cidr" {
   description = "CIDR block for VPC"
   type        = string
