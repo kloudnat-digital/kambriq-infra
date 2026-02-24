@@ -2,8 +2,8 @@
 # Application Load Balancer Module - KAMBRIQ v2.0
 # ============================================================================
 # Creates ALB with HTTPS listener and routing rules:
-# - /api/v1/* → FastAPI Target Group (FastAPI backend routes)
-# - /* → Next.js Target Group (Next.js API routes, SSR pages, static assets)
+# - /api/* → API Target Group (NestJS backend routes)
+# - /* → Web Target Group (SSR pages, static assets)
 # ============================================================================
 
 locals {
@@ -66,7 +66,7 @@ resource "aws_lb" "main" {
   }
 }
 
-# Target Group for FastAPI (API)
+# Target Group for API
 resource "aws_lb_target_group" "api" {
   name        = "${local.name_prefix}-api-tg"
   port        = var.api_port
@@ -80,7 +80,7 @@ resource "aws_lb_target_group" "api" {
     unhealthy_threshold = 3
     timeout             = 5
     interval            = 30
-    path                = "/api/v1/health"
+    path                = "/api/v1/health/ready"
     matcher             = "200"
     protocol            = "HTTP"
   }
@@ -179,10 +179,10 @@ resource "aws_lb_listener" "http_forward" {
   }
 }
 
-# Listener Rule: /api/v1/* → FastAPI Target Group
-# Priority 1 (highest priority - specific FastAPI routes)
+# Listener Rule: /api/* → API Target Group
+# Priority 1 (highest priority - API routes)
 # Use HTTPS listener if certificate is available, otherwise HTTP listener
-# Note: Only /api/v1/* routes go to FastAPI. All other /api/* routes (like /api/countries, /api/verify/*, /api/kbs/*) go to Next.js
+# Note: Only /api/* routes go to API. All other routes go to Web.
 resource "aws_lb_listener_rule" "api_v1" {
   listener_arn = var.certificate_arn != null && var.certificate_arn != "" ? aws_lb_listener.https[0].arn : aws_lb_listener.http_forward[0].arn
   priority     = 1
@@ -194,7 +194,7 @@ resource "aws_lb_listener_rule" "api_v1" {
 
   condition {
     path_pattern {
-      values = ["/api/v1/*"]
+      values = ["/api/*"]
     }
   }
 }

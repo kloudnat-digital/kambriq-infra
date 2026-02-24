@@ -29,7 +29,12 @@ output "all_subnet_ids" {
 
 output "nat_gateway_id" {
   description = "NAT Gateway ID"
-  value       = aws_nat_gateway.main.id
+  value       = aws_nat_gateway.main[0].id
+}
+
+output "nat_gateway_ids" {
+  description = "NAT Gateway IDs"
+  value       = aws_nat_gateway.main[*].id
 }
 
 output "internet_gateway_id" {
@@ -46,17 +51,17 @@ output "internet_gateway_id" {
 
 output "route53_zone_id" {
   description = "Route53 hosted zone ID (provided via variable or data source, created manually in AWS Console)"
-  value       = local.route53_zone.zone_id
+  value       = local.route53_zone != null ? local.route53_zone.zone_id : null
 }
 
 output "route53_zone_name" {
   description = "Route53 hosted zone name"
-  value       = local.route53_zone.name
+  value       = local.route53_zone != null ? local.route53_zone.name : null
 }
 
 output "route53_name_servers" {
   description = "Route53 name servers"
-  value       = local.route53_zone.name_servers
+  value       = local.route53_zone != null ? local.route53_zone.name_servers : []
 }
 
 # ============================================================================

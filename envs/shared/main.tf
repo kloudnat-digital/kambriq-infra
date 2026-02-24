@@ -1,0 +1,96 @@
+terraform {
+  required_version = ">= 1.5.0"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = var.aws_region
+}
+
+module "shared" {
+  source = "../../modules/shared"
+
+  project_name                  = var.project_name
+  aws_region                    = var.aws_region
+  vpc_cidr                      = var.vpc_cidr
+  availability_zones            = var.availability_zones
+  nat_per_az                    = var.nat_per_az
+  domain_name                   = var.domain_name
+  route53_zone_id               = var.route53_zone_id
+  enable_route53_lookup         = var.enable_route53_lookup
+  ses_domain                    = var.ses_domain
+  ses_from_email                = var.ses_from_email
+  ses_domain_identity_arn        = var.ses_domain_identity_arn
+  ses_email_identity_arn         = var.ses_email_identity_arn
+  api_acm_certificate_arn        = var.api_acm_certificate_arn
+  cloudfront_acm_certificate_arn = var.cloudfront_acm_certificate_arn
+  enable_s3_logs                 = var.enable_s3_logs
+  enable_s3_artifacts            = var.enable_s3_artifacts
+}
+
+resource "aws_iam_openid_connect_provider" "github" {
+  url             = "https://token.actions.githubusercontent.com"
+  client_id_list  = ["sts.amazonaws.com"]
+  thumbprint_list = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
+
+  tags = {
+    Name = "${var.project_name}-github-oidc"
+    Type = "shared"
+  }
+}
+
+data "aws_iam_policy_document" "github_actions_infra_assume_role" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringLike"
+      variable = "token.actions.githubusercontent.com:sub"
+      values = [
+        "repo:${var.github_repo_infra}:environment:shared",
+        "repo:${var.github_repo_infra}:environment:dev",
+        "repo:${var.github_repo_infra}:environment:prd",
+      ]
+    }
+  }
+}
+
+resource "aws_iam_role" "github_actions_infra" {
+  name               = "${var.project_name}-infra-github-actions"
+  assume_role_policy = data.aws_iam_policy_document.github_actions_infra_assume_role.json
+
+  tags = {
+    Name = "${var.project_name}-infra-github-actions"
+    Type = "shared"
+  }
+}
+
+data "aws_iam_policy_document" "github_actions_infra_permissions" {
+  statement {
+    sid     = "TerraformAdmin"
+    actions = ["*"]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_role_policy" "github_actions_infra" {
+  name   = "${var.project_name}-infra-github-actions"
+  role   = aws_iam_role.github_actions_infra.id
+  policy = data.aws_iam_policy_document.github_actions_infra_permissions.json
+}

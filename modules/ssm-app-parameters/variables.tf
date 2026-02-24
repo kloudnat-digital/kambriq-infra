@@ -1,5 +1,5 @@
 variable "env" {
-  description = "Environment name (dev, prod)"
+  description = "Environment name (dev, prd)"
   type        = string
 }
 
@@ -13,9 +13,38 @@ variable "db_port" {
   type        = number
 }
 
-variable "db_name" {
-  description = "Database name"
+variable "db_core_name" {
+  description = "Core database name"
   type        = string
+}
+
+variable "db_kbs_name" {
+  description = "KBS database name"
+  type        = string
+}
+
+variable "db_kamnet_name" {
+  description = "Kamnet database name (optional)"
+  type        = string
+  default     = ""
+}
+
+variable "db_lands_name" {
+  description = "Lands database name (optional)"
+  type        = string
+  default     = ""
+}
+
+variable "db_verify_name" {
+  description = "Verify database name (optional)"
+  type        = string
+  default     = ""
+}
+
+variable "db_valuation_name" {
+  description = "Valuation database name (optional)"
+  type        = string
+  default     = ""
 }
 
 variable "db_username" {
@@ -37,6 +66,12 @@ variable "jwt_secret" {
   default     = ""
 }
 
+variable "use_existing_jwt_secret" {
+  description = "Read existing legacy jwt_secret parameter when jwt_secret is empty"
+  type        = bool
+  default     = false
+}
+
 variable "frontend_url" {
   description = "Frontend URL (CloudFront URL or custom domain)"
   type        = string
@@ -45,6 +80,114 @@ variable "frontend_url" {
 variable "ses_from_email" {
   description = "SES sender email address"
   type        = string
+}
+
+# ============================================================================
+# Core API runtime parameters (current NestJS stack)
+# ============================================================================
+
+variable "node_env" {
+  description = "Runtime environment (production, dev, prd, etc.)"
+  type        = string
+  default     = "production"
+}
+
+variable "port" {
+  description = "API listening port"
+  type        = number
+  default     = 3000
+}
+
+variable "api_prefix" {
+  description = "Global API prefix"
+  type        = string
+  default     = "api/v1"
+}
+
+variable "jwt_access_expiration" {
+  description = "JWT access token lifetime (e.g. 15m)"
+  type        = string
+  default     = "15m"
+}
+
+variable "jwt_refresh_expiration" {
+  description = "JWT refresh token lifetime (e.g. 15d)"
+  type        = string
+  default     = "15d"
+}
+
+variable "cors_origins" {
+  description = "Comma-separated allowed CORS origins"
+  type        = string
+  default     = ""
+}
+
+variable "throttle_ttl" {
+  description = "Rate limit window in milliseconds"
+  type        = number
+  default     = 60000
+}
+
+variable "throttle_limit" {
+  description = "Max requests per window"
+  type        = number
+  default     = 100
+}
+
+variable "redis_host" {
+  description = "Redis host"
+  type        = string
+  default     = ""
+}
+
+variable "redis_port" {
+  description = "Redis port"
+  type        = number
+  default     = 6379
+}
+
+variable "aws_s3_bucket" {
+  description = "S3 bucket name for uploads"
+  type        = string
+  default     = ""
+}
+
+variable "aws_region" {
+  description = "AWS region for SDK"
+  type        = string
+  default     = "eu-central-1"
+}
+
+variable "email_from" {
+  description = "Sender email address"
+  type        = string
+  default     = ""
+}
+
+variable "email_from_name" {
+  description = "Sender display name"
+  type        = string
+  default     = "KAMBRIQ"
+}
+
+variable "salt_rounds" {
+  description = "bcrypt salt rounds"
+  type        = number
+  default     = 12
+}
+
+variable "aws_access_key_id" {
+  description = "AWS access key (optional, prefer IAM roles)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "aws_secret_access_key" {
+  description = "AWS secret key (optional, prefer IAM roles)"
+  type        = string
+  default     = ""
+  sensitive   = true
 }
 
 # ============================================================================
