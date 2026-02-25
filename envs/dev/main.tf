@@ -219,6 +219,15 @@ data "aws_iam_policy_document" "github_actions_permissions" {
   }
 
   statement {
+    sid = "ElbDescribe"
+    actions = [
+      "elasticloadbalancing:DescribeLoadBalancers",
+      "elasticloadbalancing:DescribeTargetGroups",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
     sid = "IamPassRole"
     actions = [
       "iam:PassRole",
