@@ -62,6 +62,28 @@ module "alb" {
   web_port          = var.web_port
 }
 
+module "bastion" {
+  source             = "../../modules/bastion"
+  name               = "${local.name_prefix}-bastion"
+  vpc_id             = data.terraform_remote_state.shared.outputs.vpc_id
+  public_subnet_id   = data.terraform_remote_state.shared.outputs.public_subnet_ids[0]
+  key_name           = var.bastion_key_name
+  allowed_ssh_cidrs  = var.bastion_allowed_ssh_cidrs
+  instance_type      = var.bastion_instance_type
+}
+
+resource "aws_route53_record" "dev_api" {
+  zone_id = data.terraform_remote_state.shared.outputs.route53_zone_id
+  name    = "dev.kambriq.com"
+  type    = "A"
+
+  alias {
+    name                   = module.alb.alb_dns_name
+    zone_id                = module.alb.alb_zone_id
+    evaluate_target_health = true
+  }
+}
+
 resource "aws_security_group" "ecs" {
   name        = "${local.name_prefix}-ecs-sg"
   description = "Security group for ECS tasks"

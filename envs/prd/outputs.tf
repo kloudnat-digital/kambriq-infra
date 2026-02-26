@@ -48,6 +48,16 @@ output "alb_dns_name" {
   value       = module.alb.alb_dns_name
 }
 
+output "bastion_instance_id" {
+  description = "Bastion instance ID"
+  value       = module.bastion.instance_id
+}
+
+output "bastion_public_ip" {
+  description = "Bastion public IP"
+  value       = module.bastion.public_ip
+}
+
 output "rds_endpoint" {
   description = "RDS endpoint"
   value       = module.rds.db_endpoint
@@ -66,6 +76,11 @@ output "database_url_core_parameter_arn" {
 output "database_url_kbs_parameter_arn" {
   description = "SSM ARN for DATABASE_URL_KBS"
   value       = module.ssm_app_parameters.database_url_kbs_parameter_arn
+}
+
+output "db_password_parameter_arn" {
+  description = "SSM ARN for DB_PASSWORD"
+  value       = module.ssm_app_parameters.db_password_parameter_arn
 }
 
 output "jwt_secret_parameter_arn" {

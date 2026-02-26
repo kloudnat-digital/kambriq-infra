@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
  - Remote state backends and shared VPC/NAT stack.
  - ElastiCache Redis module and outputs.
  - GitHub variables helper script and docs.
+ - Bastion module with SSH + SSM access for dev/prd.
+ - Route53 record for `dev.kambriq.com` pointing to the ALB.
 ### Changed
  - Align ALB routing and health checks for NestJS API.
  - Update ECS init container defaults to Prisma migrations.

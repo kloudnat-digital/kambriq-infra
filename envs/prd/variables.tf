@@ -306,3 +306,21 @@ variable "enable_web_service" {
   type        = bool
   default     = true
 }
+
+variable "bastion_key_name" {
+  description = "SSH key pair name for bastion"
+  type        = string
+  default     = "bastion_key_pair"
+}
+
+variable "bastion_allowed_ssh_cidrs" {
+  description = "CIDR blocks allowed to SSH into bastion"
+  type        = list(string)
+  default     = []
+}
+
+variable "bastion_instance_type" {
+  description = "Bastion instance type"
+  type        = string
+  default     = "t3.micro"
+}

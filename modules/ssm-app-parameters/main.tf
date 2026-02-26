@@ -28,6 +28,19 @@ locals {
 # ============================================================================
 # DATABASE_URL_CORE - Core PostgreSQL connection string
 # ============================================================================
+resource "aws_ssm_parameter" "db_password" {
+  name  = "/kambriq/${var.env}/db/DB_PASSWORD"
+  type  = "SecureString"
+  value = var.db_password
+
+  description = "RDS master password for ${var.env} environment"
+  tags = {
+    Name        = "kambriq-db-password-${var.env}"
+    Environment = var.env
+    Service     = "db"
+  }
+}
+
 resource "aws_ssm_parameter" "database_url_core" {
   name  = "/kambriq/${var.env}/api/DATABASE_URL_CORE"
   type  = "SecureString"

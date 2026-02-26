@@ -54,7 +54,7 @@ variable "db_username" {
 }
 
 variable "db_password" {
-  description = "Database password (from SSM /kambriq/{env}/db/password)"
+  description = "Database password (stored at /kambriq/{env}/db/DB_PASSWORD)"
   type        = string
   sensitive   = true
 }

@@ -18,6 +18,16 @@ output "database_url_kbs_parameter_arn" {
   value       = aws_ssm_parameter.database_url_kbs.arn
 }
 
+output "db_password_parameter_name" {
+  description = "SSM parameter name for DB_PASSWORD"
+  value       = aws_ssm_parameter.db_password.name
+}
+
+output "db_password_parameter_arn" {
+  description = "SSM parameter ARN for DB_PASSWORD"
+  value       = aws_ssm_parameter.db_password.arn
+}
+
 output "jwt_secret_parameter_name" {
   description = "SSM parameter name for JWT_SECRET"
   value       = aws_ssm_parameter.jwt_secret.name
