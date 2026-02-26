@@ -78,6 +78,16 @@ output "database_url_kbs_parameter_arn" {
   value       = module.ssm_app_parameters.database_url_kbs_parameter_arn
 }
 
+output "database_url_kamnet_parameter_arn" {
+  description = "SSM ARN for DATABASE_URL_KAMNET"
+  value       = module.ssm_app_parameters.database_url_kamnet_parameter_arn
+}
+
+output "database_url_lands_parameter_arn" {
+  description = "SSM ARN for DATABASE_URL_LANDS"
+  value       = module.ssm_app_parameters.database_url_lands_parameter_arn
+}
+
 output "db_password_parameter_arn" {
   description = "SSM ARN for DB_PASSWORD"
   value       = module.ssm_app_parameters.db_password_parameter_arn

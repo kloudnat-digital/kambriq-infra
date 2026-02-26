@@ -43,7 +43,8 @@ This sets:
 ### Dev (CI/CD)
 - Trigger: push to `develop`.
 - Steps: quality checks → build/push image (`vX.Y.Z` + `latest`) → register new
-  task definition → run migrations (ECS one-off) → update ECS service → smoke test.
+  task definition → run migrations (ECS one-off) → run seed (ECS one-off) →
+  update ECS service → smoke test.
 - Smoke test tries the vanity domain first and falls back to ALB DNS.
 
 ### Dev (local script)

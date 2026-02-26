@@ -115,6 +115,14 @@ resource "aws_security_group" "rds" {
     security_groups = [aws_security_group.ecs.id]
   }
 
+  ingress {
+    description     = "Postgres from bastion"
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [module.bastion.security_group_id]
+  }
+
   egress {
     description = "All outbound"
     from_port   = 0
@@ -297,6 +305,8 @@ module "ssm_app_parameters" {
   db_port       = module.rds.db_port
   db_core_name  = var.db_core_name
   db_kbs_name   = var.db_kbs_name
+  db_kamnet_name = var.db_kamnet_name
+  db_lands_name  = var.db_lands_name
   db_username   = var.db_username
   db_password   = var.db_password
   jwt_secret    = var.jwt_secret
@@ -371,6 +381,8 @@ module "ecs_service_api" {
   secrets = {
     DATABASE_URL_CORE = module.ssm_app_parameters.database_url_core_parameter_arn
     DATABASE_URL_KBS  = module.ssm_app_parameters.database_url_kbs_parameter_arn
+    DATABASE_URL_KAMNET = module.ssm_app_parameters.database_url_kamnet_parameter_arn
+    DATABASE_URL_LANDS  = module.ssm_app_parameters.database_url_lands_parameter_arn
     JWT_SECRET        = module.ssm_app_parameters.jwt_secret_parameter_arn
   }
 }

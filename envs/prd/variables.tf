@@ -131,6 +131,18 @@ variable "db_kbs_name" {
   default     = "kambriq_kbs"
 }
 
+variable "db_kamnet_name" {
+  description = "Kamnet database name"
+  type        = string
+  default     = "kambriq_kamnet"
+}
+
+variable "db_lands_name" {
+  description = "Lands database name"
+  type        = string
+  default     = "kambriq_lands"
+}
+
 variable "db_username" {
   description = "DB master username"
   type        = string

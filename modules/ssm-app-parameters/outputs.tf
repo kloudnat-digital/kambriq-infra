@@ -18,6 +18,16 @@ output "database_url_kbs_parameter_arn" {
   value       = aws_ssm_parameter.database_url_kbs.arn
 }
 
+output "database_url_kamnet_parameter_arn" {
+  description = "SSM parameter ARN for DATABASE_URL_KAMNET"
+  value       = try(aws_ssm_parameter.database_url_kamnet[0].arn, null)
+}
+
+output "database_url_lands_parameter_arn" {
+  description = "SSM parameter ARN for DATABASE_URL_LANDS"
+  value       = try(aws_ssm_parameter.database_url_lands[0].arn, null)
+}
+
 output "db_password_parameter_name" {
   description = "SSM parameter name for DB_PASSWORD"
   value       = aws_ssm_parameter.db_password.name
