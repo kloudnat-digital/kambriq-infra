@@ -80,6 +80,8 @@ This sets:
 ### Verify DB via bastion (SSM)
 Use the SSM port-forward instructions in `README.md` to access the DB and
 verify seed data.
+Note: the core schema no longer includes `Permission` or `RolePermission`
+tables, so they should not be expected during verification.
 
 ### Common troubleshooting
 - If vanity domain fails, use ALB DNS output for health checks.
