@@ -143,6 +143,12 @@ variable "db_lands_name" {
   default     = "kambriq_lands"
 }
 
+variable "db_extra" {
+  description = "Additional DBs: map of suffix -> database name"
+  type        = map(string)
+  default     = {}
+}
+
 variable "db_username" {
   description = "DB master username"
   type        = string

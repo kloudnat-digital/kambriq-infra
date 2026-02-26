@@ -47,6 +47,12 @@ variable "db_valuation_name" {
   default     = ""
 }
 
+variable "db_extra" {
+  description = "Additional DBs: map of suffix -> database name"
+  type        = map(string)
+  default     = {}
+}
+
 variable "db_username" {
   description = "Database username"
   type        = string

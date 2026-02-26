@@ -88,6 +88,11 @@ output "database_url_lands_parameter_arn" {
   value       = module.ssm_app_parameters.database_url_lands_parameter_arn
 }
 
+output "database_url_extra_parameter_arns" {
+  description = "SSM ARNs for extra DATABASE_URL_*"
+  value       = module.ssm_app_parameters.database_url_extra_parameter_arns
+}
+
 output "db_password_parameter_arn" {
   description = "SSM ARN for DB_PASSWORD"
   value       = module.ssm_app_parameters.db_password_parameter_arn

@@ -47,6 +47,11 @@ This sets:
   update ECS service → smoke test.
 - Smoke test tries the vanity domain first and falls back to ALB DNS.
 
+### Future DBs
+- Add new schemas under `prisma/<name>/schema.prisma` and `prisma/<name>/prisma.config.ts`.
+- Add new DB entries in Terraform via `db_extra` to generate `DATABASE_URL_*` secrets.
+- CI/CD uses `node prisma/run-migrations.js` to discover and migrate all schemas.
+
 ### Dev (local script)
 ```
 ./scripts/deploy-dev.sh

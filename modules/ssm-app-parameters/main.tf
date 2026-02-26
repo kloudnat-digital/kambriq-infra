@@ -23,6 +23,11 @@ locals {
   database_url_lands     = var.db_lands_name != "" ? "postgresql://${var.db_username}:${var.db_password}@${var.db_host}:${var.db_port}/${var.db_lands_name}?schema=public" : ""
   database_url_verify    = var.db_verify_name != "" ? "postgresql://${var.db_username}:${var.db_password}@${var.db_host}:${var.db_port}/${var.db_verify_name}?schema=public" : ""
   database_url_valuation = var.db_valuation_name != "" ? "postgresql://${var.db_username}:${var.db_password}@${var.db_host}:${var.db_port}/${var.db_valuation_name}?schema=public" : ""
+
+  database_url_extra = {
+    for key, name in var.db_extra :
+    upper(key) => "postgresql://${var.db_username}:${var.db_password}@${var.db_host}:${var.db_port}/${name}?schema=public"
+  }
 }
 
 # ============================================================================
@@ -124,6 +129,20 @@ resource "aws_ssm_parameter" "database_url_valuation" {
   description = "Valuation PostgreSQL connection string for ${var.env} environment"
   tags = {
     Name        = "kambriq-api-database-url-valuation-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+}
+
+resource "aws_ssm_parameter" "database_url_extra" {
+  for_each = local.database_url_extra
+  name     = "/kambriq/${var.env}/api/DATABASE_URL_${each.key}"
+  type     = "SecureString"
+  value    = each.value
+
+  description = "Extra PostgreSQL connection string for ${var.env} environment"
+  tags = {
+    Name        = "kambriq-api-database-url-${lower(each.key)}-${var.env}"
     Environment = var.env
     Service     = "api"
   }

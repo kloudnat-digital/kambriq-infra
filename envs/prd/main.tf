@@ -307,6 +307,7 @@ module "ssm_app_parameters" {
   db_kbs_name   = var.db_kbs_name
   db_kamnet_name = var.db_kamnet_name
   db_lands_name  = var.db_lands_name
+  db_extra      = var.db_extra
   db_username   = var.db_username
   db_password   = var.db_password
   jwt_secret    = var.jwt_secret
@@ -378,13 +379,13 @@ module "ecs_service_api" {
     JWT_REFRESH_EXPIRATION = var.jwt_refresh_expiration
   }
 
-  secrets = {
+  secrets = merge({
     DATABASE_URL_CORE = module.ssm_app_parameters.database_url_core_parameter_arn
     DATABASE_URL_KBS  = module.ssm_app_parameters.database_url_kbs_parameter_arn
     DATABASE_URL_KAMNET = module.ssm_app_parameters.database_url_kamnet_parameter_arn
     DATABASE_URL_LANDS  = module.ssm_app_parameters.database_url_lands_parameter_arn
     JWT_SECRET        = module.ssm_app_parameters.jwt_secret_parameter_arn
-  }
+  }, module.ssm_app_parameters.database_url_extra_parameter_arns)
 }
 
 module "ecs_service_web" {

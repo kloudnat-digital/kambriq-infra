@@ -28,6 +28,14 @@ output "database_url_lands_parameter_arn" {
   value       = try(aws_ssm_parameter.database_url_lands[0].arn, null)
 }
 
+output "database_url_extra_parameter_arns" {
+  description = "SSM parameter ARNs for extra DATABASE_URL_*"
+  value = {
+    for key, param in aws_ssm_parameter.database_url_extra :
+    "DATABASE_URL_${key}" => param.arn
+  }
+}
+
 output "db_password_parameter_name" {
   description = "SSM parameter name for DB_PASSWORD"
   value       = aws_ssm_parameter.db_password.name

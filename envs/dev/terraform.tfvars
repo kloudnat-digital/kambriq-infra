@@ -27,6 +27,7 @@ db_core_name = "kambriq_core"
 db_kbs_name  = "kambriq_kbs"
 db_kamnet_name = "kambriq_kamnet"
 db_lands_name  = "kambriq_lands"
+db_extra = {}
 db_username  = "kambriq_admin"
 db_password  = "CHANGE_ME"
 
