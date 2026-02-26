@@ -16,17 +16,17 @@
 locals {
   # Construct DATABASE_URLs from RDS components
   # Format: postgresql://{username}:{password}@{host}:{port}/{database}?schema=public
-  database_url_core = "postgresql://${var.db_username}:${var.db_password}@${var.db_host}:${var.db_port}/${var.db_core_name}?schema=public&sslmode=require"
-  database_url_kbs  = "postgresql://${var.db_username}:${var.db_password}@${var.db_host}:${var.db_port}/${var.db_kbs_name}?schema=public&sslmode=require"
+  database_url_core = "postgresql://${var.db_username}:${var.db_password}@${var.db_host}:${var.db_port}/${var.db_core_name}?schema=public&sslmode=require&uselibpqcompat=true"
+  database_url_kbs  = "postgresql://${var.db_username}:${var.db_password}@${var.db_host}:${var.db_port}/${var.db_kbs_name}?schema=public&sslmode=require&uselibpqcompat=true"
 
-  database_url_kamnet    = var.db_kamnet_name != "" ? "postgresql://${var.db_username}:${var.db_password}@${var.db_host}:${var.db_port}/${var.db_kamnet_name}?schema=public&sslmode=require" : ""
-  database_url_lands     = var.db_lands_name != "" ? "postgresql://${var.db_username}:${var.db_password}@${var.db_host}:${var.db_port}/${var.db_lands_name}?schema=public&sslmode=require" : ""
-  database_url_verify    = var.db_verify_name != "" ? "postgresql://${var.db_username}:${var.db_password}@${var.db_host}:${var.db_port}/${var.db_verify_name}?schema=public&sslmode=require" : ""
-  database_url_valuation = var.db_valuation_name != "" ? "postgresql://${var.db_username}:${var.db_password}@${var.db_host}:${var.db_port}/${var.db_valuation_name}?schema=public&sslmode=require" : ""
+  database_url_kamnet    = var.db_kamnet_name != "" ? "postgresql://${var.db_username}:${var.db_password}@${var.db_host}:${var.db_port}/${var.db_kamnet_name}?schema=public&sslmode=require&uselibpqcompat=true" : ""
+  database_url_lands     = var.db_lands_name != "" ? "postgresql://${var.db_username}:${var.db_password}@${var.db_host}:${var.db_port}/${var.db_lands_name}?schema=public&sslmode=require&uselibpqcompat=true" : ""
+  database_url_verify    = var.db_verify_name != "" ? "postgresql://${var.db_username}:${var.db_password}@${var.db_host}:${var.db_port}/${var.db_verify_name}?schema=public&sslmode=require&uselibpqcompat=true" : ""
+  database_url_valuation = var.db_valuation_name != "" ? "postgresql://${var.db_username}:${var.db_password}@${var.db_host}:${var.db_port}/${var.db_valuation_name}?schema=public&sslmode=require&uselibpqcompat=true" : ""
 
   database_url_extra = {
     for key, name in var.db_extra :
-    upper(key) => "postgresql://${var.db_username}:${var.db_password}@${var.db_host}:${var.db_port}/${name}?schema=public&sslmode=require"
+    upper(key) => "postgresql://${var.db_username}:${var.db_password}@${var.db_host}:${var.db_port}/${name}?schema=public&sslmode=require&uselibpqcompat=true"
   }
 }
 
