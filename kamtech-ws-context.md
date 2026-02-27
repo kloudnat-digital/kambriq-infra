@@ -1,0 +1,147 @@
+# Kamtech Workspace Context
+
+## Workspace
+- Path: `/Users/vmi/workspace/kamtech`
+- GitHub org: `kloudnat-digital`
+- Repositories:
+  - `kambriq-api` - backend API code for the platform
+    - https://github.com/kloudnat-digital/kambriq-api
+  - `kambriq-infra` - Terraform IaC for AWS hosting resources
+    - https://github.com/kloudnat-digital/kambriq-infra
+  - `kambriq-web` - frontend web app code
+    - https://github.com/kloudnat-digital/kambriq-web
+
+## Platform
+- KAMBRIQ is the ongoing web application platform under development.
+
+## Repository Notes
+
+### `kambriq-api`
+- Stack: NestJS v11 in an Nx v22 monorepo.
+- Entry point: `apps/api/src/main.ts` (port 3000, global prefix `/api/v1`).
+- Architecture: API gateway in `apps/api` with domain modules `core` and `kbs`.
+- Datastores: separate PostgreSQL databases per domain; Prisma v7 with per-domain schemas (`prisma/core`, `prisma/kbs`).
+- Shared library: `libs/common` (guards, filters, i18n, services, Prisma clients).
+- Infra/dev: `docker/docker-compose.yml` with Postgres 16, Redis 7, pgAdmin 4.
+- Auth/security: JWT auth + roles guard, Helmet, Throttler, CORS.
+- Validation/errors: Zod validation pipe, global exception filters, response interceptor.
+- Ops: Pino logging with correlation IDs; health check at `/api/v1/health/ready`.
+- Docs: Swagger at `/api/v1/docs` in non-production.
+- Scripts: dev/build/test/lint, Prisma migrate/generate, docker helpers.
+- CI/CD: deploy dev/prd workflows + migrate dev/prd workflows (ECS one-off tasks), semver image tags `vX.Y.Z` + `latest` alias.
+- CI/CD (dev): runs migrations + seed (ECS one-off tasks) after image build.
+- Core schema: `Permission`/`RolePermission` tables are deprecated and no longer expected in verification.
+
+### `kambriq-infra`
+- Environments: `envs/shared`, `envs/dev`, `envs/prd` with S3 remote state.
+- Shared stack: VPC, public/private subnets, single NAT, Route53 lookups, shared S3 buckets.
+- Dev/Prd stacks: ALB, ECS (cluster/service/task defs), RDS Postgres, ElastiCache Redis, SSM parameters, bastion hosts (SSH + SSM).
+- ALB routing: `/api/*` to API target group with health check `/api/v1/health/ready`.
+- Dev DNS: `dev.kambriq.com` Route53 record aliases to the ALB.
+- ECS migrations: one-off Prisma migrate deploy in CI/CD.
+- ECS seed: dev pipeline runs `npm run db:seed` as a one-off task.
+- Future DBs: add schemas under `prisma/<name>` and list in `db_extra` to auto-create `DATABASE_URL_*` secrets.
+- SSM parameters: split `DATABASE_URL_CORE`/`DATABASE_URL_KBS`, JWT secret and app config.
+- DB password: stored in SSM at `/kambriq/{env}/db/DB_PASSWORD`; use `TF_VAR_db_password` at apply time (no secrets in git).
+- GitHub OIDC: per-env app deploy roles and infra deploy role.
+- GitHub Actions: Terraform plan/apply workflows for infra.
+- Helper: `scripts/set-github-vars.sh` to populate GitHub env vars/secrets from outputs.
+- Docs: `docs/deployment-sequence.md` for infra → API → web rollout order.
+
+#### `kambriq-api` Runbook
+- Prereqs: Node >= 20, npm >= 10, Docker + Docker Compose.
+- Local dev:
+  - `npm install`
+  - `npm run docker:dev`
+  - `npm run db:migrate:dev`
+  - `npm run start:dev`
+  - API: `http://localhost:3000` (docs at `/api/v1/docs`)
+- Production build:
+  - `npm run build`
+  - `npm run start:prod`
+- Docker image:
+  - `npm run docker:build` (builds image `kambriq-api`)
+- Container expects port `3000` and `/api/v1/health/ready` endpoint for health check.
+
+## Notes
+- This file is the living context for the workspace.
+- Update it as new conventions, decisions, and routines emerge.
+
+## Infra Apply Checklist
+- Apply order: `envs/shared` -> `envs/dev` or `envs/prd`.
+- Ensure GitHub Environments exist for `kambriq-infra` (shared/dev/prd) and `kambriq-api` (dev/prd).
+- Set `AWS_ROLE_ARN` secret in `kambriq-infra` envs (shared/dev/prd) for Terraform CI.
+- Set GitHub vars for `kambriq-api` via `scripts/set-github-vars.sh`.
+
+## Roadmap
+
+### Roadmap v1.0 — Hard‑Deadline Milestone Contract
+
+Owners (default):
+- Infra Lead: TBD
+- API Lead: TBD
+- CI/CD Lead: TBD
+- Ops Lead: TBD
+
+#### Milestone 1 — Fri Mar 6, 2026 (P0‑A)
+Deliverables:
+- `verify-seed.sh` (SSM tunnel + DB counts).
+- Env var registry (single source of truth).
+- CI summary standardization.
+Acceptance criteria:
+- Any engineer can deploy dev and verify seed in <15 minutes.
+- CI summaries include image tag, task def ARN, migration/seed status.
+Risks & mitigations:
+- Missing env vars → keep registry complete; add CI checks.
+- Verification script flaky → add retries and clear failure messages.
+
+#### Milestone 2 — Fri Mar 20, 2026 (P0‑B)
+Deliverables:
+- Prisma migrations for all schemas.
+- CI uses `migrate deploy` only (no db push).
+- Migration governance doc.
+Acceptance criteria:
+- Dev CI succeeds without `ALLOW_DB_PUSH`.
+- Schema drift is blocked.
+Risks & mitigations:
+- Migration conflicts → freeze schema changes during cutover.
+- Incomplete migrations → require peer review on schema/migrations.
+
+#### Milestone 3 — Fri Apr 3, 2026 (P1‑A)
+Deliverables:
+- Release notes automation.
+- PRD manual approval gate.
+- Rollback playbook (single command path).
+Acceptance criteria:
+- Every prd release is traceable and reversible.
+Risks & mitigations:
+- Approvals delay releases → pre‑approve routine releases.
+- Rollback not tested → run a dry‑run in dev.
+
+#### Milestone 4 — Fri Apr 17, 2026 (P1‑B)
+Deliverables:
+- Dashboards (ALB/ECS/RDS/Redis).
+- Alerts (5xx spikes, task restarts, DB connections).
+Acceptance criteria:
+- Alerts fire on simulated failures.
+- Dashboard links documented.
+Risks & mitigations:
+- Alert fatigue → tune thresholds and severity.
+- Missing metrics → verify CloudWatch metrics exist first.
+
+#### Milestone 5 — Fri May 1, 2026 (P2 Stretch)
+Deliverables:
+- Terraform plan + cost diffs in PRs.
+- Preview environments for PRs (auto‑expire).
+- Golden path templates for new DB/service.
+Acceptance criteria:
+- PRs show infra cost impact.
+- Preview envs auto‑expire.
+Risks & mitigations:
+- Cost spikes → TTL cleanup and size limits.
+- Complexity creep → roll out to one service first.
+
+#### Escalation & De‑Scope
+- Hard deadlines: Milestones 1 & 2 are non‑negotiable.
+- De‑scope order: P2 → P1 → P0.
+- Any risk impacting P0 must be escalated within 24 hours.
