@@ -66,3 +66,6 @@ variables for CI/CD.
 
 ## Deployment Sequence
 See `docs/deployment-sequence.md` for the full infra → API → web rollout flow.
+
+## Commit Hygiene
+- Do not add `Made-with: Cursor` to commits.

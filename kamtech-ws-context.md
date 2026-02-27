@@ -66,6 +66,7 @@
 ## Notes
 - This file is the living context for the workspace.
 - Update it as new conventions, decisions, and routines emerge.
+- Commit hygiene: do not add `Made-with: Cursor` to commits.
 
 ## Infra Apply Checklist
 - Apply order: `envs/shared` -> `envs/dev` or `envs/prd`.
