@@ -70,6 +70,9 @@ module "bastion" {
   key_name           = var.bastion_key_name
   allowed_ssh_cidrs  = var.bastion_allowed_ssh_cidrs
   instance_type      = var.bastion_instance_type
+  schedule_stop      = var.bastion_schedule_stop
+  schedule_start     = var.bastion_schedule_start
+  schedule_timezone  = var.bastion_schedule_timezone
 }
 
 resource "aws_route53_record" "dev_api" {
@@ -286,6 +289,7 @@ module "rds" {
   storage_type            = var.rds_storage_type
   backup_retention_period = var.rds_backup_retention_period
   skip_final_snapshot     = var.rds_skip_final_snapshot
+  enable_cloudwatch_logs  = var.rds_enable_cloudwatch_logs
   vpc_id                  = data.terraform_remote_state.shared.outputs.vpc_id
   subnet_ids              = data.terraform_remote_state.shared.outputs.private_subnet_ids
   security_group_id       = aws_security_group.rds.id

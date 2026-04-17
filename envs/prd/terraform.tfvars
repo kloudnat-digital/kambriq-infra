@@ -34,7 +34,7 @@ db_password  = "CHANGE_ME"
 rds_instance_class          = "db.t4g.small"
 rds_allocated_storage       = 50
 rds_storage_type            = "gp3"
-rds_backup_retention_period = 14
+rds_backup_retention_period = 5
 rds_skip_final_snapshot     = false
 
 redis_node_type                    = "cache.t4g.small"

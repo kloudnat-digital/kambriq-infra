@@ -342,3 +342,27 @@ variable "bastion_instance_type" {
   type        = string
   default     = "t3.micro"
 }
+
+variable "rds_enable_cloudwatch_logs" {
+  description = "Export RDS logs to CloudWatch"
+  type        = bool
+  default     = false
+}
+
+variable "bastion_schedule_stop" {
+  description = "Cron to stop bastion (Europe/Paris). Empty = always on."
+  type        = string
+  default     = ""
+}
+
+variable "bastion_schedule_start" {
+  description = "Cron to start bastion (Europe/Paris). Empty = always on."
+  type        = string
+  default     = ""
+}
+
+variable "bastion_schedule_timezone" {
+  description = "IANA timezone for bastion schedules"
+  type        = string
+  default     = "Europe/Paris"
+}

@@ -41,3 +41,21 @@ variable "enable_ssh" {
   description = "Enable SSH ingress rules"
   default     = true
 }
+
+variable "schedule_stop" {
+  type        = string
+  description = "Cron expression to stop the bastion (e.g. '0 19 ? * MON-FRI *'). Empty = no schedule."
+  default     = ""
+}
+
+variable "schedule_start" {
+  type        = string
+  description = "Cron expression to start the bastion (e.g. '0 7 ? * MON-FRI *'). Empty = no schedule."
+  default     = ""
+}
+
+variable "schedule_timezone" {
+  type        = string
+  description = "IANA timezone for stop/start schedules"
+  default     = "Europe/Paris"
+}

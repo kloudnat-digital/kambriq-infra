@@ -49,7 +49,7 @@ resource "aws_db_instance" "main" {
   publicly_accessible = false
   multi_az            = false # Single-AZ pour minimiser les coûts
 
-  enabled_cloudwatch_logs_exports = ["postgresql", "upgrade"]
+  enabled_cloudwatch_logs_exports = var.enable_cloudwatch_logs ? ["postgresql", "upgrade"] : []
 
   tags = {
     Name = "kambriq-postgres-${var.env}"

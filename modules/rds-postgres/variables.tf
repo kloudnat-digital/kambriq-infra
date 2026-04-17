@@ -66,3 +66,9 @@ variable "skip_final_snapshot" {
   default     = true
 }
 
+variable "enable_cloudwatch_logs" {
+  description = "Export postgresql and upgrade logs to CloudWatch"
+  type        = bool
+  default     = true
+}
+
