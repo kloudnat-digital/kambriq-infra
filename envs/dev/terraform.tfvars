@@ -1,7 +1,7 @@
 project_name = "kambriq"
 env          = "dev"
 aws_region   = "eu-central-1"
-github_repo  = "kloudnat-digital/kambriq-api"
+github_repo  = "kloudnat-digital/kambriq-webapp"
 
 shared_state_bucket = "kloudnat-infra-shared-store"
 shared_state_key    = "kambriq/envs/shared/terraform.tfstate"
