@@ -14,8 +14,8 @@
 crash.log
 crash.*.log
 
-# Terraform lock file (contains provider checksums)
-.terraform.lock.hcl
+# Terraform lock file — tracked in git for reproducible provider versions
+# .terraform.lock.hcl
 
 # ============================================================================
 # Sensitive Configuration Files

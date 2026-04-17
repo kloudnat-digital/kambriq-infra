@@ -20,25 +20,70 @@ on:
 permissions:
   id-token: write
   contents: read
+  pull-requests: write
+
+env:
+  TF_VERSION: "1.12.0"
 
 jobs:
-  plan:
+  detect-envs:
+    name: Detect changed environments
     runs-on: ubuntu-latest
-    environment: ${{ inputs.env || 'dev' }}
+    if: github.event_name == 'pull_request'
+    outputs:
+      envs: ${{ steps.detect.outputs.envs }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed environments
+        id: detect
+        run: |
+          set -euo pipefail
+          CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
+          ENVS=()
+          for ENV in shared dev prd; do
+            if echo "$CHANGED" | grep -qE "^envs/${ENV}/|^modules/"; then
+              ENVS+=("\"${ENV}\"")
+            fi
+          done
+          # Always include dev if only .github/workflows changed (smoke-plan)
+          if echo "$CHANGED" | grep -q "^\.github/workflows/terraform-"; then
+            if ! printf '%s\n' "${ENVS[@]:-}" | grep -q '"dev"'; then
+              ENVS+=("\"dev\"")
+            fi
+          fi
+          if [[ ${#ENVS[@]} -eq 0 ]]; then
+            ENVS+=("\"dev\"")
+          fi
+          MATRIX="[$(IFS=,; echo "${ENVS[*]}")]"
+          echo "envs=${MATRIX}" >> "$GITHUB_OUTPUT"
+          echo "Environments to plan: ${MATRIX}"
+
+  plan:
+    name: Plan (${{ matrix.env }})
+    runs-on: ubuntu-latest
+    needs: [detect-envs]
+    if: always() && (github.event_name == 'workflow_dispatch' || needs.detect-envs.result == 'success')
+    strategy:
+      fail-fast: false
+      matrix:
+        env: ${{ github.event_name == 'workflow_dispatch' && fromJson(format('["{0}"]', inputs.env)) || fromJson(needs.detect-envs.outputs.envs) }}
+    environment: ${{ matrix.env }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
 
       - name: Resolve environment
         id: env
         run: |
           set -euo pipefail
-          ENV_NAME="${{ inputs.env }}"
-          if [[ -z "${ENV_NAME}" ]]; then
-            ENV_NAME="dev"
-          fi
+          ENV_NAME="${{ matrix.env }}"
           echo "env_name=${ENV_NAME}" >> "$GITHUB_OUTPUT"
           AWS_REGION="$(awk -F'=' '/^aws_region/ { gsub(/["[:space:]]/, "", $2); print $2 }' "envs/${ENV_NAME}/terraform.tfvars")"
           echo "AWS_REGION=${AWS_REGION}" >> "$GITHUB_ENV"
@@ -52,10 +97,66 @@ jobs:
       - name: Terraform init
         run: terraform -chdir="envs/${{ steps.env.outputs.env_name }}" init -reconfigure
 
+      - name: Terraform format check
+        run: terraform -chdir="envs/${{ steps.env.outputs.env_name }}" fmt -check -recursive -diff
+
+      - name: Terraform validate
+        run: terraform -chdir="envs/${{ steps.env.outputs.env_name }}" validate
+
       - name: Terraform plan
+        id: plan
         run: |
           set -euo pipefail
-          terraform -chdir="envs/${{ steps.env.outputs.env_name }}" plan -no-color | tee plan.txt
+          terraform -chdir="envs/${{ steps.env.outputs.env_name }}" plan -no-color 2>&1 | tee plan.txt
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      - name: Post plan as PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = fs.readFileSync('plan.txt', 'utf8');
+            const truncated = plan.length > 60000
+              ? plan.substring(0, 60000) + '\n\n... [output truncated — see step summary for full plan]'
+              : plan;
+            const body = [
+              `## Terraform Plan \`${{ matrix.env }}\``,
+              '',
+              '<details><summary>Show plan</summary>',
+              '',
+              '```terraform',
+              truncated,
+              '```',
+              '</details>',
+              '',
+              `_Triggered by @${{ github.actor }} on \`${{ github.head_ref }}\`_`,
+            ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c =>
+              c.user.login === 'github-actions[bot]' &&
+              c.body.startsWith(`## Terraform Plan \`${{ matrix.env }}\``)
+            );
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
 
       - name: Plan summary
         if: always()
@@ -63,14 +164,15 @@ jobs:
           {
             echo "## Terraform plan (${{ steps.env.outputs.env_name }})"
             echo
-            echo '```'
+            echo '```terraform'
             cat plan.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload plan output
+      - name: Upload plan artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: terraform-plan-${{ steps.env.outputs.env_name }}
           path: plan.txt
+          retention-days: 7

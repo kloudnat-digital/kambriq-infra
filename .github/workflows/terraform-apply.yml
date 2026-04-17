@@ -16,12 +16,16 @@ permissions:
   id-token: write
   contents: read
 
+env:
+  TF_VERSION: "1.12.0"
+
 concurrency:
   group: terraform-apply-${{ inputs.env }}
   cancel-in-progress: false
 
 jobs:
   apply:
+    name: Apply (${{ inputs.env }})
     runs-on: ubuntu-latest
     environment: ${{ inputs.env }}
     steps:
@@ -29,6 +33,8 @@ jobs:
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
 
       - name: Resolve environment
         id: env
@@ -48,5 +54,51 @@ jobs:
       - name: Terraform init
         run: terraform -chdir="envs/${{ steps.env.outputs.env_name }}" init -reconfigure
 
+      - name: Terraform format check
+        run: terraform -chdir="envs/${{ steps.env.outputs.env_name }}" fmt -check -recursive -diff
+
+      - name: Terraform validate
+        run: terraform -chdir="envs/${{ steps.env.outputs.env_name }}" validate
+
+      - name: Terraform plan
+        id: plan
+        run: |
+          set -euo pipefail
+          terraform -chdir="envs/${{ steps.env.outputs.env_name }}" plan -no-color -out=tfplan 2>&1 | tee plan.txt
+
+      - name: Plan summary (pre-apply)
+        run: |
+          {
+            echo "## Terraform plan — ${{ steps.env.outputs.env_name }} (pre-apply)"
+            echo
+            echo '```terraform'
+            cat plan.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Terraform apply
-        run: terraform -chdir="envs/${{ steps.env.outputs.env_name }}" apply -auto-approve
+        id: apply
+        run: |
+          set -euo pipefail
+          terraform -chdir="envs/${{ steps.env.outputs.env_name }}" apply -no-color -auto-approve tfplan 2>&1 | tee apply.txt
+
+      - name: Apply summary
+        if: always()
+        run: |
+          {
+            echo "## Terraform apply — ${{ steps.env.outputs.env_name }}"
+            echo
+            echo '```terraform'
+            cat apply.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload apply output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-apply-${{ steps.env.outputs.env_name }}-${{ github.run_id }}
+          path: |
+            plan.txt
+            apply.txt
+          retention-days: 30
