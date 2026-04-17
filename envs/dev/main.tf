@@ -234,7 +234,10 @@ data "aws_iam_policy_document" "github_actions_permissions" {
       "ecr:PutImage",
       "ecr:UploadLayerPart",
     ]
-    resources = [module.ecr_api.repository_arn]
+    resources = [
+      module.ecr_api.repository_arn,
+      module.ecr_web.repository_arn,
+    ]
   }
 
   statement {
