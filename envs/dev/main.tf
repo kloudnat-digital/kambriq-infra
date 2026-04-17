@@ -18,7 +18,9 @@ provider "aws" {
 
 locals {
   name_prefix       = "${var.project_name}-${var.env}"
-  alb_ingress_ports = distinct([var.api_port, var.web_port])
+  # Include port 3001 explicitly: web container listens on 3001 even though
+  # web_port (TG port) is 3000 to avoid target-group recreation.
+  alb_ingress_ports = distinct([var.api_port, var.web_port, 3001])
 }
 
 data "terraform_remote_state" "shared" {
