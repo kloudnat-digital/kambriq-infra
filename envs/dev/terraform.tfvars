@@ -17,7 +17,7 @@ api_cpu               = 256
 api_memory            = 512
 api_desired_count     = 1
 
-web_port              = 3001
+web_port              = 3000
 web_health_check_path = "/health"
 web_cpu               = 512
 web_memory            = 1024

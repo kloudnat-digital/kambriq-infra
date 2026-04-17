@@ -414,7 +414,7 @@ module "ecs_service_web" {
   task_execution_role_arn = module.ecs_cluster.task_execution_role_arn
   task_role_arn           = module.iam_roles_ecs.task_web_role_arn
   container_image         = "${module.ecr_web.repository_url}:${var.web_image_tag}"
-  container_port          = var.web_port
+  container_port          = 3001
   cpu                     = var.web_cpu
   memory                  = var.web_memory
   desired_count           = var.web_desired_count
@@ -427,7 +427,7 @@ module "ecs_service_web" {
   enable_init_container   = false
 
   environment_variables = {
-    PORT         = tostring(var.web_port)
+    PORT         = "3001"
     NODE_ENV     = var.node_env
     NEXTAUTH_URL = var.frontend_url
   }

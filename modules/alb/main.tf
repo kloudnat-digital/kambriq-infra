@@ -96,7 +96,7 @@ resource "aws_lb_target_group" "api" {
 
 # Target Group for Next.js (Web)
 resource "aws_lb_target_group" "web" {
-  name_prefix = "web-"
+  name        = "${local.name_prefix}-web-tg"
   port        = var.web_port
   protocol    = "HTTP"
   vpc_id      = var.vpc_id
@@ -119,10 +119,6 @@ resource "aws_lb_target_group" "web" {
     Name = "${local.name_prefix}-web-tg"
     Env  = var.env
     Type = "alb-target-group"
-  }
-
-  lifecycle {
-    create_before_destroy = true
   }
 }
 
