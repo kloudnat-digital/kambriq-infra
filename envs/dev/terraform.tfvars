@@ -17,7 +17,7 @@ api_cpu               = 256
 api_memory            = 512
 api_desired_count     = 1
 
-web_port              = 3000
+web_port              = 3001
 web_health_check_path = "/health"
 web_cpu               = 512
 web_memory            = 1024
@@ -63,7 +63,7 @@ web_image_tag = "latest"
 
 ecr_api_repo_name  = "kambriq-api"
 ecr_web_repo_name  = "kambriq-web"
-enable_web_service = false
+enable_web_service = true
 
 bastion_key_name          = "bastion_key_pair"
 bastion_allowed_ssh_cidrs = ["90.25.230.44/32"]

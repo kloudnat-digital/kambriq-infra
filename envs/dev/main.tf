@@ -425,4 +425,15 @@ module "ecs_service_web" {
   aws_region              = var.aws_region
   health_check_path       = var.web_health_check_path
   enable_init_container   = false
+
+  environment_variables = {
+    PORT         = tostring(var.web_port)
+    NODE_ENV     = var.node_env
+    NEXTAUTH_URL = var.frontend_url
+  }
+
+  secrets = {
+    AUTH_SECRET    = module.ssm_app_parameters.web_nextauth_secret_parameter_arn
+    JWT_EXPIRES_IN = module.ssm_app_parameters.web_jwt_expires_in_parameter_arn
+  }
 }

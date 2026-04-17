@@ -75,3 +75,13 @@ output "email_from_name_parameter_name" {
   description = "SSM parameter name for EMAIL_FROM_NAME"
   value       = aws_ssm_parameter.email_from_name.name
 }
+
+output "web_nextauth_secret_parameter_arn" {
+  description = "SSM parameter ARN for NEXTAUTH_SECRET (web)"
+  value       = aws_ssm_parameter.web_nextauth_secret.arn
+}
+
+output "web_jwt_expires_in_parameter_arn" {
+  description = "SSM parameter ARN for JWT_EXPIRES_IN (web)"
+  value       = aws_ssm_parameter.web_jwt_expires_in.arn
+}
