@@ -17,8 +17,8 @@ provider "aws" {
 }
 
 locals {
-  name_prefix        = "${var.project_name}-${var.env}"
-  alb_ingress_ports  = distinct([var.api_port, var.web_port])
+  name_prefix       = "${var.project_name}-${var.env}"
+  alb_ingress_ports = distinct([var.api_port, var.web_port])
 }
 
 data "terraform_remote_state" "shared" {
@@ -45,10 +45,10 @@ module "ecr_web" {
 }
 
 module "ecs_cluster" {
-  source     = "../../modules/ecs-cluster"
+  source       = "../../modules/ecs-cluster"
   project_name = var.project_name
-  env         = var.env
-  aws_region  = var.aws_region
+  env          = var.env
+  aws_region   = var.aws_region
 }
 
 module "alb" {
@@ -63,16 +63,16 @@ module "alb" {
 }
 
 module "bastion" {
-  source             = "../../modules/bastion"
-  name               = "${local.name_prefix}-bastion"
-  vpc_id             = data.terraform_remote_state.shared.outputs.vpc_id
-  public_subnet_id   = data.terraform_remote_state.shared.outputs.public_subnet_ids[0]
-  key_name           = var.bastion_key_name
-  allowed_ssh_cidrs  = var.bastion_allowed_ssh_cidrs
-  instance_type      = var.bastion_instance_type
-  schedule_stop      = var.bastion_schedule_stop
-  schedule_start     = var.bastion_schedule_start
-  schedule_timezone  = var.bastion_schedule_timezone
+  source            = "../../modules/bastion"
+  name              = "${local.name_prefix}-bastion"
+  vpc_id            = data.terraform_remote_state.shared.outputs.vpc_id
+  public_subnet_id  = data.terraform_remote_state.shared.outputs.public_subnet_ids[0]
+  key_name          = var.bastion_key_name
+  allowed_ssh_cidrs = var.bastion_allowed_ssh_cidrs
+  instance_type     = var.bastion_instance_type
+  schedule_stop     = var.bastion_schedule_stop
+  schedule_start    = var.bastion_schedule_start
+  schedule_timezone = var.bastion_schedule_timezone
 }
 
 resource "aws_route53_record" "dev_api" {
@@ -315,66 +315,66 @@ module "s3_media" {
 }
 
 module "ssm_app_parameters" {
-  source        = "../../modules/ssm-app-parameters"
-  env           = var.env
-  db_host       = module.rds.db_host
-  db_port       = module.rds.db_port
-  db_core_name  = var.db_core_name
-  db_kbs_name   = var.db_kbs_name
-  db_kamnet_name = var.db_kamnet_name
-  db_lands_name  = var.db_lands_name
-  db_extra      = var.db_extra
-  db_username   = var.db_username
-  db_password   = var.db_password
-  jwt_secret    = var.jwt_secret
+  source                  = "../../modules/ssm-app-parameters"
+  env                     = var.env
+  db_host                 = module.rds.db_host
+  db_port                 = module.rds.db_port
+  db_core_name            = var.db_core_name
+  db_kbs_name             = var.db_kbs_name
+  db_kamnet_name          = var.db_kamnet_name
+  db_lands_name           = var.db_lands_name
+  db_extra                = var.db_extra
+  db_username             = var.db_username
+  db_password             = var.db_password
+  jwt_secret              = var.jwt_secret
   use_existing_jwt_secret = var.use_existing_jwt_secret
-  frontend_url  = var.frontend_url
-  ses_from_email = var.ses_from_email
+  frontend_url            = var.frontend_url
+  ses_from_email          = var.ses_from_email
 
-  node_env            = var.node_env
-  port                = var.api_port
-  api_prefix          = var.api_prefix
-  cors_origins        = var.cors_origins
-  throttle_ttl        = var.throttle_ttl
-  throttle_limit      = var.throttle_limit
-  redis_host          = module.redis.primary_endpoint_address
-  redis_port          = module.redis.port
-  aws_s3_bucket       = module.s3_media.bucket_id
-  aws_region          = var.aws_region
-  email_from          = var.ses_from_email
-  email_from_name     = var.email_from_name
-  salt_rounds         = var.salt_rounds
+  node_env               = var.node_env
+  port                   = var.api_port
+  api_prefix             = var.api_prefix
+  cors_origins           = var.cors_origins
+  throttle_ttl           = var.throttle_ttl
+  throttle_limit         = var.throttle_limit
+  redis_host             = module.redis.primary_endpoint_address
+  redis_port             = module.redis.port
+  aws_s3_bucket          = module.s3_media.bucket_id
+  aws_region             = var.aws_region
+  email_from             = var.ses_from_email
+  email_from_name        = var.email_from_name
+  salt_rounds            = var.salt_rounds
   jwt_access_expiration  = var.jwt_access_expiration
   jwt_refresh_expiration = var.jwt_refresh_expiration
 }
 
 module "iam_roles_ecs" {
-  source      = "../../modules/iam-roles-ecs"
+  source       = "../../modules/iam-roles-ecs"
   project_name = var.project_name
-  env         = var.env
-  aws_region  = var.aws_region
+  env          = var.env
+  aws_region   = var.aws_region
 }
 
 module "ecs_service_api" {
-  source                 = "../../modules/ecs-service"
-  project_name           = var.project_name
-  env                    = var.env
-  service_name           = "api"
-  cluster_id             = module.ecs_cluster.cluster_id
+  source                  = "../../modules/ecs-service"
+  project_name            = var.project_name
+  env                     = var.env
+  service_name            = "api"
+  cluster_id              = module.ecs_cluster.cluster_id
   task_execution_role_arn = module.ecs_cluster.task_execution_role_arn
-  task_role_arn          = module.iam_roles_ecs.task_api_role_arn
-  container_image        = "${module.ecr_api.repository_url}:${var.api_image_tag}"
-  container_port         = var.api_port
-  cpu                    = var.api_cpu
-  memory                 = var.api_memory
-  desired_count          = var.api_desired_count
-  subnet_ids             = data.terraform_remote_state.shared.outputs.private_subnet_ids
-  security_group_ids     = [aws_security_group.ecs.id]
-  target_group_arn       = module.alb.api_target_group_arn
-  assign_public_ip       = false
-  aws_region             = var.aws_region
-  health_check_path      = var.api_health_check_path
-  enable_init_container  = false
+  task_role_arn           = module.iam_roles_ecs.task_api_role_arn
+  container_image         = "${module.ecr_api.repository_url}:${var.api_image_tag}"
+  container_port          = var.api_port
+  cpu                     = var.api_cpu
+  memory                  = var.api_memory
+  desired_count           = var.api_desired_count
+  subnet_ids              = data.terraform_remote_state.shared.outputs.private_subnet_ids
+  security_group_ids      = [aws_security_group.ecs.id]
+  target_group_arn        = module.alb.api_target_group_arn
+  assign_public_ip        = false
+  aws_region              = var.aws_region
+  health_check_path       = var.api_health_check_path
+  enable_init_container   = false
 
   environment_variables = {
     NODE_ENV               = var.node_env
@@ -396,33 +396,33 @@ module "ecs_service_api" {
   }
 
   secrets = merge({
-    DATABASE_URL_CORE = module.ssm_app_parameters.database_url_core_parameter_arn
-    DATABASE_URL_KBS  = module.ssm_app_parameters.database_url_kbs_parameter_arn
+    DATABASE_URL_CORE   = module.ssm_app_parameters.database_url_core_parameter_arn
+    DATABASE_URL_KBS    = module.ssm_app_parameters.database_url_kbs_parameter_arn
     DATABASE_URL_KAMNET = module.ssm_app_parameters.database_url_kamnet_parameter_arn
     DATABASE_URL_LANDS  = module.ssm_app_parameters.database_url_lands_parameter_arn
-    JWT_SECRET        = module.ssm_app_parameters.jwt_secret_parameter_arn
+    JWT_SECRET          = module.ssm_app_parameters.jwt_secret_parameter_arn
   }, module.ssm_app_parameters.database_url_extra_parameter_arns)
 }
 
 module "ecs_service_web" {
-  count                  = var.enable_web_service ? 1 : 0
-  source                 = "../../modules/ecs-service"
-  project_name           = var.project_name
-  env                    = var.env
-  service_name           = "web"
-  cluster_id             = module.ecs_cluster.cluster_id
+  count                   = var.enable_web_service ? 1 : 0
+  source                  = "../../modules/ecs-service"
+  project_name            = var.project_name
+  env                     = var.env
+  service_name            = "web"
+  cluster_id              = module.ecs_cluster.cluster_id
   task_execution_role_arn = module.ecs_cluster.task_execution_role_arn
-  task_role_arn          = module.iam_roles_ecs.task_web_role_arn
-  container_image        = "${module.ecr_web.repository_url}:${var.web_image_tag}"
-  container_port         = var.web_port
-  cpu                    = var.web_cpu
-  memory                 = var.web_memory
-  desired_count          = var.web_desired_count
-  subnet_ids             = data.terraform_remote_state.shared.outputs.private_subnet_ids
-  security_group_ids     = [aws_security_group.ecs.id]
-  target_group_arn       = module.alb.web_target_group_arn
-  assign_public_ip       = false
-  aws_region             = var.aws_region
-  health_check_path      = var.web_health_check_path
-  enable_init_container  = false
+  task_role_arn           = module.iam_roles_ecs.task_web_role_arn
+  container_image         = "${module.ecr_web.repository_url}:${var.web_image_tag}"
+  container_port          = var.web_port
+  cpu                     = var.web_cpu
+  memory                  = var.web_memory
+  desired_count           = var.web_desired_count
+  subnet_ids              = data.terraform_remote_state.shared.outputs.private_subnet_ids
+  security_group_ids      = [aws_security_group.ecs.id]
+  target_group_arn        = module.alb.web_target_group_arn
+  assign_public_ip        = false
+  aws_region              = var.aws_region
+  health_check_path       = var.web_health_check_path
+  enable_init_container   = false
 }

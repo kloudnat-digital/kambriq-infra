@@ -51,7 +51,7 @@ variable "api_acm_certificate_arn" {
   default     = ""
 }
 
- 
+
 
 variable "api_port" {
   description = "API container port"

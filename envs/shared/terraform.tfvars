@@ -1,5 +1,5 @@
-aws_region = "eu-central-1"
-env        = "shared"
+aws_region        = "eu-central-1"
+env               = "shared"
 github_repo_infra = "kloudnat-digital/kambriq-infra"
 
 domain_name     = "kambriq.com"

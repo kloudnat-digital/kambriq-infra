@@ -23,13 +23,13 @@ web_cpu               = 512
 web_memory            = 1024
 web_desired_count     = 2
 
-db_core_name = "kambriq_core"
-db_kbs_name  = "kambriq_kbs"
+db_core_name   = "kambriq_core"
+db_kbs_name    = "kambriq_kbs"
 db_kamnet_name = "kambriq_kamnet"
 db_lands_name  = "kambriq_lands"
-db_extra = {}
-db_username  = "kambriq_admin"
-db_password  = "CHANGE_ME"
+db_extra       = {}
+db_username    = "kambriq_admin"
+db_password    = "CHANGE_ME"
 
 rds_instance_class          = "db.t4g.small"
 rds_allocated_storage       = 50
@@ -37,31 +37,31 @@ rds_storage_type            = "gp3"
 rds_backup_retention_period = 5
 rds_skip_final_snapshot     = false
 
-redis_node_type                    = "cache.t4g.small"
-redis_engine_version               = "7.1"
-redis_port                         = 6379
-redis_auth_token                   = ""
-redis_transit_encryption_enabled   = true
+redis_node_type                  = "cache.t4g.small"
+redis_engine_version             = "7.1"
+redis_port                       = 6379
+redis_auth_token                 = ""
+redis_transit_encryption_enabled = true
 
 s3_media_bucket_name = ""
 cors_origins         = "https://kambriq.com"
 frontend_url         = "https://kambriq.com"
 node_env             = "production"
 
-jwt_access_expiration  = "15m"
-jwt_refresh_expiration = "15d"
-throttle_ttl           = 60000
-throttle_limit         = 100
-email_from_name        = "KAMBRIQ"
-salt_rounds            = 12
-jwt_secret             = ""
+jwt_access_expiration   = "15m"
+jwt_refresh_expiration  = "15d"
+throttle_ttl            = 60000
+throttle_limit          = 100
+email_from_name         = "KAMBRIQ"
+salt_rounds             = 12
+jwt_secret              = ""
 use_existing_jwt_secret = false
 
 api_image_tag = "latest"
 web_image_tag = "latest"
 
-ecr_api_repo_name = "kambriq-api"
-ecr_web_repo_name = "kambriq-web"
+ecr_api_repo_name  = "kambriq-api"
+ecr_web_repo_name  = "kambriq-web"
 enable_web_service = true
 
 bastion_key_name          = "bastion_key_pair"

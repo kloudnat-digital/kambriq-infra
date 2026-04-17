@@ -116,7 +116,7 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            const plan = fs.readFileSync('plan.txt', 'utf8');
+            const plan = fs.existsSync('plan.txt') ? fs.readFileSync('plan.txt', 'utf8') : '(plan step did not run — a prior step failed)';
             const truncated = plan.length > 60000
               ? plan.substring(0, 60000) + '\n\n... [output truncated — see step summary for full plan]'
               : plan;
@@ -165,7 +165,7 @@ jobs:
             echo "## Terraform plan (${{ steps.env.outputs.env_name }})"
             echo
             echo '```terraform'
-            cat plan.txt
+            cat plan.txt 2>/dev/null || echo "(plan step did not run — a prior step failed)"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -175,4 +175,5 @@ jobs:
         with:
           name: terraform-plan-${{ steps.env.outputs.env_name }}
           path: plan.txt
+          if-no-files-found: ignore
           retention-days: 7

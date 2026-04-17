@@ -72,7 +72,7 @@ jobs:
             echo "## Terraform plan — ${{ steps.env.outputs.env_name }} (pre-apply)"
             echo
             echo '```terraform'
-            cat plan.txt
+            cat plan.txt 2>/dev/null || echo "(plan step did not produce output)"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -89,7 +89,7 @@ jobs:
             echo "## Terraform apply — ${{ steps.env.outputs.env_name }}"
             echo
             echo '```terraform'
-            cat apply.txt
+            cat apply.txt 2>/dev/null || echo "(apply step did not run)"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -101,4 +101,5 @@ jobs:
           path: |
             plan.txt
             apply.txt
+          if-no-files-found: ignore
           retention-days: 30

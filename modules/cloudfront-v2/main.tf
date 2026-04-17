@@ -78,9 +78,9 @@ resource "aws_cloudfront_distribution" "main" {
       }
     }
 
-    min_ttl     = 0      # No cache for SSR pages
-    default_ttl = 0      # No cache for SSR pages (changed from 3600)
-    max_ttl     = 86400  # Allow long cache for static assets via Cache-Control
+    min_ttl     = 0     # No cache for SSR pages
+    default_ttl = 0     # No cache for SSR pages (changed from 3600)
+    max_ttl     = 86400 # Allow long cache for static assets via Cache-Control
     compress    = true
   }
 
