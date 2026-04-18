@@ -273,6 +273,7 @@ data "aws_iam_policy_document" "github_actions_permissions" {
     resources = [
       module.ecs_cluster.task_execution_role_arn,
       module.iam_roles_ecs.task_api_role_arn,
+      module.iam_roles_ecs.task_web_role_arn,
     ]
   }
 }
