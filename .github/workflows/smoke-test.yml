@@ -1,0 +1,59 @@
+name: Smoke Test
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Runs the infrastructure smoke test against a deployed environment.
+# Triggers:
+#   - Automatically after terraform-apply.yml completes successfully
+#   - Manually via workflow_dispatch
+# ──────────────────────────────────────────────────────────────────────────────
+
+on:
+  workflow_run:
+    workflows: ["Terraform Apply"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      env:
+        description: "Environment to test"
+        type: choice
+        options: [dev, prd]
+        default: dev
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  smoke-test:
+    name: Smoke Test (${{ github.event.inputs.env || 'dev' }})
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    environment: ${{ github.event.inputs.env || 'dev' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'eu-central-1' }}
+
+      - name: Run smoke test
+        run: |
+          chmod +x scripts/smoke-test.sh
+          ./scripts/smoke-test.sh "$ENV"
+        env:
+          ENV: ${{ github.event.inputs.env || 'dev' }}
+          AWS_REGION: ${{ vars.AWS_REGION || 'eu-central-1' }}
+          WEB_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
+          API_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
+          ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+          ECS_API_SERVICE: ${{ vars.ECS_SERVICE }}
+          ECS_WEB_SERVICE: ${{ vars.ECS_WEB_SERVICE }}
+
+      - name: Smoke test summary
+        if: always()
+        run: echo "Smoke test completed for environment ${{ github.event.inputs.env || 'dev' }}"

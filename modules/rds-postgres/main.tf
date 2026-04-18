@@ -47,7 +47,7 @@ resource "aws_db_instance" "main" {
   final_snapshot_identifier = var.skip_final_snapshot ? null : "kambriq-postgres-${var.env}-final-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
 
   publicly_accessible = false
-  multi_az            = false # Single-AZ pour minimiser les coûts
+  multi_az            = var.multi_az
 
   enabled_cloudwatch_logs_exports = var.enable_cloudwatch_logs ? ["postgresql", "upgrade"] : []
 
@@ -55,5 +55,12 @@ resource "aws_db_instance" "main" {
     Name = "kambriq-postgres-${var.env}"
     Env  = var.env
   }
-}
 
+  # To enable destroy protection on an existing prd instance, uncomment below.
+  # prevent_destroy cannot be set dynamically in Terraform — enable manually
+  # in the prd workspace after first apply.
+  #
+  # lifecycle {
+  #   prevent_destroy = true
+  # }
+}

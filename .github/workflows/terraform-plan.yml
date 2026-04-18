@@ -177,3 +177,30 @@ jobs:
           path: plan.txt
           if-no-files-found: ignore
           retention-days: 7
+
+  # ── Terraform module unit tests ───────────────────────────────────────────────
+  module-tests:
+    name: Module Tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Test ALB module
+        run: |
+          terraform -chdir=modules/alb init -backend=false
+          terraform -chdir=modules/alb test
+
+      - name: Test RDS module
+        run: |
+          terraform -chdir=modules/rds-postgres init -backend=false
+          terraform -chdir=modules/rds-postgres test
+
+      - name: Module test summary
+        if: always()
+        run: echo "Module tests completed"

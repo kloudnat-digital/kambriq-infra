@@ -59,6 +59,15 @@ resource "aws_lb" "main" {
   enable_http2                     = true
   enable_cross_zone_load_balancing = true
 
+  dynamic "access_logs" {
+    for_each = var.access_logs_bucket != "" ? [1] : []
+    content {
+      bucket  = var.access_logs_bucket
+      prefix  = "${local.name_prefix}-alb"
+      enabled = true
+    }
+  }
+
   tags = {
     Name = "${local.name_prefix}-alb"
     Env  = var.env

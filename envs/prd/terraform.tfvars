@@ -34,7 +34,8 @@ db_password    = "CHANGE_ME"
 rds_instance_class          = "db.t4g.small"
 rds_allocated_storage       = 50
 rds_storage_type            = "gp3"
-rds_backup_retention_period = 5
+rds_multi_az                = true
+rds_backup_retention_period = 30
 rds_skip_final_snapshot     = false
 
 redis_node_type                  = "cache.t4g.small"
@@ -43,7 +44,8 @@ redis_port                       = 6379
 redis_auth_token                 = ""
 redis_transit_encryption_enabled = true
 
-s3_media_bucket_name = ""
+alb_access_logs_bucket = "" # Set to an S3 bucket name to enable ALB access logging
+s3_media_bucket_name   = ""
 cors_origins         = "https://kambriq.com"
 frontend_url         = "https://kambriq.com"
 node_env             = "production"

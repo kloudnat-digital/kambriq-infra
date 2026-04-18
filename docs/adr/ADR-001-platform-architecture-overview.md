@@ -168,12 +168,15 @@ This architecture provides:
 | Aspect | Dev | Prd |
 |--------|-----|-----|
 | API tasks | 1 | 2 |
-| Web tasks | 0 (disabled) | 2 |
+| Web tasks | 1 | 2 |
 | RDS class | db.t4g.micro | db.t4g.small |
+| RDS Multi-AZ | No | Yes |
 | Redis class | cache.t4g.micro | cache.t4g.small |
-| RDS backups | 7 days | 14 days |
+| RDS backups | 0 days | 30 days |
 | Redis TLS | No | Yes |
+| Redis auth token | No | Yes (set before apply) |
 | Final snapshot | No | Yes |
+| ALB access logs | No | Opt-in (set `alb_access_logs_bucket`) |
 
 ---
 
@@ -185,8 +188,7 @@ This architecture provides:
 - Application code is decoupled from infra — can deploy each independently
 
 **Bad / Known Gaps:**
-- Web service is currently disabled in dev (`enable_web_service = false`)
 - No CloudFront CDN in front of the ALB today (module exists, not wired)
 - No WAF rules on the ALB
-- `prd` Terraform state does not yet exist — production not deployed
-- GitHub OIDC role trusts old repo name (`kambriq-api`) — must be updated to `kambriq-webapp`
+- `prd` Terraform stack not yet applied — production not yet live (see [ADR-005](./ADR-005-production-automation-prerequisites.md) for full bootstrap procedure)
+- ALB access logs disabled until an S3 bucket is created and `alb_access_logs_bucket` is set in `envs/prd/terraform.tfvars`

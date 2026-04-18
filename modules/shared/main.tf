@@ -161,7 +161,7 @@ resource "aws_route_table_association" "private" {
 # ============================================================================
 # Route53 hosted zone is created manually in AWS Console.
 # Terraform uses a data source to reference the existing zone.
-# See docs/setup/ROUTE53_DNS_SETUP.md for manual setup instructions.
+# See docs/adr/ADR-005-production-automation-prerequisites.md for the bootstrap guide.
 
 data "aws_route53_zone" "main" {
   count   = var.enable_route53_lookup && var.route53_zone_id != "" ? 1 : 0
@@ -185,7 +185,7 @@ locals {
 # No Terraform resources are created here - only outputs are provided based on variables.
 # 
 # SES and ACM certificates are managed manually - Terraform only consumes ARNs passed via tfvars.
-# See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions.
+# See docs/adr/ADR-005-production-automation-prerequisites.md for the bootstrap guide.
 
 # ============================================================================
 # ACM Certificates
@@ -197,7 +197,7 @@ locals {
 # No Terraform resources are created here - only outputs are provided based on variables.
 #
 # SES and ACM certificates are managed manually - Terraform only consumes ARNs passed via tfvars.
-# See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions.
+# See docs/adr/ADR-005-production-automation-prerequisites.md for the bootstrap guide.
 
 # ============================================================================
 # S3 Buckets for Logs and Artifacts

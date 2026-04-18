@@ -42,3 +42,9 @@ variable "enable_deletion_protection" {
   default     = false
 }
 
+variable "access_logs_bucket" {
+  description = "S3 bucket name for ALB access logs. Leave empty to disable."
+  type        = string
+  default     = ""
+}
+

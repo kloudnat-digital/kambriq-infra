@@ -47,7 +47,7 @@ output "internet_gateway_id" {
 # ============================================================================
 # Route53 hosted zone is created manually in AWS Console.
 # These outputs reflect the existing zone referenced via data source.
-# See docs/setup/ROUTE53_DNS_SETUP.md for manual setup instructions.
+# See docs/adr/ADR-005-production-automation-prerequisites.md for the bootstrap guide.
 
 output "route53_zone_id" {
   description = "Route53 hosted zone ID (provided via variable or data source, created manually in AWS Console)"
@@ -70,7 +70,7 @@ output "route53_name_servers" {
 # SES identities are created manually in AWS Console.
 # These outputs reflect the ARNs and values provided via variables.
 # SES and ACM certificates are managed manually - Terraform only consumes ARNs passed via tfvars.
-# See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions.
+# See docs/adr/ADR-005-production-automation-prerequisites.md for the bootstrap guide.
 
 output "ses_domain_identity_arn" {
   description = "SES domain identity ARN (provided via variable, created manually in AWS Console)"
@@ -97,23 +97,13 @@ output "ses_from_email" {
   value       = var.ses_from_email
 }
 
-output "ses_domain_verification_token" {
-  description = "[DEPRECATED] SES domain verification token - no longer available (SES created manually)"
-  value       = null
-}
-
-output "ses_dkim_tokens" {
-  description = "[DEPRECATED] SES DKIM tokens - no longer available (SES created manually)"
-  value       = []
-}
-
 # ============================================================================
 # ACM Certificate Outputs
 # ============================================================================
 # ACM certificates are created manually in AWS Console.
 # These outputs reflect the ARNs provided via variables.
 # SES and ACM certificates are managed manually - Terraform only consumes ARNs passed via tfvars.
-# See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions.
+# See docs/adr/ADR-005-production-automation-prerequisites.md for the bootstrap guide.
 
 output "api_certificate_arn" {
   description = "ACM certificate ARN for API Gateway (provided via variable, created manually in AWS Console, must be in eu-central-1)"

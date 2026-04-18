@@ -52,14 +52,15 @@ module "ecs_cluster" {
 }
 
 module "alb" {
-  source            = "../../modules/alb"
-  project_name      = var.project_name
-  env               = var.env
-  vpc_id            = data.terraform_remote_state.shared.outputs.vpc_id
-  public_subnet_ids = data.terraform_remote_state.shared.outputs.public_subnet_ids
-  certificate_arn   = var.api_acm_certificate_arn
-  api_port          = var.api_port
-  web_port          = var.web_port
+  source              = "../../modules/alb"
+  project_name        = var.project_name
+  env                 = var.env
+  vpc_id              = data.terraform_remote_state.shared.outputs.vpc_id
+  public_subnet_ids   = data.terraform_remote_state.shared.outputs.public_subnet_ids
+  certificate_arn     = var.api_acm_certificate_arn
+  api_port            = var.api_port
+  web_port            = var.web_port
+  access_logs_bucket  = var.alb_access_logs_bucket
 }
 
 module "bastion" {
@@ -274,6 +275,7 @@ module "rds" {
   storage_type            = var.rds_storage_type
   backup_retention_period = var.rds_backup_retention_period
   skip_final_snapshot     = var.rds_skip_final_snapshot
+  multi_az                = var.rds_multi_az
   vpc_id                  = data.terraform_remote_state.shared.outputs.vpc_id
   subnet_ids              = data.terraform_remote_state.shared.outputs.private_subnet_ids
   security_group_id       = aws_security_group.rds.id

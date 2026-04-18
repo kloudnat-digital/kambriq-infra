@@ -72,3 +72,9 @@ variable "enable_cloudwatch_logs" {
   default     = true
 }
 
+variable "multi_az" {
+  description = "Enable Multi-AZ for automatic failover (set true for production)"
+  type        = bool
+  default     = false
+}
+

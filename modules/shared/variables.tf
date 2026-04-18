@@ -32,7 +32,7 @@ variable "nat_per_az" {
 # Route53 Configuration
 # Note: Route53 hosted zone is created manually in AWS Console.
 # Provide the zone_id here after manual setup.
-# See docs/setup/ROUTE53_DNS_SETUP.md for manual setup instructions.
+# See docs/adr/ADR-005-production-automation-prerequisites.md for the bootstrap guide.
 
 variable "domain_name" {
   description = "Domain name for Route53 hosted zone (e.g., kambriq.com)"
@@ -56,7 +56,7 @@ variable "enable_route53_lookup" {
 # Note: SES identities (domain/email) must be created and verified manually in AWS Console.
 # Provide the ARNs and domain/email values here after manual setup.
 # SES and ACM certificates are managed manually - Terraform only consumes ARNs passed via tfvars.
-# See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions.
+# See docs/adr/ADR-005-production-automation-prerequisites.md for the bootstrap guide.
 
 variable "ses_domain" {
   description = "SES domain already verified in AWS Console (e.g., kambriq.com)"
@@ -92,7 +92,7 @@ variable "ses_email_identity_arn" {
 # Note: ACM certificates must be created and validated manually in AWS Console.
 # Provide the ARNs here after manual setup.
 # CloudFront certificates must be created in us-east-1, API Gateway certificates in eu-central-1.
-# See docs/setup/SES_AND_ACM_MANUAL_SETUP.md for manual setup instructions.
+# See docs/adr/ADR-005-production-automation-prerequisites.md for the bootstrap guide.
 
 variable "api_acm_certificate_arn" {
   description = "ACM certificate ARN for API Gateway (created manually in AWS Console, must be in eu-central-1)"

@@ -191,6 +191,12 @@ variable "rds_skip_final_snapshot" {
   default     = false
 }
 
+variable "rds_multi_az" {
+  description = "Enable RDS Multi-AZ for automatic failover"
+  type        = bool
+  default     = false
+}
+
 variable "redis_node_type" {
   description = "Redis node type"
   type        = string
@@ -220,6 +226,12 @@ variable "redis_transit_encryption_enabled" {
   description = "Enable Redis in-transit encryption"
   type        = bool
   default     = true
+}
+
+variable "alb_access_logs_bucket" {
+  description = "S3 bucket for ALB access logs. Leave empty to disable."
+  type        = string
+  default     = ""
 }
 
 variable "s3_media_bucket_name" {
