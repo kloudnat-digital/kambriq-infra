@@ -17,7 +17,7 @@ provider "aws" {
 }
 
 locals {
-  name_prefix       = "${var.project_name}-${var.env}"
+  name_prefix = "${var.project_name}-${var.env}"
   # Include port 3001 explicitly: web container listens on 3001 even though
   # web_port (TG port) is 3000 to avoid target-group recreation.
   alb_ingress_ports = distinct([var.api_port, var.web_port, 3001])
@@ -54,14 +54,15 @@ module "ecs_cluster" {
 }
 
 module "alb" {
-  source            = "../../modules/alb"
-  project_name      = var.project_name
-  env               = var.env
-  vpc_id            = data.terraform_remote_state.shared.outputs.vpc_id
-  public_subnet_ids = data.terraform_remote_state.shared.outputs.public_subnet_ids
-  certificate_arn   = var.api_acm_certificate_arn
-  api_port          = var.api_port
-  web_port          = var.web_port
+  source                    = "../../modules/alb"
+  project_name              = var.project_name
+  env                       = var.env
+  vpc_id                    = data.terraform_remote_state.shared.outputs.vpc_id
+  public_subnet_ids         = data.terraform_remote_state.shared.outputs.public_subnet_ids
+  certificate_arn           = var.api_acm_certificate_arn
+  api_port                  = var.api_port
+  web_port                  = var.web_port
+  redirect_www_to_apex_host = "dev.kambriq.com"
 }
 
 module "bastion" {
@@ -80,6 +81,19 @@ module "bastion" {
 resource "aws_route53_record" "dev_api" {
   zone_id = data.terraform_remote_state.shared.outputs.route53_zone_id
   name    = "dev.kambriq.com"
+  type    = "A"
+
+  alias {
+    name                   = module.alb.alb_dns_name
+    zone_id                = module.alb.alb_zone_id
+    evaluate_target_health = true
+  }
+}
+
+# www.dev.kambriq.com → ALB (ALB listener rule then 301-redirects to dev.kambriq.com)
+resource "aws_route53_record" "dev_www" {
+  zone_id = data.terraform_remote_state.shared.outputs.route53_zone_id
+  name    = "www.dev.kambriq.com"
   type    = "A"
 
   alias {
