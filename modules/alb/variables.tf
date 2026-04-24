@@ -48,3 +48,9 @@ variable "access_logs_bucket" {
   default     = ""
 }
 
+variable "redirect_www_to_apex_host" {
+  description = "Apex host (e.g. dev.kambriq.com). When non-empty and certificate_arn is set, www.<host> is 301-redirected to <host> on both HTTP and HTTPS listeners. Leave empty to disable."
+  type        = string
+  default     = ""
+}
+

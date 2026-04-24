@@ -170,6 +170,12 @@ resource "aws_ecs_service" "main" {
     Type = "ecs-service"
   }
 
+  # CI/CD registers new task-definition revisions on each deploy, so terraform
+  # must not try to revert task_definition back to the revision it created.
+  lifecycle {
+    ignore_changes = [task_definition]
+  }
+
   depends_on = [aws_ecs_task_definition.main]
 }
 

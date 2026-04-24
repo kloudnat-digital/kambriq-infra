@@ -52,15 +52,42 @@ module "ecs_cluster" {
 }
 
 module "alb" {
-  source              = "../../modules/alb"
-  project_name        = var.project_name
-  env                 = var.env
-  vpc_id              = data.terraform_remote_state.shared.outputs.vpc_id
-  public_subnet_ids   = data.terraform_remote_state.shared.outputs.public_subnet_ids
-  certificate_arn     = var.api_acm_certificate_arn
-  api_port            = var.api_port
-  web_port            = var.web_port
-  access_logs_bucket  = var.alb_access_logs_bucket
+  source                    = "../../modules/alb"
+  project_name              = var.project_name
+  env                       = var.env
+  vpc_id                    = data.terraform_remote_state.shared.outputs.vpc_id
+  public_subnet_ids         = data.terraform_remote_state.shared.outputs.public_subnet_ids
+  certificate_arn           = var.api_acm_certificate_arn
+  api_port                  = var.api_port
+  web_port                  = var.web_port
+  access_logs_bucket        = var.alb_access_logs_bucket
+  redirect_www_to_apex_host = "kambriq.com"
+}
+
+# kambriq.com → ALB (apex A alias)
+resource "aws_route53_record" "prd_apex" {
+  zone_id = data.terraform_remote_state.shared.outputs.route53_zone_id
+  name    = "kambriq.com"
+  type    = "A"
+
+  alias {
+    name                   = module.alb.alb_dns_name
+    zone_id                = module.alb.alb_zone_id
+    evaluate_target_health = true
+  }
+}
+
+# www.kambriq.com → ALB (ALB listener rule then 301-redirects to kambriq.com)
+resource "aws_route53_record" "prd_www" {
+  zone_id = data.terraform_remote_state.shared.outputs.route53_zone_id
+  name    = "www.kambriq.com"
+  type    = "A"
+
+  alias {
+    name                   = module.alb.alb_dns_name
+    zone_id                = module.alb.alb_zone_id
+    evaluate_target_health = true
+  }
 }
 
 module "bastion" {

@@ -188,6 +188,55 @@ resource "aws_lb_listener" "http_forward" {
   }
 }
 
+# Listener Rule: www.<host> → <host> (HTTPS 301 redirect)
+# Priority 10 (higher than api/web catch-alls, lower than any future specialized rule)
+# Only created when a cert is present AND redirect_www_to_apex_host is set.
+resource "aws_lb_listener_rule" "www_redirect_https" {
+  count        = var.certificate_arn != null && var.certificate_arn != "" && var.redirect_www_to_apex_host != "" ? 1 : 0
+  listener_arn = aws_lb_listener.https[0].arn
+  priority     = 10
+
+  action {
+    type = "redirect"
+    redirect {
+      host        = var.redirect_www_to_apex_host
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+
+  condition {
+    host_header {
+      values = ["www.${var.redirect_www_to_apex_host}"]
+    }
+  }
+}
+
+# Listener Rule: www.<host> → <host> (HTTP → HTTPS apex 301 redirect)
+# Overrides the default HTTP-listener redirect so www is normalized at the same time.
+resource "aws_lb_listener_rule" "www_redirect_http" {
+  count        = var.certificate_arn != null && var.certificate_arn != "" && var.redirect_www_to_apex_host != "" ? 1 : 0
+  listener_arn = aws_lb_listener.http_redirect[0].arn
+  priority     = 10
+
+  action {
+    type = "redirect"
+    redirect {
+      host        = var.redirect_www_to_apex_host
+      port        = "443"
+      protocol    = "HTTPS"
+      status_code = "HTTP_301"
+    }
+  }
+
+  condition {
+    host_header {
+      values = ["www.${var.redirect_www_to_apex_host}"]
+    }
+  }
+}
+
 # Listener Rule: /api/* → API Target Group
 # Priority 1 (highest priority - API routes)
 # Use HTTPS listener if certificate is available, otherwise HTTP listener
