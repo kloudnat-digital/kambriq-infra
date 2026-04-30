@@ -228,6 +228,79 @@ variable "s3_media_bucket_name" {
   default     = ""
 }
 
+# ---------------------------------------------------------------------------
+# S3 media bucket — lifecycle, versioning, CORS
+# ---------------------------------------------------------------------------
+variable "s3_media_versioning_enabled" {
+  description = "Enable versioning on the media bucket. Dev defaults to false (Suspended)."
+  type        = bool
+  default     = false
+}
+
+variable "s3_media_tmp_prefix" {
+  description = "Object key prefix for temporary uploads (auto-expire)"
+  type        = string
+  default     = "uploads/tmp/"
+}
+
+variable "s3_media_tmp_expiration_days" {
+  description = "Days after which uploads/tmp/* objects are deleted"
+  type        = number
+  default     = 1
+}
+
+variable "s3_media_lands_prefix" {
+  description = "Object key prefix for land assets (transition to STANDARD_IA)"
+  type        = string
+  default     = "lands/"
+}
+
+variable "s3_media_lands_ia_transition_days" {
+  description = "Days after which lands/* objects move to STANDARD_IA"
+  type        = number
+  default     = 90
+}
+
+variable "s3_media_cors_allowed_methods" {
+  description = "HTTP methods allowed by S3 CORS"
+  type        = list(string)
+  default     = ["GET", "PUT", "POST", "HEAD"]
+}
+
+variable "s3_media_cors_allowed_origins" {
+  description = "Origins allowed by S3 CORS"
+  type        = list(string)
+  default = [
+    "https://dev.kambriq.com",
+    "http://localhost:3000",
+    "http://localhost:3001",
+  ]
+}
+
+# ---------------------------------------------------------------------------
+# S3 runtime config injected into the API ECS task
+# ---------------------------------------------------------------------------
+variable "s3_presigned_url_ttl_seconds" {
+  description = "TTL (seconds) for presigned upload/download URLs"
+  type        = number
+  default     = 900
+}
+
+variable "s3_max_upload_size_mb" {
+  description = "Max single-object upload size, MB (validated at API layer)"
+  type        = number
+  default     = 100
+}
+
+# ---------------------------------------------------------------------------
+# Pre-existing IAM user receiving developer access to the media bucket
+# ---------------------------------------------------------------------------
+variable "media_developer_user_name" {
+  description = "Existing IAM user name to grant developer access to the media bucket"
+  type        = string
+  default     = "kambriq-app-dev"
+}
+
 variable "cors_origins" {
   description = "CORS origins"
   type        = string

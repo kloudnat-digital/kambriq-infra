@@ -329,9 +329,19 @@ module "redis" {
 }
 
 module "s3_media" {
-  source      = "../../modules/s3-media"
-  env         = var.env
-  bucket_name = var.s3_media_bucket_name
+  source       = "../../modules/s3-media"
+  env          = var.env
+  project_name = var.project_name
+  bucket_name  = var.s3_media_bucket_name
+
+  versioning_enabled       = var.s3_media_versioning_enabled
+  tmp_prefix               = var.s3_media_tmp_prefix
+  tmp_expiration_days      = var.s3_media_tmp_expiration_days
+  lands_prefix             = var.s3_media_lands_prefix
+  lands_ia_transition_days = var.s3_media_lands_ia_transition_days
+
+  cors_allowed_methods = var.s3_media_cors_allowed_methods
+  cors_allowed_origins = var.s3_media_cors_allowed_origins
 }
 
 module "ssm_app_parameters" {
@@ -351,21 +361,24 @@ module "ssm_app_parameters" {
   frontend_url            = var.frontend_url
   ses_from_email          = var.ses_from_email
 
-  node_env               = var.node_env
-  port                   = var.api_port
-  api_prefix             = var.api_prefix
-  cors_origins           = var.cors_origins
-  throttle_ttl           = var.throttle_ttl
-  throttle_limit         = var.throttle_limit
-  redis_host             = module.redis.primary_endpoint_address
-  redis_port             = module.redis.port
-  aws_s3_bucket          = module.s3_media.bucket_id
-  aws_region             = var.aws_region
-  email_from             = var.ses_from_email
-  email_from_name        = var.email_from_name
-  salt_rounds            = var.salt_rounds
-  jwt_access_expiration  = var.jwt_access_expiration
-  jwt_refresh_expiration = var.jwt_refresh_expiration
+  node_env                     = var.node_env
+  port                         = var.api_port
+  api_prefix                   = var.api_prefix
+  cors_origins                 = var.cors_origins
+  throttle_ttl                 = var.throttle_ttl
+  throttle_limit               = var.throttle_limit
+  redis_host                   = module.redis.primary_endpoint_address
+  redis_port                   = module.redis.port
+  aws_s3_bucket                = module.s3_media.bucket_id
+  aws_region                   = var.aws_region
+  aws_s3_region                = var.aws_region
+  s3_presigned_url_ttl_seconds = var.s3_presigned_url_ttl_seconds
+  s3_max_upload_size_mb        = var.s3_max_upload_size_mb
+  email_from                   = var.ses_from_email
+  email_from_name              = var.email_from_name
+  salt_rounds                  = var.salt_rounds
+  jwt_access_expiration        = var.jwt_access_expiration
+  jwt_refresh_expiration       = var.jwt_refresh_expiration
 }
 
 module "iam_roles_ecs" {
@@ -397,22 +410,25 @@ module "ecs_service_api" {
   enable_init_container   = false
 
   environment_variables = {
-    NODE_ENV               = var.node_env
-    PORT                   = tostring(var.api_port)
-    API_PREFIX             = var.api_prefix
-    CORS_ORIGINS           = var.cors_origins
-    THROTTLE_TTL           = tostring(var.throttle_ttl)
-    THROTTLE_LIMIT         = tostring(var.throttle_limit)
-    REDIS_HOST             = module.redis.primary_endpoint_address
-    REDIS_PORT             = tostring(module.redis.port)
-    AWS_S3_BUCKET          = module.s3_media.bucket_id
-    AWS_REGION             = var.aws_region
-    EMAIL_FROM             = var.ses_from_email
-    EMAIL_FROM_NAME        = var.email_from_name
-    FRONTEND_URL           = var.frontend_url
-    SALT_ROUNDS            = tostring(var.salt_rounds)
-    JWT_ACCESS_EXPIRATION  = var.jwt_access_expiration
-    JWT_REFRESH_EXPIRATION = var.jwt_refresh_expiration
+    NODE_ENV                     = var.node_env
+    PORT                         = tostring(var.api_port)
+    API_PREFIX                   = var.api_prefix
+    CORS_ORIGINS                 = var.cors_origins
+    THROTTLE_TTL                 = tostring(var.throttle_ttl)
+    THROTTLE_LIMIT               = tostring(var.throttle_limit)
+    REDIS_HOST                   = module.redis.primary_endpoint_address
+    REDIS_PORT                   = tostring(module.redis.port)
+    AWS_S3_BUCKET                = module.s3_media.bucket_id
+    AWS_S3_REGION                = var.aws_region
+    AWS_REGION                   = var.aws_region
+    S3_PRESIGNED_URL_TTL_SECONDS = tostring(var.s3_presigned_url_ttl_seconds)
+    S3_MAX_UPLOAD_SIZE_MB        = tostring(var.s3_max_upload_size_mb)
+    EMAIL_FROM                   = var.ses_from_email
+    EMAIL_FROM_NAME              = var.email_from_name
+    FRONTEND_URL                 = var.frontend_url
+    SALT_ROUNDS                  = tostring(var.salt_rounds)
+    JWT_ACCESS_EXPIRATION        = var.jwt_access_expiration
+    JWT_REFRESH_EXPIRATION       = var.jwt_refresh_expiration
   }
 
   secrets = merge({
