@@ -9,7 +9,6 @@ on:
         options:
           - shared
           - dev
-          - prd
         required: true
 
 permissions:

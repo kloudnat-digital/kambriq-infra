@@ -14,7 +14,6 @@ on:
         options:
           - shared
           - dev
-          - prd
         required: true
 
 permissions:
@@ -43,7 +42,7 @@ jobs:
           set -euo pipefail
           CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
           ENVS=()
-          for ENV in shared dev prd; do
+          for ENV in shared dev; do
             if echo "$CHANGED" | grep -qE "^envs/${ENV}/|^modules/"; then
               ENVS+=("\"${ENV}\"")
             fi

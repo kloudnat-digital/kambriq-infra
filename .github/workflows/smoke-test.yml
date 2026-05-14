@@ -16,7 +16,7 @@ on:
       env:
         description: "Environment to test"
         type: choice
-        options: [dev, prd]
+        options: [dev]
         default: dev
         required: true
 
