@@ -65,7 +65,6 @@ data "aws_iam_policy_document" "github_actions_infra_assume_role" {
       values = [
         "repo:${var.github_repo_infra}:environment:shared",
         "repo:${var.github_repo_infra}:environment:dev",
-        "repo:${var.github_repo_infra}:environment:prd",
       ]
     }
   }
