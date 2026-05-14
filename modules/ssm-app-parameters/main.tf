@@ -343,6 +343,45 @@ resource "aws_ssm_parameter" "aws_region" {
   }
 }
 
+resource "aws_ssm_parameter" "aws_s3_region" {
+  name  = "/kambriq/${var.env}/api/AWS_S3_REGION"
+  type  = "String"
+  value = var.aws_s3_region
+
+  description = "AWS region for the S3 media bucket in ${var.env}"
+  tags = {
+    Name        = "kambriq-api-aws-s3-region-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+}
+
+resource "aws_ssm_parameter" "s3_presigned_url_ttl_seconds" {
+  name  = "/kambriq/${var.env}/api/S3_PRESIGNED_URL_TTL_SECONDS"
+  type  = "String"
+  value = tostring(var.s3_presigned_url_ttl_seconds)
+
+  description = "TTL (seconds) for S3 presigned URLs in ${var.env}"
+  tags = {
+    Name        = "kambriq-api-s3-presigned-url-ttl-seconds-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+}
+
+resource "aws_ssm_parameter" "s3_max_upload_size_mb" {
+  name  = "/kambriq/${var.env}/api/S3_MAX_UPLOAD_SIZE_MB"
+  type  = "String"
+  value = tostring(var.s3_max_upload_size_mb)
+
+  description = "Max single-object upload size (MB) for ${var.env}"
+  tags = {
+    Name        = "kambriq-api-s3-max-upload-size-mb-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+}
+
 resource "aws_ssm_parameter" "email_from" {
   name  = "/kambriq/${var.env}/api/EMAIL_FROM"
   type  = "String"

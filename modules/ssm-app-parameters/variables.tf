@@ -164,6 +164,24 @@ variable "aws_region" {
   default     = "eu-central-1"
 }
 
+variable "aws_s3_region" {
+  description = "AWS region for the S3 bucket. Mirrors aws_region but exposed separately because the API config reads AWS_S3_REGION."
+  type        = string
+  default     = "eu-central-1"
+}
+
+variable "s3_presigned_url_ttl_seconds" {
+  description = "TTL (seconds) for presigned upload/download URLs"
+  type        = number
+  default     = 900
+}
+
+variable "s3_max_upload_size_mb" {
+  description = "Max single-object upload size in MB (API-side validation)"
+  type        = number
+  default     = 100
+}
+
 variable "email_from" {
   description = "Sender email address"
   type        = string
