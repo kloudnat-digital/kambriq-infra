@@ -46,9 +46,9 @@ redis_transit_encryption_enabled = true
 
 alb_access_logs_bucket = "" # Set to an S3 bucket name to enable ALB access logging
 s3_media_bucket_name   = ""
-cors_origins         = "https://kambriq.com"
-frontend_url         = "https://kambriq.com"
-node_env             = "production"
+cors_origins           = "https://kambriq.com"
+frontend_url           = "https://kambriq.com"
+node_env               = "production"
 
 jwt_access_expiration   = "15m"
 jwt_refresh_expiration  = "15d"
