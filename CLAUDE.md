@@ -46,7 +46,6 @@ modules/
 ├── ecr-repository/       # ECR + lifecycle policy
 ├── rds-postgres/         # RDS PG15 + parameter group + subnet group
 ├── elasticache-redis/    # Redis 7 replication group
-├── bastion/              # EC2 bastion + IAM SSM (port-forward to RDS)
 ├── iam-roles-ecs/        # task_api role + task_web role (definitions only)
 ├── s3-media/             # media bucket: CORS + lifecycle + versioning + SSE-S3
 └── ssm-app-parameters/   # SSM Parameter Store - every API runtime config (secret + non-secret)
@@ -67,12 +66,10 @@ modules/
 
 ## Known drift / pitfalls
 
-- **Bastion replacement on every apply**: `module.bastion.aws_instance.bastion` uses `data "aws_ami" "al2023"` that resolves to the latest AL2023 AMI. AWS rotates AMIs frequently, so each apply may force replacement. The current choice is to live with the drift (replacement is fast). If you want pinning, add `lifecycle { ignore_changes = [ami] }`.
 - **S3 versioning quirk**: once a bucket has been `Enabled`, S3 will NOT accept `Disabled` again - only `Suspended`. The `s3-media` module maps `var.versioning_enabled = false` -> `Suspended` for that reason.
 - **SSM secrets must exist before first ECS apply**: `JWT_SECRET` and `DATABASE_URL_*` are read via `data.aws_ssm_parameter` if `use_existing_jwt_secret = true`. Pre-create with `aws ssm put-parameter --type SecureString` or pass via tfvars.
 - **prd has never been applied**. Bootstrap prerequisites in `docs/adr/ADR-005-production-automation-prerequisites.md`.
-- **Web service disabled in dev**: `enable_web_service = false` in `envs/dev/terraform.tfvars` - only the API ECS service runs in dev.
-- **Bastion key pair**: `var.bastion_key_name` must reference an existing EC2 Key Pair in the region.
+- **Both API and web run in dev**: `enable_web_service = true` in `envs/dev/terraform.tfvars` - the API and web ECS services are both deployed.
 - **NAT Gateway is single-AZ** (cost optimization). No HA on outbound traffic in dev or prd.
 - **SES sandbox**: if the AWS account is in SES sandbox, only verified email addresses receive mail. Sortir du sandbox before going prd.
 - **prd tag versioning**: `deploy-prd.yml` validates that the git tag `v*` matches `package.json` version exactly. Mismatch fails the deploy.

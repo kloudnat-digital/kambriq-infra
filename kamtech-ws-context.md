@@ -35,7 +35,7 @@
 ### `kambriq-infra`
 - Environments: `envs/shared`, `envs/dev`, `envs/prd` with S3 remote state.
 - Shared stack: VPC, public/private subnets, single NAT, Route53 lookups, shared S3 buckets.
-- Dev/Prd stacks: ALB, ECS (cluster/service/task defs), RDS Postgres, ElastiCache Redis, SSM parameters, bastion hosts (SSH + SSM).
+- Dev/Prd stacks: ALB, ECS (cluster/service/task defs), RDS Postgres, ElastiCache Redis, SSM parameters.
 - ALB routing: `/api/*` to API target group with health check `/api/v1/health/ready`.
 - Dev DNS: `dev.kambriq.com` Route53 record aliases to the ALB.
 - ECS migrations: one-off Prisma migrate deploy in CI/CD.

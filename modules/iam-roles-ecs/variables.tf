@@ -13,3 +13,8 @@ variable "aws_region" {
   type        = string
 }
 
+variable "enable_ecs_exec" {
+  description = "Grant both task roles the ssmmessages channel permissions ECS Exec requires"
+  type        = bool
+  default     = false
+}

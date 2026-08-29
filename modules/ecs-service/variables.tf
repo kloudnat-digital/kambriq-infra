@@ -124,3 +124,8 @@ variable "init_container_command" {
   default     = []
 }
 
+variable "enable_execute_command" {
+  description = "Enable ECS Exec (SSM session into a running task). The task role must carry the ssmmessages permissions separately."
+  type        = bool
+  default     = false
+}
