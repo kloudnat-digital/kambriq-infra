@@ -56,3 +56,12 @@ run "skip_final_snapshot_true_by_default" {
     error_message = "skip_final_snapshot must default to true (safe for non-prd)"
   }
 }
+
+run "engine_version_is_major_only_by_default" {
+  command = plan
+
+  assert {
+    condition     = var.engine_version == "15"
+    error_message = "engine_version must default to the major version only, so AWS minor upgrades do not create a downgrade diff"
+  }
+}

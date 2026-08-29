@@ -78,3 +78,14 @@ variable "multi_az" {
   default     = false
 }
 
+variable "engine_version" {
+  description = "PostgreSQL engine version. A major-only value (\"15\") prefix-matches, so AWS minor upgrades do not produce a perpetual diff. Pass a full version only to freeze a specific minor."
+  type        = string
+  default     = "15"
+}
+
+variable "auto_minor_version_upgrade" {
+  description = "Let AWS apply minor version upgrades during the maintenance window"
+  type        = bool
+  default     = true
+}
