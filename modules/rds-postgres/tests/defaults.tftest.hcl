@@ -57,11 +57,16 @@ run "skip_final_snapshot_true_by_default" {
   }
 }
 
-run "engine_version_is_major_only_by_default" {
+run "engine_version_is_pinned_and_auto_upgrade_is_off" {
   command = plan
 
   assert {
-    condition     = var.engine_version == "15"
-    error_message = "engine_version must default to the major version only, so AWS minor upgrades do not create a downgrade diff"
+    condition     = var.auto_minor_version_upgrade == false
+    error_message = "auto_minor_version_upgrade must be off, otherwise AWS moves the minor and the pinned engine_version becomes a downgrade Terraform cannot apply"
+  }
+
+  assert {
+    condition     = can(regex("^[0-9]+\\.[0-9]+$", var.engine_version))
+    error_message = "engine_version must be a full major.minor version, not a prefix: prefix matching does not suppress the diff on the aws 5.x provider that envs/dev pins"
   }
 }

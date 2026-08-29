@@ -79,13 +79,13 @@ variable "multi_az" {
 }
 
 variable "engine_version" {
-  description = "PostgreSQL engine version. A major-only value (\"15\") prefix-matches, so AWS minor upgrades do not produce a perpetual diff. Pass a full version only to freeze a specific minor."
+  description = "Exact PostgreSQL engine version. Pinned in full because auto_minor_version_upgrade is off: AWS will not move the instance, so this value stays true. Bumping it is a deliberate upgrade."
   type        = string
-  default     = "15"
+  default     = "15.17"
 }
 
 variable "auto_minor_version_upgrade" {
-  description = "Let AWS apply minor version upgrades during the maintenance window"
+  description = "Let AWS apply minor upgrades in the maintenance window. Off: an auto-upgrade silently invalidates the pinned engine_version and turns the next plan into a downgrade Terraform cannot apply. Minor upgrades are a scheduled decision instead."
   type        = bool
-  default     = true
+  default     = false
 }

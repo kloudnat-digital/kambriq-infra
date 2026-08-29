@@ -25,8 +25,8 @@ resource "aws_db_instance" "main" {
   identifier = "kambriq-postgres-${var.env}"
 
   engine = "postgres"
-  # Major version only. auto_minor_version_upgrade is on, so AWS owns the minor
-  # and a hard-coded one drifts into a downgrade Terraform cannot apply.
+  # Pinned in full, with auto minor upgrades off, so the declared version and the
+  # running version cannot diverge. An upgrade is a deliberate bump of this value.
   engine_version             = var.engine_version
   auto_minor_version_upgrade = var.auto_minor_version_upgrade
   instance_class             = var.instance_class
