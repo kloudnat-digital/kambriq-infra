@@ -56,3 +56,17 @@ run "skip_final_snapshot_true_by_default" {
     error_message = "skip_final_snapshot must default to true (safe for non-prd)"
   }
 }
+
+run "engine_version_is_pinned_and_auto_upgrade_is_off" {
+  command = plan
+
+  assert {
+    condition     = var.auto_minor_version_upgrade == false
+    error_message = "auto_minor_version_upgrade must be off, otherwise AWS moves the minor and the pinned engine_version becomes a downgrade Terraform cannot apply"
+  }
+
+  assert {
+    condition     = can(regex("^[0-9]+\\.[0-9]+$", var.engine_version))
+    error_message = "engine_version must be a full major.minor version, not a prefix: prefix matching does not suppress the diff on the aws 5.x provider that envs/dev pins"
+  }
+}

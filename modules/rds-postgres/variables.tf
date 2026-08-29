@@ -78,3 +78,14 @@ variable "multi_az" {
   default     = false
 }
 
+variable "engine_version" {
+  description = "Exact PostgreSQL engine version. Pinned in full because auto_minor_version_upgrade is off: AWS will not move the instance, so this value stays true. Bumping it is a deliberate upgrade."
+  type        = string
+  default     = "15.17"
+}
+
+variable "auto_minor_version_upgrade" {
+  description = "Let AWS apply minor upgrades in the maintenance window. Off: an auto-upgrade silently invalidates the pinned engine_version and turns the next plan into a downgrade Terraform cannot apply. Minor upgrades are a scheduled decision instead."
+  type        = bool
+  default     = false
+}
