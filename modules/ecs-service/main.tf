@@ -144,6 +144,8 @@ resource "aws_ecs_service" "main" {
   desired_count   = var.desired_count
   launch_type     = "FARGATE"
 
+  enable_execute_command = var.enable_execute_command
+
   network_configuration {
     subnets          = var.subnet_ids
     security_groups  = var.security_group_ids

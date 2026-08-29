@@ -65,9 +65,5 @@ ecr_api_repo_name  = "kambriq-api"
 ecr_web_repo_name  = "kambriq-web"
 enable_web_service = true
 
-bastion_key_name          = "bastion_key_pair"
-bastion_allowed_ssh_cidrs = ["90.25.230.44/32"]
-bastion_instance_type     = "t3.micro"
-bastion_schedule_stop     = "0 19 ? * MON-FRI *"
-bastion_schedule_start    = "0 7 ? * MON-FRI *"
-bastion_schedule_timezone = "Europe/Paris"
+enable_container_insights = false
+enable_ecs_exec           = true

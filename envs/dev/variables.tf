@@ -398,44 +398,20 @@ variable "enable_web_service" {
   default     = false
 }
 
-variable "bastion_key_name" {
-  description = "SSH key pair name for bastion"
-  type        = string
-  default     = "bastion_key_pair"
-}
-
-variable "bastion_allowed_ssh_cidrs" {
-  description = "CIDR blocks allowed to SSH into bastion"
-  type        = list(string)
-  default     = []
-}
-
-variable "bastion_instance_type" {
-  description = "Bastion instance type"
-  type        = string
-  default     = "t3.micro"
-}
-
 variable "rds_enable_cloudwatch_logs" {
   description = "Export RDS logs to CloudWatch"
   type        = bool
   default     = false
 }
 
-variable "bastion_schedule_stop" {
-  description = "Cron to stop bastion (Europe/Paris). Empty = always on."
-  type        = string
-  default     = ""
+variable "enable_container_insights" {
+  description = "Enable ECS Container Insights. Off in dev: it bills per task continuously and troubleshooting goes through CloudWatch Logs and ALB target health."
+  type        = bool
+  default     = false
 }
 
-variable "bastion_schedule_start" {
-  description = "Cron to start bastion (Europe/Paris). Empty = always on."
-  type        = string
-  default     = ""
-}
-
-variable "bastion_schedule_timezone" {
-  description = "IANA timezone for bastion schedules"
-  type        = string
-  default     = "Europe/Paris"
+variable "enable_ecs_exec" {
+  description = "Enable ECS Exec on the services and grant the task roles the ssmmessages permissions it requires. Replaces the bastion as the way into the private subnets."
+  type        = bool
+  default     = false
 }

@@ -122,3 +122,37 @@ resource "aws_iam_role_policy" "web_ssm" {
   })
 }
 
+# ECS Exec: the SSM messaging channels the exec agent opens from inside the task.
+# Replaces the bastion as the interactive path into the private subnets.
+# Resource must be "*": ssmmessages does not support resource-level permissions.
+locals {
+  ecs_exec_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ssmmessages:CreateControlChannel",
+          "ssmmessages:CreateDataChannel",
+          "ssmmessages:OpenControlChannel",
+          "ssmmessages:OpenDataChannel"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "api_ecs_exec" {
+  count  = var.enable_ecs_exec ? 1 : 0
+  name   = "${local.name_prefix}-api-ecs-exec"
+  role   = aws_iam_role.task_api.id
+  policy = local.ecs_exec_policy
+}
+
+resource "aws_iam_role_policy" "web_ecs_exec" {
+  count  = var.enable_ecs_exec ? 1 : 0
+  name   = "${local.name_prefix}-web-ecs-exec"
+  role   = aws_iam_role.task_web.id
+  policy = local.ecs_exec_policy
+}

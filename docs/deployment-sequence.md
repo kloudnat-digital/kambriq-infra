@@ -77,9 +77,9 @@ This sets:
 
 ## 4) Operations & Validation
 
-### Verify DB via bastion (SSM)
-Use the SSM port-forward instructions in `README.md` to access the DB and
-verify seed data.
+### Verify DB (ECS Exec)
+Use the ECS Exec instructions in `README.md` to open a shell in the API task and verify
+seed data from there.
 Note: the core schema no longer includes `Permission` or `RolePermission`
 tables, so they should not be expected during verification.
 

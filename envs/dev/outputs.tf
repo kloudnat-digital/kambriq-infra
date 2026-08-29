@@ -48,16 +48,6 @@ output "alb_dns_name" {
   value       = module.alb.alb_dns_name
 }
 
-output "bastion_instance_id" {
-  description = "Bastion instance ID"
-  value       = module.bastion.instance_id
-}
-
-output "bastion_public_ip" {
-  description = "Bastion public IP"
-  value       = module.bastion.public_ip
-}
-
 output "rds_endpoint" {
   description = "RDS endpoint"
   value       = module.rds.db_endpoint

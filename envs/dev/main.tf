@@ -47,10 +47,11 @@ module "ecr_web" {
 }
 
 module "ecs_cluster" {
-  source       = "../../modules/ecs-cluster"
-  project_name = var.project_name
-  env          = var.env
-  aws_region   = var.aws_region
+  source                    = "../../modules/ecs-cluster"
+  project_name              = var.project_name
+  env                       = var.env
+  aws_region                = var.aws_region
+  enable_container_insights = var.enable_container_insights
 }
 
 module "alb" {
@@ -63,19 +64,6 @@ module "alb" {
   api_port                  = var.api_port
   web_port                  = var.web_port
   redirect_www_to_apex_host = "dev.kambriq.com"
-}
-
-module "bastion" {
-  source            = "../../modules/bastion"
-  name              = "${local.name_prefix}-bastion"
-  vpc_id            = data.terraform_remote_state.shared.outputs.vpc_id
-  public_subnet_id  = data.terraform_remote_state.shared.outputs.public_subnet_ids[0]
-  key_name          = var.bastion_key_name
-  allowed_ssh_cidrs = var.bastion_allowed_ssh_cidrs
-  instance_type     = var.bastion_instance_type
-  schedule_stop     = var.bastion_schedule_stop
-  schedule_start    = var.bastion_schedule_start
-  schedule_timezone = var.bastion_schedule_timezone
 }
 
 resource "aws_route53_record" "dev_api" {
@@ -144,14 +132,6 @@ resource "aws_security_group" "rds" {
     to_port         = 5432
     protocol        = "tcp"
     security_groups = [aws_security_group.ecs.id]
-  }
-
-  ingress {
-    description     = "Postgres from bastion"
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [module.bastion.security_group_id]
   }
 
   egress {
@@ -382,10 +362,11 @@ module "ssm_app_parameters" {
 }
 
 module "iam_roles_ecs" {
-  source       = "../../modules/iam-roles-ecs"
-  project_name = var.project_name
-  env          = var.env
-  aws_region   = var.aws_region
+  source          = "../../modules/iam-roles-ecs"
+  project_name    = var.project_name
+  env             = var.env
+  aws_region      = var.aws_region
+  enable_ecs_exec = var.enable_ecs_exec
 }
 
 module "ecs_service_api" {
@@ -408,6 +389,7 @@ module "ecs_service_api" {
   aws_region              = var.aws_region
   health_check_path       = var.api_health_check_path
   enable_init_container   = false
+  enable_execute_command  = var.enable_ecs_exec
 
   environment_variables = {
     NODE_ENV                     = var.node_env
@@ -461,6 +443,7 @@ module "ecs_service_web" {
   aws_region              = var.aws_region
   health_check_path       = var.web_health_check_path
   enable_init_container   = false
+  enable_execute_command  = var.enable_ecs_exec
 
   environment_variables = {
     PORT         = "3001"
