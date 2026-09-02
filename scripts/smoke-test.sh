@@ -8,11 +8,14 @@
 #   AWS_REGION   - AWS region (default: eu-central-1)
 #   WEB_URL      - Web app base URL (default: https://dev.kambriq.com)
 #   API_URL      - API base URL    (default: https://dev.kambriq.com)
-#   ECS_CLUSTER  - ECS cluster name (optional, for ECS health checks)
+#   ECS_CLUSTER      - ECS cluster name     (default: kambriq-<env>-cluster)
+#   ECS_API_SERVICE  - ECS API service name (default: kambriq-<env>-api)
+#   ECS_WEB_SERVICE  - ECS web service name (default: kambriq-<env>-web)
 #
 # Exit codes:
-#   0 - all checks passed
-#   1 - one or more checks failed
+#   0 - every check that ran passed, and at least one check ran
+#   1 - one or more checks failed, or no check ran at all
+#   2 - a required variable resolved to empty; nothing was checked
 #
 # NOTE: Make this script executable before use: chmod +x scripts/smoke-test.sh
 
@@ -38,11 +41,46 @@ else
   ECS_WEB_SERVICE="${ECS_WEB_SERVICE:-kambriq-dev-web}"
 fi
 
+# ---------------------------------------------------------------------------
+# Required variables
+#
+# Everything above is resolved with the ${VAR:-default} form, which substitutes
+# when the variable is unset *and* when it is set but empty. The CI workflow
+# feeds several of these from repository variables that are not defined, so
+# they arrive as empty strings and the defaults correctly take over.
+#
+# This guard is the backstop for the case the defaults do not cover: if one is
+# ever removed, emptied, or switched to the ${VAR-default} form (which does not
+# substitute on empty), fail here naming the variable, instead of quietly
+# querying an empty cluster or service name and reporting it as a failed check.
+# ---------------------------------------------------------------------------
+REQUIRED_VARS="ENV AWS_REGION WEB_URL API_URL ECS_CLUSTER ECS_API_SERVICE ECS_WEB_SERVICE"
+missing=""
+for var in $REQUIRED_VARS; do
+  if [[ -z "${!var:-}" ]]; then
+    missing="${missing} ${var}"
+  fi
+done
+if [[ -n "$missing" ]]; then
+  echo "ERROR: required variable(s) resolved to empty:${missing}" >&2
+  echo "       Refusing to run checks against an empty target." >&2
+  exit 2
+fi
+
 PASS=0
 FAIL=0
+SKIP=0
 
-log_pass() { echo "  ✓ $1"; ((PASS++)); }
-log_fail() { echo "  ✗ $1"; ((FAIL++)); }
+# Counters are incremented with an assignment, never with ((VAR++)).
+#
+# ((VAR++)) is post-increment: it evaluates to the value VAR held *before* the
+# increment. When that value is 0 the arithmetic command reports a non-zero
+# exit status, and under `set -e` that terminates the script. That is why this
+# script died immediately after its first passing check: log_pass ran
+# ((PASS++)) with PASS=0, which exited 1 and took the whole run with it.
+log_pass() { echo "  ✓ $1"; PASS=$((PASS + 1)); }
+log_fail() { echo "  ✗ $1"; FAIL=$((FAIL + 1)); }
+log_skip() { echo "  ~ $1"; SKIP=$((SKIP + 1)); }
 
 check_http() {
   local label="$1"
@@ -56,7 +94,7 @@ check_http() {
       log_pass "$label → HTTP $status"
       return 0
     fi
-    ((attempt++))
+    attempt=$((attempt + 1))
     if [[ $attempt -lt $RETRIES ]]; then
       echo "    retry $attempt/$RETRIES (got $status, expected $expected_status)..."
       sleep "$RETRY_DELAY"
@@ -72,7 +110,11 @@ check_json_field() {
   local field="$3"
   local expected="$4"
 
-  actual=$(curl -s --max-time 10 "$url" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('$field',''))" 2>/dev/null || echo "")
+  # Two response shapes are in play. The API wraps its payload as
+  # {success: ..., data: {...}}, while the web app returns its fields flat at
+  # the top level. Read the top level first and fall back to data.<field>, so
+  # one check works against both without hardcoding which URL is which.
+  actual=$(curl -s --max-time 10 "$url" | python3 -c "import sys,json; d=json.load(sys.stdin); v=d.get('$field'); v=d.get('data',{}).get('$field') if v is None and isinstance(d.get('data'),dict) else v; print('' if v is None else v)" 2>/dev/null || echo "")
   if [[ "$actual" == "$expected" ]]; then
     log_pass "$label → $field=$actual"
   else
@@ -86,7 +128,7 @@ check_ecs_service() {
   local service="$3"
 
   if ! command -v aws &>/dev/null; then
-    echo "  ~ $label → skipped (aws CLI not available)"
+    log_skip "$label → skipped (aws CLI not available)"
     return 0
   fi
 
@@ -130,11 +172,21 @@ echo "3. ECS service health"
 check_ecs_service "API ECS service" "$ECS_CLUSTER" "$ECS_API_SERVICE"
 check_ecs_service "Web ECS service" "$ECS_CLUSTER" "$ECS_WEB_SERVICE"
 
+EXECUTED=$((PASS + FAIL))
+
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  Results: $PASS passed, $FAIL failed"
+echo "  Results: $PASS passed, $FAIL failed, $SKIP skipped ($EXECUTED executed)"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
+
+# A run that executed no check proves nothing. Exiting 0 here would report a
+# healthy environment on zero evidence, which is the failure this script exists
+# to catch. Skipped checks are not evidence either, so they do not count.
+if [[ $EXECUTED -eq 0 ]]; then
+  echo "ERROR: no check was executed ($SKIP skipped). Refusing to report success." >&2
+  exit 1
+fi
 
 if [[ $FAIL -gt 0 ]]; then
   exit 1
