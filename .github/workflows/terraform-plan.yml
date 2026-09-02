@@ -5,6 +5,7 @@ on:
     paths:
       - "envs/**"
       - "modules/**"
+      - "scripts/**"
       - ".github/workflows/terraform-*.yml"
   workflow_dispatch:
     inputs:
@@ -176,6 +177,53 @@ jobs:
           path: plan.txt
           if-no-files-found: ignore
           retention-days: 7
+
+  # ── Shell script checks ───────────────────────────────────────────────────────
+  # scripts/** was outside every path filter in this repo, so a shell script could
+  # reach develop with no automated check of any kind. That is how the smoke test
+  # stayed broken from May to September: it was never syntax-checked, never
+  # linted, and its only runtime signal was a red job that nobody could tell
+  # apart from a genuinely unhealthy environment.
+  shell-lint:
+    name: Shell Lint
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax check (bash -n)
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(scripts/*.sh)
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "No shell scripts under scripts/, nothing to check."
+            exit 0
+          fi
+          for f in "${files[@]}"; do
+            echo "bash -n ${f}"
+            bash -n "${f}"
+          done
+
+      - name: shellcheck
+        run: |
+          set -euo pipefail
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            echo "shellcheck is not available on this runner, skipping."
+            exit 0
+          fi
+          shellcheck --version
+          shopt -s nullglob
+          files=(scripts/*.sh)
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "No shell scripts under scripts/, nothing to check."
+            exit 0
+          fi
+          shellcheck "${files[@]}"
+
+      - name: Shell lint summary
+        if: always()
+        run: echo "Shell lint completed"
 
   # ── Terraform module unit tests ───────────────────────────────────────────────
   module-tests:
