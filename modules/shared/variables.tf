@@ -82,12 +82,6 @@ variable "ses_from_email" {
   default     = "noreply@kambriq.com"
 }
 
-variable "ses_email_identity_arn" {
-  description = "ARN of SES email identity (created manually in AWS Console)"
-  type        = string
-  default     = ""
-}
-
 # ACM Certificate Configuration
 # Note: ACM certificates must be created and validated manually in AWS Console.
 # Provide the ARNs here after manual setup.

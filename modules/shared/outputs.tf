@@ -77,11 +77,6 @@ output "ses_domain_identity_arn" {
   value       = var.ses_domain_identity_arn != "" ? var.ses_domain_identity_arn : null
 }
 
-output "ses_email_identity_arn" {
-  description = "SES email identity ARN (provided via variable, created manually in AWS Console)"
-  value       = var.ses_email_identity_arn != "" ? var.ses_email_identity_arn : null
-}
-
 output "ses_domain" {
   description = "SES domain (e.g., kambriq.com)"
   value       = var.ses_domain

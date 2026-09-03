@@ -339,7 +339,6 @@ module "ssm_app_parameters" {
   jwt_secret              = var.jwt_secret
   use_existing_jwt_secret = var.use_existing_jwt_secret
   frontend_url            = var.frontend_url
-  ses_from_email          = var.ses_from_email
 
   node_env                     = var.node_env
   port                         = var.api_port

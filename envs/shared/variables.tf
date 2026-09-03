@@ -75,12 +75,6 @@ variable "ses_domain_identity_arn" {
   default     = ""
 }
 
-variable "ses_email_identity_arn" {
-  description = "SES email identity ARN (manual)"
-  type        = string
-  default     = ""
-}
-
 variable "api_acm_certificate_arn" {
   description = "ACM cert ARN for ALB (eu-central-1)"
   type        = string
