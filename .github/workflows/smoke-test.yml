@@ -50,9 +50,13 @@ jobs:
           AWS_REGION: ${{ vars.AWS_REGION || 'eu-central-1' }}
           WEB_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
           API_URL: ${{ vars.NEXT_PUBLIC_APP_URL }}
-          ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
-          ECS_API_SERVICE: ${{ vars.ECS_SERVICE }}
-          ECS_WEB_SERVICE: ${{ vars.ECS_WEB_SERVICE }}
+          # ECS_CLUSTER, ECS_API_SERVICE and ECS_WEB_SERVICE are deliberately not
+          # passed here. The script derives them from the Terraform naming
+          # convention (kambriq-<env>-cluster, kambriq-<env>-api,
+          # kambriq-<env>-web), which is the single source of truth. Feeding them
+          # from repository variables added a second source that had to agree with
+          # the first, and those variables were never defined, so this block was
+          # sending empty strings that the script's defaults had to paper over.
 
       - name: Smoke test summary
         if: always()
