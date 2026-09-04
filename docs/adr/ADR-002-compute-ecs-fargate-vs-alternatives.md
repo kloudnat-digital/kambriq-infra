@@ -53,7 +53,7 @@ ECS Fargate provides serverless containers with per-second billing, native integ
 - Native ALB integration (IP-mode target groups)
 - Task-level IAM roles → fine-grained permissions
 - Init containers for migrations (`dependsOn: START`)
-- CloudWatch Container Insights built-in
+- CloudWatch Container Insights available (deliberately **disabled** on dev: $14.55/month in August, $0.00 in September)
 - Rolling deployments without downtime
 
 **Bad:**

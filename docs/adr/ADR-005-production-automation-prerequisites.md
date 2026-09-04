@@ -133,7 +133,6 @@ Open `kambriq-infra/envs/prd/terraform.tfvars` and set:
 | Variable | Current value | Required value |
 |----------|---------------|----------------|
 | `api_acm_certificate_arn` | `"arn:aws:acm:eu-central-1:ACCOUNT:certificate/XXXXXXXX"` | Real ACM certificate ARN (from shared stack output or AWS Console) |
-| `bastion_allowed_ssh_cidrs` | `["90.25.230.44/32"]` | Your actual IP(s) |
 | `s3_media_bucket_name` | `""` | S3 bucket name if media upload is used, or leave empty |
 | `alb_access_logs_bucket` | `""` | S3 bucket name for ALB logs (create bucket first, see §1.4) |
 | `use_existing_jwt_secret` | `false` | Set `true` if re-running apply and secret already in SSM |
