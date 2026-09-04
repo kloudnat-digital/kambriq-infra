@@ -104,6 +104,14 @@ terraform test
 - ❌ Skip `envs/shared` updates that `dev`/`prd` depend on.
 - ❌ Use `terraform.tfstate.backup` to roll back state - use `terraform state` operations instead.
 
+## Chantier register
+
+The cross-repo chantier register lives in `kambriq-webapp/CLAUDE.md`, together
+with the rule that the PR closing a chantier updates the register in the same
+commit, and the FinOps rule that every chantier and every added resource states
+its cost impact. Infra chantiers are listed there too; this file is not a second
+register.
+
 ## Pointers
 
 - Webapp repo: `../kambriq-webapp/`
