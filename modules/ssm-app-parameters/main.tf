@@ -9,7 +9,6 @@
 # - /kambriq/{env}/api/DATABASE_URL_KBS (SecureString)
 # - /kambriq/{env}/api/JWT_SECRET (SecureString)
 # - /kambriq/{env}/api/FRONTEND_URL (String)
-# - /kambriq/{env}/api/SES_FROM_EMAIL (String)
 # - Additional runtime parameters required by the NestJS API
 # ============================================================================
 
@@ -475,22 +474,6 @@ resource "aws_ssm_parameter" "frontend_url" {
   description = "Frontend URL for CORS and email links in ${var.env} environment"
   tags = {
     Name        = "kambriq-api-frontend-url-${var.env}"
-    Environment = var.env
-    Service     = "api"
-  }
-}
-
-# ============================================================================
-# SES_FROM_EMAIL - SES sender email address
-# ============================================================================
-resource "aws_ssm_parameter" "ses_from_email" {
-  name  = "/kambriq/${var.env}/api/SES_FROM_EMAIL"
-  type  = "String"
-  value = var.ses_from_email
-
-  description = "SES sender email address for ${var.env} environment"
-  tags = {
-    Name        = "kambriq-api-ses-from-email-${var.env}"
     Environment = var.env
     Service     = "api"
   }

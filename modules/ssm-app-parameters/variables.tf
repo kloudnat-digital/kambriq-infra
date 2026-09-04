@@ -83,11 +83,6 @@ variable "frontend_url" {
   type        = string
 }
 
-variable "ses_from_email" {
-  description = "SES sender email address"
-  type        = string
-}
-
 # ============================================================================
 # Core API runtime parameters (current NestJS stack)
 # ============================================================================

@@ -26,7 +26,6 @@ module "shared" {
   ses_domain                     = var.ses_domain
   ses_from_email                 = var.ses_from_email
   ses_domain_identity_arn        = var.ses_domain_identity_arn
-  ses_email_identity_arn         = var.ses_email_identity_arn
   api_acm_certificate_arn        = var.api_acm_certificate_arn
   cloudfront_acm_certificate_arn = var.cloudfront_acm_certificate_arn
   enable_s3_logs                 = var.enable_s3_logs

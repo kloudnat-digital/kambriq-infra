@@ -61,11 +61,6 @@ output "frontend_url_parameter_name" {
   value       = aws_ssm_parameter.frontend_url.name
 }
 
-output "ses_from_email_parameter_name" {
-  description = "SSM parameter name for SES_FROM_EMAIL"
-  value       = aws_ssm_parameter.ses_from_email.name
-}
-
 output "email_from_parameter_name" {
   description = "SSM parameter name for EMAIL_FROM"
   value       = aws_ssm_parameter.email_from.name
