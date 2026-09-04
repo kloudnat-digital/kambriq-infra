@@ -12,12 +12,9 @@
 # module.iam_roles_ecs to a resource the module does not own, so neither module
 # is the right home for it.
 #
-# Deliberately NOT granted here: ses:CreateContact and ses:CreateContactList,
-# used by the newsletter feature. No contact list exists in this account
-# (sesv2 list-contact-lists returns an empty set), so granting for it would be
-# permissions for a feature with no backing resource. NewsletterService already
-# treats AccessDeniedException on CreateContactList as benign, so withholding
-# these does not affect API startup.
+# ses:CreateContact is granted, scoped to the newsletter contact list that
+# Terraform now owns (see ses-newsletter.tf). ses:CreateContactList is NOT
+# granted: the runtime adds contacts, it never provisions infrastructure.
 # ============================================================================
 
 data "aws_caller_identity" "current" {}
@@ -58,6 +55,14 @@ resource "aws_iam_role_policy" "api_ses_send" {
             "ses:FromAddress" = var.ses_from_email
           }
         }
+      },
+      {
+        Sid    = "AddNewsletterContacts"
+        Effect = "Allow"
+        # CreateContact only. CreateContactList is deliberately withheld: the
+        # list is a Terraform resource, not something the API may create.
+        Action   = ["ses:CreateContact"]
+        Resource = aws_sesv2_contact_list.newsletter.arn
       }
     ]
   })
