@@ -406,10 +406,14 @@ module "ecs_service_api" {
     S3_MAX_UPLOAD_SIZE_MB        = tostring(var.s3_max_upload_size_mb)
     EMAIL_FROM                   = var.ses_from_email
     EMAIL_FROM_NAME              = var.email_from_name
-    FRONTEND_URL                 = var.frontend_url
-    SALT_ROUNDS                  = tostring(var.salt_rounds)
-    JWT_ACCESS_EXPIRATION        = var.jwt_access_expiration
-    JWT_REFRESH_EXPIRATION       = var.jwt_refresh_expiration
+    # Sourced from the resource, never a literal: Terraform is the single source
+    # of the contact list name. The app's default in env.validation.ts is then a
+    # fallback that never applies in a deployed environment.
+    AWS_SES_CONTACT_LIST_NAME = aws_sesv2_contact_list.newsletter.contact_list_name
+    FRONTEND_URL              = var.frontend_url
+    SALT_ROUNDS               = tostring(var.salt_rounds)
+    JWT_ACCESS_EXPIRATION     = var.jwt_access_expiration
+    JWT_REFRESH_EXPIRATION    = var.jwt_refresh_expiration
   }
 
   secrets = merge({

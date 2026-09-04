@@ -71,6 +71,33 @@ Verify these outputs exist:
 - `private_subnet_ids`
 - `github_oidc_provider_arn`
 
+#### SES contact list — must be resolved before prd sends anything
+
+**Amazon SES allows exactly one contact list per AWS account per region.**
+
+`envs/dev/ses-newsletter.tf` creates `kambriq-newsletter` in `051551940370` /
+`eu-central-1`, and the API is granted `ses:CreateContact` against it. If prd is
+deployed into the **same account and region**, it cannot create a second list.
+Both environments would write into `kambriq-newsletter`, so **test subscriptions
+from dev would mix with real subscribers from prd** — in the same list, with no
+way to tell them apart after the fact, and with real addresses exposed to
+whatever dev does next.
+
+This must be decided at prd bootstrap. The options, in rough order of
+preference:
+
+1. **Separate AWS account for prd.** Cleanest, and consistent with the
+   separation the rest of this ADR assumes. Each account gets its own list.
+2. **Separate region for prd's SES.** Contact lists are per region, so prd could
+   use a different one. Costs a second verified identity and DKIM setup.
+3. **Move the list to `envs/shared` and share it deliberately**, with the
+   application prefixing or tagging contacts by environment. Cheapest, but it
+   puts test data in the same list as real subscribers and relies on discipline.
+4. **Do not deploy the newsletter to prd** until one of the above is chosen.
+
+Doing nothing is not one of the options: the failure is silent, and it
+contaminates a list containing real people's addresses.
+
 ---
 
 ### 1.2 Prepare production secrets (do this BEFORE terraform apply)
