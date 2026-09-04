@@ -4,9 +4,10 @@ Terraform IaC for KAMBRIQ on AWS `eu-central-1`. Three environments: `shared`
 (cross-env primitives) → `dev` (live) → `prd` (**never deployed**).
 
 Application code is in `../kambriq-webapp/`, whose `CLAUDE.md` carries the
-method, the defect catalogue and the chantier register. **Read that one too** —
-the rules there (proof by execution, one mutation per expectation, gate on the
-commit) apply here without restatement.
+method and the defect catalogue. **Read that one too** — the rules there (proof
+by execution, one mutation per expectation, gate on the commit) apply here
+without restatement. The chantier register is a separate file,
+`../kambriq-webapp/docs/ops/registre-chantiers.md`.
 
 ---
 
@@ -188,11 +189,20 @@ terraform test
 
 ## Chantier register
 
-The cross-repo chantier register lives in `kambriq-webapp/CLAUDE.md`, together
-with the rule that the PR closing a chantier updates the register in the same
-commit, and the FinOps rule that every chantier and every added resource states
-its cost impact. Infra chantiers are listed there too; this file is not a second
-register.
+The cross-repo chantier register lives in
+`kambriq-webapp/docs/ops/registre-chantiers.md`. It was moved out of that repo's
+`CLAUDE.md` on 2026-09-04: Claude Code loads `CLAUDE.md` at the start of every
+session, and the register had grown to 104 896 bytes that every session paid for
+whether it touched them or not.
+
+The rules that govern it are unchanged and live in that repo's brief: the PR
+closing a chantier updates the register **in the same commit**; `EN COURS` names
+the pending proof explicitly; `PROUVE` quotes it. So does the FinOps rule that
+every chantier and every added resource states its cost impact — `None` is valid
+and must be written.
+
+Infra chantiers are listed there too. **This file is not a second register**, and
+a second one would diverge from the first inside a week.
 
 ## Pointers
 
