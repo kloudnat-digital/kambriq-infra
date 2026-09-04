@@ -1,8 +1,87 @@
-# kambriq-infra - Agent guide
+# kambriq-infra — working brief
 
-Terraform IaC for the KAMBRIQ platform on AWS `eu-central-1`. Three environments: `shared` (cross-env primitives) -> `dev` (live) -> `prd` (never deployed).
+Terraform IaC for KAMBRIQ on AWS `eu-central-1`. Three environments: `shared`
+(cross-env primitives) → `dev` (live) → `prd` (**never deployed**).
 
-The sister repo for application code (NestJS API, Next.js Web, Prisma) lives at `../kambriq-webapp/`.
+Application code is in `../kambriq-webapp/`, whose `CLAUDE.md` carries the
+method, the defect catalogue and the chantier register. **Read that one too** —
+the rules there (proof by execution, one mutation per expectation, gate on the
+commit) apply here without restatement.
+
+---
+
+## The one rule that matters most
+
+**Validate locally. Never apply.**
+
+```bash
+cd envs/<env>
+terraform init -reconfigure
+terraform validate
+terraform plan            # read it, all of it
+```
+
+`terraform apply` is **not yours to run**. `terraform-apply.yml` is a manual
+`workflow_dispatch` and the human choosing the environment is the authorisation.
+An apply here changes shared state that a running platform depends on; there is
+no `--status Active` to undo it.
+
+The same holds for anything that mutates AWS outside Terraform. If it changes
+state, it waits for an explicit yes.
+
+---
+
+## Drift, and how to actually find it
+
+Two lessons, both expensive:
+
+**An audit that reports a negative over a field it never read is worse than no
+audit.** A drift check reported "no differences" for attributes it had not
+retrieved — the AWS API returns them only when asked, and absence in the response
+was read as absence of drift. **A field you did not read cannot be a field that
+matches.** Before believing a negative result, confirm the check actually
+retrieved the thing it claims to compare.
+
+**`terraform plan` is the only thing that compares every declared attribute.**
+Hand-rolled comparisons — `aws ecs describe-services` against a `.tf` file, a
+script diffing a few keys — check the attributes somebody remembered. The plan
+checks all of them, including the ones nobody thought to list. Use it as the
+source of truth, and use scripts only to answer questions the plan does not ask.
+
+---
+
+## ECS Exec replaced the bastion
+
+`modules/iam-roles-ecs/main.tf` grants the SSM channel; `enable_execute_command`
+is on both dev services via `var.enable_ecs_exec`. The interactive path into the
+private subnets is:
+
+```bash
+aws ecs execute-command --region eu-central-1 \
+  --cluster kambriq-dev-cluster --task <task-id> \
+  --container api --interactive --command /bin/sh
+```
+
+**There is no bastion host and there should not be one** — it was removed as a
+cost and attack-surface reduction. Some ADRs still reference
+`bastion_allowed_ssh_cidrs`; those references are historical and the variable is
+not wired to a running instance.
+
+One-off work (migrations, seeds, probes) runs as an **ephemeral task**, not on a
+long-lived box:
+
+```bash
+aws ecs run-task --cluster kambriq-dev-cluster --task-definition kambriq-dev-api:<rev> \
+  --launch-type FARGATE --network-configuration '<awsvpc config>' \
+  --overrides '{"containerOverrides":[{"name":"api","command":["sh","-c","..."]}]}'
+```
+
+Container overrides cap at 8192 bytes. Read the result from CloudWatch
+`/ecs/kambriq-dev-api`, stream `api/api/<task-id>` — **and read the container's
+`exitCode`, not just the log**. A task whose log looks complete can still have
+exited 1.
+
+---
 
 ## Branch & commit conventions
 
@@ -41,7 +120,7 @@ envs/{shared,dev,prd}/    # composition layer (env-specific wiring)
 modules/
 ├── shared/               # VPC, subnets, NAT, ACM, SES, Route53
 ├── alb/                  # ALB HTTPS + listener rules + target groups
-├── ecs-cluster/          # cluster + Container Insights + task execution role
+├── ecs-cluster/          # cluster + task execution role (Container Insights OFF - see below)
 ├── ecs-service/          # task definition + service + (optional) init container for migrations
 ├── ecr-repository/       # ECR + lifecycle policy
 ├── rds-postgres/         # RDS PG15 + parameter group + subnet group
@@ -70,8 +149,11 @@ modules/
 - **SSM secrets must exist before first ECS apply**: `JWT_SECRET` and `DATABASE_URL_*` are read via `data.aws_ssm_parameter` if `use_existing_jwt_secret = true`. Pre-create with `aws ssm put-parameter --type SecureString` or pass via tfvars.
 - **prd has never been applied**. Bootstrap prerequisites in `docs/adr/ADR-005-production-automation-prerequisites.md`.
 - **Both API and web run in dev**: `enable_web_service = true` in `envs/dev/terraform.tfvars` - the API and web ECS services are both deployed.
-- **NAT Gateway is single-AZ** (cost optimization). No HA on outbound traffic in dev or prd.
-- **SES sandbox**: if the AWS account is in SES sandbox, only verified email addresses receive mail. Sortir du sandbox before going prd.
+- **NAT Gateway is single-AZ** (cost optimisation). No HA on outbound traffic. At roughly $39/month it is the largest single line in the bill; chantier `X2` decided a cheaper option and deliberately did **not** apply it before the delivery, because a shared-state network change days before a delivery trades $35/month against a broken dev.
+- **Container Insights is disabled** and must stay that way unless somebody decides otherwise in writing. It cost $14.55 in August and $0.00 in September. Verified at the source with `aws ecs describe-clusters --include SETTINGS`, not inferred from the bill.
+- **RDS `BackupRetentionPeriod` is 0 on dev, deliberately** - what a backup protects is reproducible from `migrate deploy` plus a restorative seed. **This must be revisited the moment prd exists**; it belongs on the ADR-005 checklist.
+- **The RDS postgresql log group is capped at 7 days**, set outside Terraform because RDS creates that group itself. It is undeclared state and belongs in the RDS module next time that module is touched.
+- **SES has production access** (granted 2026-09). The account is out of the sandbox, so mail reaches unverified addresses. Note that the mailbox simulator does not move `SentLast24Hours`, and that metric is not a real-time witness of anything: the `AWS/SES` `Send` and `Delivery` CloudWatch metrics are.
 - **prd tag versioning**: `deploy-prd.yml` validates that the git tag `v*` matches `package.json` version exactly. Mismatch fails the deploy.
 
 ## Common commands
@@ -82,7 +164,7 @@ cd envs/<env>
 terraform init -reconfigure
 terraform validate
 terraform plan
-terraform apply -auto-approve     # only on user instruction; CI is the canonical path
+# terraform apply is NOT run from here. terraform-apply.yml, manual, human-chosen.
 
 ./scripts/set-github-vars.sh <env> owner/repo   # push outputs to GitHub vars/secrets
 ./scripts/smoke-test.sh                          # post-apply health checks
@@ -97,7 +179,7 @@ terraform test
 
 ## Don't
 
-- ❌ Apply directly without a plan review.
+- ❌ Apply. At all. `terraform-apply.yml` is manual and the human running it is the authorisation.
 - ❌ Modify `.tfstate` manually.
 - ❌ Commit credentials, AMIs, instance IDs, or anything from `terraform output`.
 - ❌ Add resources to `envs/<env>/main.tf` that should be a reusable module - extract to `modules/<name>/` first.

@@ -111,7 +111,6 @@ VPC: 10.0.0.0/16 (eu-central-1)
 | ECS Web | 3001 | ALB SG |
 | RDS | 5432 | ECS SG + Bastion SG |
 | Redis | 6379 | ECS SG |
-| Bastion | 22 | `bastion_allowed_ssh_cidrs` |
 
 ### CI/CD Flow
 
