@@ -32,6 +32,43 @@ state, it waits for an explicit yes.
 
 ---
 
+## The standards describe the codebase, not the code written after today
+
+There is no double standard between new code and existing code. The rules in the
+webapp brief - proof by execution, one mutation per expectation, no mechanism
+that reports success by saying nothing - and the rules in this file describe what
+these repositories are supposed to be, everywhere. They do not start applying at
+the next commit.
+
+Deliberately bounded, so it does not become a refactor that blocks delivery:
+
+1. **Any file you touch in a PR comes up to standard in that same PR.** Not the
+   whole module, not the whole repo: the file you were already editing. In
+   Terraform that means the `.tf` file you edited gets its variable descriptions,
+   its tags, and its cost note - not the module next door.
+2. **If bringing a touched file up to standard would balloon the PR, stop and say
+   so** rather than shipping half of it silently. A partial cleanup nobody
+   mentions is worse than none: it leaves a file that looks reviewed and is not.
+3. **The gap that remains is inventoried, not assumed.** `A7` in the register is
+   a read-only pass over both repositories, file by file, listing where they do
+   not meet these standards. Its output is a list, not a set of fixes. The debt
+   becomes visible and finite rather than discovered one incident at a time.
+
+### CLAUDE.md is updated in the same PR as the work it describes
+
+Exactly like the register, and for the same reason.
+
+These briefs carry the method and the defect catalogue, and both grow with every
+chantier. A brief that lags behind the code it briefs is the stale
+cross-reference defect applied to the one document whose entire job is being
+trusted - and it is worse here than anywhere else, because this is the file every
+session loads before it knows enough to doubt it.
+
+A chantier that teaches something new adds it here, in the PR that closes the
+chantier. Not afterwards, not in a docs pass, not "once it settles down".
+
+---
+
 ## Drift, and how to actually find it
 
 Two lessons, both expensive:
