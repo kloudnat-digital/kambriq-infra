@@ -176,6 +176,10 @@ modules/
   - SSM Parameter Store SecureString under `/kambriq/{env}/{api,db,web}/...`. Never inline in `.tf` files (always via `var.<sensitive> = true`).
   - The ECS task pulls them via the `secrets:` block (`valueFrom = <ssm-arn>`), NOT `environment_variables:`.
   - Non-secret config also gets stored as plain SSM `String` for inventory consistency, AND injected directly into ECS `environment_variables` for runtime use.
+  - **A third pattern exists, deliberately: values the application reads itself, at runtime.** The twelve `/kambriq/{env}/api/payment-channels/*` parameters (`G10`) are `SecureString`, are **not** in the `secrets:` block and **not** in `environment_variables`. Only the *prefix* is injected; the API reads the values through the SSM SDK with a 60-second cache.
+    - Why: `G3` chose that reader so a wrong bank account number is corrected with one `aws ssm put-parameter --overwrite` and takes effect on the running task within a minute. As `secrets:` a correction would need a task restart; as `environment_variables` it would need an apply. Either would undo the design decision the parameters exist to serve.
+    - They therefore carry `lifecycle { ignore_changes = [value] }`. Terraform creates them with visibly fictitious defaults and never touches the values again. **Removing that line makes every apply overwrite a corrected account number with a placeholder.**
+    - Proved, not assumed: a `put-parameter` at 23:56 changed the bank name in an instruction email sent at 23:57 by the same process that had sent the old one at 23:55 - no restart, no deploy.
 - **IAM split**:
   - **Role definitions** + always-on policies (SSM read, RDS describe) live in `modules/iam-roles-ecs/main.tf`.
   - **Resource-specific policy attachments** (e.g. S3 media access on the API task role) live in the env composition layer (`envs/dev/iam-media.tf`) - they cross both module boundaries (the role and the bucket ARN) so they belong where both are visible.
@@ -184,6 +188,7 @@ modules/
 ## Known drift / pitfalls
 
 - **S3 versioning quirk**: once a bucket has been `Enabled`, S3 will NOT accept `Disabled` again - only `Suspended`. The `s3-media` module maps `var.versioning_enabled = false` -> `Suspended` for that reason.
+- **A `terraform plan` is a diff against state, not against reality.** When terraform adopts resources that already exist outside state, the plan shows clean creations and can warn about nothing - it has no prior version to compare. `G10`'s first draft declared the twelve payment-channel parameters as `String`; the live ones (hand-created) are `SecureString`, and the plan said so nowhere. Applying would have converted twelve bank details to plaintext. **Before applying a change that adopts existing resources, compare the declaration against the live resource yourself** - type, tier, encryption, tags.
 - **SSM secrets must exist before first ECS apply**: `JWT_SECRET` and `DATABASE_URL_*` are read via `data.aws_ssm_parameter` if `use_existing_jwt_secret = true`. Pre-create with `aws ssm put-parameter --type SecureString` or pass via tfvars.
 - **prd has never been applied**. Bootstrap prerequisites in `docs/adr/ADR-005-production-automation-prerequisites.md`.
 - **Both API and web run in dev**: `enable_web_service = true` in `envs/dev/terraform.tfvars` - the API and web ECS services are both deployed.

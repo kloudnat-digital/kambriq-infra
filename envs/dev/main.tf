@@ -414,6 +414,31 @@ module "ecs_service_api" {
     SALT_ROUNDS               = tostring(var.salt_rounds)
     JWT_ACCESS_EXPIRATION     = var.jwt_access_expiration
     JWT_REFRESH_EXPIRATION    = var.jwt_refresh_expiration
+
+    # G10 - payment channel details.
+    #
+    # **The prefix, not the values.** The twelve bank / mobile money / notary
+    # parameters are deliberately neither `environment_variables` (which
+    # terraform renders at apply time) nor ECS `secrets` (which the agent
+    # resolves at task start). Either would mean a wrong account number is
+    # corrected by a deployment. G3 chose a runtime SDK reader with a 60-second
+    # cache so that `aws ssm put-parameter --overwrite` takes effect on the
+    # running task within a minute, and this is where that choice is kept.
+    #
+    # Sourced from the module rather than written as a literal, so the path the
+    # API reads and the path the parameters live under cannot drift apart.
+    PAYMENT_CHANNELS_SSM_PREFIX = module.ssm_app_parameters.payment_channels_prefix
+
+    # 'ssm' is the schema default; naming it here is the difference between an
+    # environment that is configured and one that merely has not said otherwise.
+    # With 'ssm' and no prefix the API refuses to start - which is what G10 fixed
+    # in the application, and what this line makes sure never has to fire.
+    PAYMENT_CHANNELS_TRANSPORT = "ssm"
+
+    # G9 - how long a payment stays valid. Reaches the client as the deadline in
+    # the instruction email. See the register: the number is a choice, not a
+    # specification, and it is a variable so that settling it is one edit.
+    PAYMENT_VALIDITY_DAYS = tostring(var.payment_validity_days)
   }
 
   secrets = merge({
