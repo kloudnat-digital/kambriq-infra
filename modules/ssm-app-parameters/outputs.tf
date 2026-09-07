@@ -80,3 +80,12 @@ output "web_jwt_expires_in_parameter_arn" {
   description = "SSM parameter ARN for JWT_EXPIRES_IN (web)"
   value       = aws_ssm_parameter.web_jwt_expires_in.arn
 }
+
+output "payment_channels_prefix" {
+  description = "SSM path the API reads payment channel details from at runtime (G10)"
+  # Derived from the resources rather than written twice: the prefix the task
+  # definition points at cannot drift from the path the parameters live under.
+  value = "/kambriq/${var.env}/api/payment-channels"
+
+  depends_on = [aws_ssm_parameter.payment_channels]
+}

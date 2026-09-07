@@ -415,3 +415,9 @@ variable "enable_ecs_exec" {
   type        = bool
   default     = false
 }
+
+variable "payment_validity_days" {
+  description = "How long a payment stays valid once created, in days (G9). A business choice, not a specification - see docs/ops/registre-chantiers.md."
+  type        = number
+  default     = 30
+}

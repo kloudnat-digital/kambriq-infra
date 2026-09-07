@@ -884,3 +884,89 @@ resource "aws_ssm_parameter" "web_jwt_expires_in" {
   }
   lifecycle { ignore_changes = [value] }
 }
+
+# ---------------------------------------------------------------------------
+# G10 - payment channel details
+# ---------------------------------------------------------------------------
+#
+# The twelve values the payment instruction email is built from: where a client
+# actually sends money. Until now they existed on dev **only because somebody
+# typed twelve `aws ssm put-parameter` commands at 21:41 on 6 September**. Not in
+# terraform, so not in any other environment, and not recoverable if the
+# parameter store were rebuilt.
+#
+# Three properties, and the third is the one that is easy to break:
+#
+# 1. **Declared**, so a new environment gets all twelve or none - the API refuses
+#    to start when the set is incomplete, which is the behaviour G3 chose.
+#
+# 2. **Never real values in this repository.** The defaults below are visibly
+#    fictitious and say so in their own text: an operator who sees
+#    "DEV - ne pas virer d'argent" in an email knows immediately that the
+#    environment is unconfigured. A placeholder that looks like a plausible IBAN
+#    is worse than a blank, because somebody might send money to it.
+#
+# 3. **`ignore_changes = [value]`, which is the whole point.** G3 chose a runtime
+#    SDK reader precisely so that correcting a wrong account number is one
+#    command and not a deploy. If terraform owned these values, the next apply
+#    would silently revert an operational correction - and the provisioning
+#    would have undone the design decision it was meant to serve. Terraform
+#    creates them and then never touches the values again.
+#
+# The **values** are therefore not ECS `secrets` and not terraform-rendered
+# `environment_variables`. Only the prefix is (see envs/dev/main.tf), and the app
+# reads the values through the SSM SDK with a 60-second cache. A correction takes
+# effect within a minute, on the running task, with no deployment.
+#
+# IAM needs no change: the API task role already holds ssm:GetParametersByPath on
+# arn:aws:ssm:*:*:parameter/kambriq/${var.env}/api/* (modules/iam-roles-ecs).
+
+locals {
+  # name suffix => the fictitious default a fresh environment starts with
+  payment_channel_defaults = {
+    BANK_NAME             = "DEV - aucune banque reelle"
+    BANK_ACCOUNT_NAME     = "DEV - ne pas virer d'argent"
+    BANK_IBAN             = "DEV-COMPTE-FICTIF-NE-PAS-UTILISER"
+    BANK_SWIFT            = "DEVDEVDEV"
+    MOBILE_MONEY_OPERATOR = "DEV - operateur fictif"
+    MOBILE_MONEY_NUMBER   = "DEV-NUMERO-FICTIF"
+    MOBILE_MONEY_NAME     = "DEV - ne pas envoyer d'argent"
+    NOTARY_NAME           = "DEV - notaire fictif"
+    NOTARY_PHONE          = "DEV-TELEPHONE-FICTIF"
+    NOTARY_ADDRESS        = "DEV - adresse fictive"
+    SUPPORT_EMAIL         = "contact@kambriq.com"
+    SUPPORT_PHONE         = "DEV-SUPPORT-FICTIF"
+  }
+}
+
+resource "aws_ssm_parameter" "payment_channels" {
+  for_each = local.payment_channel_defaults
+
+  name = "/kambriq/${var.env}/api/payment-channels/${each.key}"
+
+  # SecureString, matching what already exists on dev - and correct on its own
+  # terms: a bank account number and a notary's address are business-sensitive,
+  # and `ssm:GetParametersByPath` without decryption returns ciphertext to
+  # anything that only half-holds the permission.
+  #
+  # This was `String` in the first draft. `terraform plan` showed twelve
+  # creations and said nothing about the type, because from terraform's point of
+  # view they did not exist yet - the plan cannot warn about a conflict with a
+  # resource it does not know it is adopting. Comparing the plan against the live
+  # parameters is what caught it, and the cost of not comparing would have been
+  # twelve bank details silently converted to plaintext on the first apply.
+  type        = "SecureString"
+  value       = each.value
+  overwrite   = true
+  description = "Payment channel detail ${each.key} for ${var.env} - corrected operationally, never by apply"
+
+  tags = {
+    Name        = "kambriq-api-payment-channel-${lower(replace(each.key, "_", "-"))}-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+
+  # See (3) above. Removing this line makes every terraform apply overwrite a
+  # corrected bank account number with the placeholder below it.
+  lifecycle { ignore_changes = [value] }
+}
