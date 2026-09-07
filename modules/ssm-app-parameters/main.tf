@@ -924,20 +924,63 @@ resource "aws_ssm_parameter" "web_jwt_expires_in" {
 locals {
   # name suffix => the fictitious default a fresh environment starts with
   payment_channel_defaults = {
-    BANK_NAME             = "DEV - aucune banque reelle"
-    BANK_ACCOUNT_NAME     = "DEV - ne pas virer d'argent"
-    BANK_IBAN             = "DEV-COMPTE-FICTIF-NE-PAS-UTILISER"
-    BANK_SWIFT            = "DEVDEVDEV"
+    BANK_NAME         = "DEV - aucune banque reelle"
+    BANK_ACCOUNT_NAME = "DEV - ne pas virer d'argent"
+    BANK_IBAN         = "DEV-COMPTE-FICTIF-NE-PAS-UTILISER"
+    BANK_SWIFT        = "DEVDEVDEV"
+    # Mobile money, one operator - kept, and read by no channel. See the note
+    # below the map: removing them today stops the API booting.
     MOBILE_MONEY_OPERATOR = "DEV - operateur fictif"
     MOBILE_MONEY_NUMBER   = "DEV-NUMERO-FICTIF"
     MOBILE_MONEY_NAME     = "DEV - ne pas envoyer d'argent"
-    NOTARY_NAME           = "DEV - notaire fictif"
-    NOTARY_PHONE          = "DEV-TELEPHONE-FICTIF"
-    NOTARY_ADDRESS        = "DEV - adresse fictive"
-    SUPPORT_EMAIL         = "contact@kambriq.com"
-    SUPPORT_PHONE         = "DEV-SUPPORT-FICTIF"
+
+    # Mobile money, per operator (v03 section 9). Orange and MTN have neither
+    # the same number, nor the same confirmation format, nor the same dispute
+    # procedure, so OMO and MOMO are two channels and need two sets.
+    #
+    # The placeholders are deliberately **undiallable**. A Cameroonian mobile
+    # number is +237 6XX XXX XXX, so anything of that shape could be copied into
+    # a transfer form and money would leave. These cannot be: they are not
+    # numbers at all, and they say so in their own text.
+    ORANGE_MONEY_NUMBER = "DEV-NUMERO-ORANGE-FICTIF-NE-PAS-UTILISER"
+    ORANGE_MONEY_NAME   = "DEV - Orange Money fictif, ne pas envoyer d'argent"
+    MTN_MONEY_NUMBER    = "DEV-NUMERO-MTN-FICTIF-NE-PAS-UTILISER"
+    MTN_MONEY_NAME      = "DEV - MTN Mobile Money fictif, ne pas envoyer d'argent"
+
+    NOTARY_NAME    = "DEV - notaire fictif"
+    NOTARY_PHONE   = "DEV-TELEPHONE-FICTIF"
+    NOTARY_ADDRESS = "DEV - adresse fictive"
+    SUPPORT_EMAIL  = "contact@kambriq.com"
+    SUPPORT_PHONE  = "DEV-SUPPORT-FICTIF"
   }
 }
+
+# ---------------------------------------------------------------------------
+# Sixteen, not twelve - and why the old mobile-money trio stays
+# ---------------------------------------------------------------------------
+#
+# v03 section 9: "Seize parametres sont requis, et non douze. Le decoupage de
+# mobile money en deux canaux ajoute ORANGE_MONEY_NUMBER, ORANGE_MONEY_NAME,
+# MTN_MONEY_NUMBER et MTN_MONEY_NAME." Four are **added** to the twelve; the
+# arithmetic in the design is 12 + 4, not a replacement.
+#
+# MOBILE_MONEY_OPERATOR, MOBILE_MONEY_NUMBER and MOBILE_MONEY_NAME are therefore
+# kept, and they are now read by **no channel**: in the webapp, `CHANNEL_FIELDS`
+# sends OMO the Orange pair and MOMO the MTN pair, and nothing asks for these
+# three.
+#
+# They are kept anyway, and not renamed or removed, for one hard reason:
+# `PaymentChannelsService.FIELDS` still lists all three as **required at
+# startup**, and an absent or empty one refuses the boot. Deleting them here
+# would stop the API starting on dev the moment it deploys - trading a channel
+# that cannot be sent for an environment that will not run.
+#
+# Removing them is a webapp change first, infra second, in that order:
+#   1. drop the three from `FIELDS` in payment-channels.service.ts,
+#   2. merge and deploy that,
+#   3. then remove them here.
+# Doing it the other way round breaks dev. Registered as a follow-up.
+
 
 resource "aws_ssm_parameter" "payment_channels" {
   for_each = local.payment_channel_defaults
