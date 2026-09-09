@@ -25,10 +25,29 @@ permissions:
 env:
   TF_VERSION: "1.12.0"
 
+
+# ------------------------------------------------------------------------------
+# CONCURRENCY
+#
+# A plan is a read. Three pushes to a PR used to run three full plan matrices to
+# completion and bill all three - and every job here bills a full minute for
+# work measured in seconds, so a superseded run is pure waste.
+#
+# Safe to cancel BECAUSE it is terraform plan: it acquires no state lock it
+# cannot lose and changes nothing. `terraform-apply.yml` is the opposite case
+# and keeps `cancel-in-progress: false` - a cancelled apply can leave the state
+# file locked and the real infrastructure half-changed, which is not a CI
+# problem but an AWS one.
+# ------------------------------------------------------------------------------
+concurrency:
+  group: tf-plan-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   detect-envs:
     name: Detect changed environments
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABELS || '["ubuntu-latest"]') }}
+    timeout-minutes: 5
     if: github.event_name == 'pull_request'
     outputs:
       envs: ${{ steps.detect.outputs.envs }}
@@ -63,7 +82,8 @@ jobs:
 
   plan:
     name: Plan (${{ matrix.env }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABELS || '["ubuntu-latest"]') }}
+    timeout-minutes: 10
     needs: [detect-envs]
     if: always() && (github.event_name == 'workflow_dispatch' || needs.detect-envs.result == 'success')
     strategy:
@@ -186,7 +206,8 @@ jobs:
   # apart from a genuinely unhealthy environment.
   shell-lint:
     name: Shell Lint
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABELS || '["ubuntu-latest"]') }}
+    timeout-minutes: 5
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4
@@ -228,7 +249,8 @@ jobs:
   # ── Terraform module unit tests ───────────────────────────────────────────────
   module-tests:
     name: Module Tests
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABELS || '["ubuntu-latest"]') }}
+    timeout-minutes: 10
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v4

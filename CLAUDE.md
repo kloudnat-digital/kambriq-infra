@@ -256,3 +256,40 @@ a second one would diverge from the first inside a week.
 - Production bootstrap: `docs/adr/ADR-005-production-automation-prerequisites.md`
 - Active PRs: `gh pr list --repo kloudnat-digital/kambriq-infra`
 - Recent merged work: see commits since the latest tag (S3 media bucket config, IAM split, SSM extension all landed early May 2026)
+
+---
+
+### CI is billed per job, rounded up — five jobs of seconds cost five minutes
+
+Measured 2026-09-09, against `Terraform Plan` run `34106681008`.
+
+| job | measured | billed |
+| --- | ---: | ---: |
+| Detect changed environments | 5s | 1m |
+| Shell Lint | 6s | 1m |
+| Module Tests | 42s | 1m |
+| Plan (shared) | 36s | 1m |
+| Plan (dev) | 54s | 1m |
+| **total** | **143s** | **5m** |
+
+GitHub rounds each job up to the minute and charges per job, so 2m23s of work
+bills as five minutes. The three cheapest jobs — 53 seconds between them — cost
+three of those five.
+
+**The rule: parallelism is bought, and the price is one rounded-up minute per
+job.** Split when someone waits on the clock; merge when they only pay the bill.
+
+What was applied here: concurrency on the plan (superseded PR runs cancelled),
+and `timeout-minutes` on every job. The default is **360 minutes**, so one job
+wedged on a provider call burns 18% of a monthly quota unnoticed.
+
+**`terraform-apply` keeps `cancel-in-progress: false`, and that is not
+symmetry.** A plan is a read: cancelling it loses nothing. A cancelled apply can
+leave the state file locked and the real infrastructure half-changed — not a CI
+problem but an AWS one.
+
+Not applied: merging `detect-envs`, `shell-lint` and `module-tests` into one
+job, which is the largest remaining saving at two billed minutes. `detect-envs`
+publishes `outputs` that the `plan` matrix consumes, so the merge has to
+preserve that contract and was not worth doing blind while no run could execute
+to prove it.
