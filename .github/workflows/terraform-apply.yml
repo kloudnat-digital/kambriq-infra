@@ -25,7 +25,8 @@ concurrency:
 jobs:
   apply:
     name: Apply (${{ inputs.env }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABELS || '["ubuntu-latest"]') }}
+    timeout-minutes: 15
     environment: ${{ inputs.env }}
     steps:
       - uses: actions/checkout@v4

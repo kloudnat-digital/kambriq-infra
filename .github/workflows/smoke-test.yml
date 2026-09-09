@@ -27,7 +27,8 @@ permissions:
 jobs:
   smoke-test:
     name: Smoke Test (${{ github.event.inputs.env || 'dev' }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABELS || '["ubuntu-latest"]') }}
+    timeout-minutes: 10
     if: >
       github.event_name == 'workflow_dispatch' ||
       github.event.workflow_run.conclusion == 'success'
