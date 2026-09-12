@@ -145,6 +145,24 @@ jobs:
           terraform -chdir="envs/${{ steps.env.outputs.env_name }}" show -json tfplan.bin > tfplan.json
           ./scripts/assert-task-sg-closed.sh tfplan.json
 
+      # D15. A route whose target has been deleted is not removed by AWS - it is
+      # kept and marked blackhole, and traffic matching it is dropped silently.
+      # That is the specific failure removing the NAT gateway risks, so it is
+      # checked against the LIVE route tables: a blackhole is a fact about what
+      # AWS holds now, appears only after an apply, and no plan can show it.
+      - name: Assert no route points at a deleted target
+        if: steps.env.outputs.env_name == 'dev'
+        run: |
+          set -euo pipefail
+          vpc="$(terraform -chdir="envs/${{ steps.env.outputs.env_name }}" show -json tfplan.bin \
+            | jq -r '.prior_state.values.root_module.child_modules[]?.resources[]?
+                     | select(.type=="aws_vpc") | .values.id' | head -1)"
+          if [ -z "$vpc" ]; then
+            vpc="$(aws ec2 describe-vpcs --filters Name=tag:Name,Values=kambriq-vpc \
+              --query 'Vpcs[0].VpcId' --output text)"
+          fi
+          ./scripts/assert-no-blackhole-routes.sh "$vpc"
+
       - name: Post plan as PR comment
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
