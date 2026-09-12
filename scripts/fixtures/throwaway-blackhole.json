@@ -1,0 +1,123 @@
+{
+  "RouteTables": [
+    {
+      "Associations": [
+        {
+          "Main": false,
+          "RouteTableAssociationId": "rtbassoc-0d0a00f449b82fcfb",
+          "RouteTableId": "rtb-0fcd8137697566370",
+          "SubnetId": "subnet-03f9128334a4b5516",
+          "AssociationState": {
+            "State": "associated"
+          }
+        },
+        {
+          "Main": false,
+          "RouteTableAssociationId": "rtbassoc-03ee3fe10f4954c01",
+          "RouteTableId": "rtb-0fcd8137697566370",
+          "SubnetId": "subnet-085728f14e8c9bc9c",
+          "AssociationState": {
+            "State": "associated"
+          }
+        }
+      ],
+      "PropagatingVgws": [],
+      "RouteTableId": "rtb-0fcd8137697566370",
+      "Routes": [
+        {
+          "DestinationCidrBlock": "10.0.0.0/16",
+          "GatewayId": "local",
+          "Origin": "CreateRouteTable",
+          "State": "active"
+        },
+        {
+          "DestinationCidrBlock": "0.0.0.0/0",
+          "GatewayId": "igw-02d7cf4407b7c6009",
+          "Origin": "CreateRoute",
+          "State": "blackhole"
+        }
+      ],
+      "Tags": [
+        {
+          "Key": "Type",
+          "Value": "shared"
+        },
+        {
+          "Key": "Name",
+          "Value": "kambriq-public-rt"
+        }
+      ],
+      "VpcId": "vpc-0b15f965686496a1f",
+      "OwnerId": "051551940370"
+    },
+    {
+      "Associations": [
+        {
+          "Main": false,
+          "RouteTableAssociationId": "rtbassoc-01cd052250ab50b5b",
+          "RouteTableId": "rtb-08ffc1f3802b9d8c2",
+          "SubnetId": "subnet-0e568ae408ff7358d",
+          "AssociationState": {
+            "State": "associated"
+          }
+        },
+        {
+          "Main": false,
+          "RouteTableAssociationId": "rtbassoc-090d52815bb07b1de",
+          "RouteTableId": "rtb-08ffc1f3802b9d8c2",
+          "SubnetId": "subnet-0ee39246b7854399e",
+          "AssociationState": {
+            "State": "associated"
+          }
+        }
+      ],
+      "PropagatingVgws": [],
+      "RouteTableId": "rtb-08ffc1f3802b9d8c2",
+      "Routes": [
+        {
+          "DestinationCidrBlock": "10.0.0.0/16",
+          "GatewayId": "local",
+          "Origin": "CreateRouteTable",
+          "State": "active"
+        }
+      ],
+      "Tags": [
+        {
+          "Key": "Name",
+          "Value": "kambriq-private-rt"
+        },
+        {
+          "Key": "Type",
+          "Value": "shared"
+        }
+      ],
+      "VpcId": "vpc-0b15f965686496a1f",
+      "OwnerId": "051551940370"
+    },
+    {
+      "Associations": [
+        {
+          "Main": true,
+          "RouteTableAssociationId": "rtbassoc-08bd589ba56f40e14",
+          "RouteTableId": "rtb-0900bb2dcc1d597d2",
+          "AssociationState": {
+            "State": "associated"
+          }
+        }
+      ],
+      "PropagatingVgws": [],
+      "RouteTableId": "rtb-0900bb2dcc1d597d2",
+      "Routes": [
+        {
+          "DestinationCidrBlock": "10.0.0.0/16",
+          "GatewayId": "local",
+          "Origin": "CreateRouteTable",
+          "State": "active"
+        }
+      ],
+      "Tags": [],
+      "VpcId": "vpc-0b15f965686496a1f",
+      "OwnerId": "051551940370"
+    }
+  ]
+}

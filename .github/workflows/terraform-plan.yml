@@ -167,7 +167,9 @@ jobs:
             vpc="$(aws ec2 describe-vpcs --filters Name=tag:Name,Values=kambriq-vpc \
               --query 'Vpcs[0].VpcId' --output text)"
           fi
-          ./scripts/assert-no-blackhole-routes.sh "$vpc"
+          # THROWAWAY: pointed at a deliberately broken document so the guard
+          # can be seen failing through the CI path, not just locally.
+          ./scripts/assert-no-blackhole-routes.sh --file scripts/fixtures/throwaway-blackhole.json
 
       - name: Post plan as PR comment
         if: github.event_name == 'pull_request'
