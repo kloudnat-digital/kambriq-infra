@@ -381,10 +381,10 @@ module "ecs_service_api" {
   cpu                     = var.api_cpu
   memory                  = var.api_memory
   desired_count           = var.api_desired_count
-  subnet_ids              = data.terraform_remote_state.shared.outputs.private_subnet_ids
+  subnet_ids              = data.terraform_remote_state.shared.outputs.public_subnet_ids
   security_group_ids      = [aws_security_group.ecs.id]
   target_group_arn        = module.alb.api_target_group_arn
-  assign_public_ip        = false
+  assign_public_ip        = true
   aws_region              = var.aws_region
   health_check_path       = var.api_health_check_path
   enable_init_container   = false
@@ -464,10 +464,10 @@ module "ecs_service_web" {
   cpu                     = var.web_cpu
   memory                  = var.web_memory
   desired_count           = var.web_desired_count
-  subnet_ids              = data.terraform_remote_state.shared.outputs.private_subnet_ids
+  subnet_ids              = data.terraform_remote_state.shared.outputs.public_subnet_ids
   security_group_ids      = [aws_security_group.ecs.id]
   target_group_arn        = module.alb.web_target_group_arn
-  assign_public_ip        = false
+  assign_public_ip        = true
   aws_region              = var.aws_region
   health_check_path       = var.web_health_check_path
   enable_init_container   = false

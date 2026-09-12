@@ -20,6 +20,7 @@ module "shared" {
   vpc_cidr                       = var.vpc_cidr
   availability_zones             = var.availability_zones
   nat_per_az                     = var.nat_per_az
+  enable_nat                     = var.enable_nat
   domain_name                    = var.domain_name
   route53_zone_id                = var.route53_zone_id
   enable_route53_lookup          = var.enable_route53_lookup
