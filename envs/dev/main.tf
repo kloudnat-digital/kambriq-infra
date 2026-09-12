@@ -107,6 +107,15 @@ resource "aws_security_group" "ecs" {
     }
   }
 
+  # THROWAWAY - proves branch protection refuses a merge. Deleted immediately.
+  ingress {
+    description = "throwaway: open to the internet on purpose"
+    from_port   = 3000
+    to_port     = 3000
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   egress {
     description = "All outbound"
     from_port   = 0
