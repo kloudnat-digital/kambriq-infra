@@ -368,6 +368,26 @@ module "iam_roles_ecs" {
   enable_ecs_exec = var.enable_ecs_exec
 }
 
+# ---------------------------------------------------------------------------
+# P1 - where the daily contact digest is sent.
+#
+# Read from SSM rather than carried as a terraform variable, because the value
+# is an address and addresses do not go in this repository. The parameter is
+# created by hand once; terraform reads it and renders it into the task
+# definition, so the application sees an ordinary environment variable.
+#
+# NOT an ECS secret, deliberately. The project's rule is that credentials are
+# secrets and configuration is an environment variable, and an address is
+# configuration.
+#
+# contact@kambriq.com, not noreply@. The digest is read by a human who may
+# reply, which is what the Workspace mailbox is for; noreply@ is the SES machine
+# sender and only ever leaves, never receives.
+# ---------------------------------------------------------------------------
+data "aws_ssm_parameter" "contact_inbox_email" {
+  name = "/kambriq/${var.env}/api/CONTACT_INBOX_EMAIL"
+}
+
 module "ecs_service_api" {
   source                  = "../../modules/ecs-service"
   project_name            = var.project_name
@@ -405,6 +425,7 @@ module "ecs_service_api" {
     S3_PRESIGNED_URL_TTL_SECONDS = tostring(var.s3_presigned_url_ttl_seconds)
     S3_MAX_UPLOAD_SIZE_MB        = tostring(var.s3_max_upload_size_mb)
     EMAIL_FROM                   = var.ses_from_email
+    CONTACT_INBOX_EMAIL          = data.aws_ssm_parameter.contact_inbox_email.value
     EMAIL_FROM_NAME              = var.email_from_name
     # Sourced from the resource, never a literal: Terraform is the single source
     # of the contact list name. The app's default in env.validation.ts is then a
