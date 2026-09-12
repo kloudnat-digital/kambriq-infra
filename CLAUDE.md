@@ -293,3 +293,65 @@ job, which is the largest remaining saving at two billed minutes. `detect-envs`
 publishes `outputs` that the `plan` matrix consumes, so the merge has to
 preserve that contract and was not worth doing blind while no run could execute
 to prove it.
+
+## D15 - dev has no NAT gateway, and the tasks are in public subnets
+
+Applied 12 September 2026. The gateway was the largest single line in the dev
+bill, larger than the Fargate compute it served: **USD 40.55 a month**, against
+USD 30.79 for the two services it existed to give egress to.
+
+**The tasks are in the public subnets with `assign_public_ip = true`.** RDS and
+ElastiCache stayed private and were not touched. That works because the load
+balancer registers targets by private IP, and both database security groups
+admit the task security group rather than a subnet CIDR - neither cares which
+subnet the task sits in.
+
+**VPC endpoints were priced and rejected.** The eight interface endpoints the two
+IAM task roles require cost USD 140.16 a month at two availability zones, against
+the gateway's USD 40.55, and even a minimal five-endpoint set is more than double.
+Only the S3 gateway endpoint is free. At this scale the swap everyone reaches for
+first costs three times what it saves.
+
+### What the change removed, and what replaced it
+
+A private subnet was the second layer in front of the tasks. Now the security
+group is the only one. `scripts/assert-task-sg-closed.sh` asserts it on every
+pull request, reading the **resolved plan** rather than the source, because the
+ingress is a `dynamic` block and grepping cannot say what `for_each` produced.
+
+### The route table, which is the part worth remembering
+
+`route` is Optional **and** Computed on `aws_route_table`. Three consequences,
+each of which cost an attempt:
+
+- omitting the argument, or a `dynamic` block producing no blocks, reads as *not
+  configured* rather than *no routes*. Terraform keeps the state value and
+  reports the table unchanged, so the default route outlives the gateway;
+- a standalone `aws_route` cannot remove it either: the route is in state as part
+  of the table, so a resource at count zero that was never in state destroys
+  nothing;
+- an explicit list is the only form that can say "no routes", and its unused
+  attributes must be `null`, not `""` - the provider stores them as empty strings
+  and validates them as CIDRs on the way in.
+
+A route whose target is deleted is not removed by AWS. It is kept and marked
+`blackhole`, and traffic matching it is dropped silently.
+`scripts/assert-no-blackhole-routes.sh` reads the **live** route tables for that
+reason: a blackhole exists only after an apply, and no plan can show one.
+
+### Apply order, which is not optional
+
+`envs/dev` first, so the tasks hold their own egress, health confirmed behind the
+load balancer, and only then `envs/shared`. Applying shared first strands the
+running tasks with no route out: no image pulls, no logs, no parameter reads.
+
+### A variable proved on the command line is a variable the apply never sees
+
+`terraform-apply.yml` plans from the environment's tfvars and passes no `-var`.
+The change was proved with `-var=enable_nat_gateway=false` and would have applied
+nothing: the plan would have been empty and the run would have reported success
+while the gateway survived. The flag lives in `envs/shared/terraform.tfvars`.
+
+**Rollback is one line there, and it is planned rather than assumed:** with the
+gateway re-enabled, the plan against the infrastructure as it stands is a strict
+no-op.
