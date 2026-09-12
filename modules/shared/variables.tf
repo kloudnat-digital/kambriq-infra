@@ -98,6 +98,42 @@ variable "cloudfront_acm_certificate_arn" {
   description = "ACM certificate ARN for CloudFront (created manually in AWS Console, must be in us-east-1)"
   type        = string
   default     = ""
+
+  # A placeholder is worse than an empty value, and this one proved it.
+  #
+  # `arn:aws:acm:...:ACCOUNT:certificate/XXXXXXXX` sat here from May. It failed
+  # pull request #10's plan with "is an invalid ARN: invalid account ID value",
+  # the pull request merged anyway because nothing was required, and it has been
+  # in the tree ever since. It looks configured. It is not, and nothing notices
+  # because no distribution consumes it yet - so it would have failed on the day
+  # somebody added one, which is the worst possible day to discover it.
+  #
+  # Empty means "not configured", which is honest and already handled. A value
+  # shaped like a real ARN and containing none of a real ARN's information is a
+  # claim that is false, and that is what this refuses.
+  validation {
+    condition = var.cloudfront_acm_certificate_arn == "" || !can(regex(
+      "ACCOUNT|XXXX|EXAMPLE|TODO|CHANGEME|<[^>]+>", var.cloudfront_acm_certificate_arn
+    ))
+    error_message = <<-EOT
+      cloudfront_acm_certificate_arn looks like a placeholder rather than a real ARN.
+
+      Either set it to the real certificate ARN from us-east-1, or leave it
+      empty. Empty is a supported state and means no CloudFront certificate is
+      configured; a placeholder means the plan will fail the day a distribution
+      is added, and it will not be obvious why.
+    EOT
+  }
+
+  # The same refusal for a value that is not an ARN at all, which is how this
+  # first surfaced: the plan failed inside the ALB module rather than here,
+  # naming a resource rather than the variable that fed it.
+  validation {
+    condition = var.cloudfront_acm_certificate_arn == "" || can(regex(
+      "^arn:aws:acm:[a-z0-9-]+:[0-9]{12}:certificate/[0-9a-f-]+$", var.cloudfront_acm_certificate_arn
+    ))
+    error_message = "cloudfront_acm_certificate_arn must be a full ACM certificate ARN with a 12-digit account id, or empty."
+  }
 }
 
 # S3 Logs Configuration
