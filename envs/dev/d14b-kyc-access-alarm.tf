@@ -55,10 +55,10 @@
 # ---------------------------------------------------------------------------
 
 locals {
-  d14_kyc_prefix    = "users/"
-  d14_trail_name    = "${var.project_name}-${var.env}-kyc-data-events"
-  d14_log_group     = "/aws/cloudtrail/${var.project_name}-${var.env}-kyc"
-  d14_logs_bucket   = "kambriq-logs-b9321a78"
+  d14_kyc_prefix      = "users/"
+  d14_trail_name      = "${var.project_name}-${var.env}-kyc-data-events"
+  d14_log_group       = "/aws/cloudtrail/${var.project_name}-${var.env}-kyc"
+  d14_logs_bucket     = "kambriq-logs-b9321a78"
   d14_alarm_threshold = 5   # denied reads
   d14_alarm_period    = 300 # within 5 minutes
 }
