@@ -12,3 +12,14 @@ ses_domain_identity_arn = "arn:aws:ses:eu-central-1:051551940370:identity/kambri
 ses_from_email          = "noreply@kambriq.com"
 
 nat_per_az = false
+
+# D15 - no NAT gateway on this VPC.
+#
+# The Fargate tasks moved into the public subnets with public IPs, so nothing in
+# the private subnets needs outbound internet any more: only RDS and ElastiCache
+# remain there and neither makes an outbound call. The gateway was the largest
+# single line in the dev bill, larger than the Fargate compute it served.
+#
+# Set back to true to restore it. That path is planned, not assumed: with this
+# true the plan against the current infrastructure is a strict no-op.
+enable_nat_gateway = false
