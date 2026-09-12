@@ -87,7 +87,7 @@ resource "aws_subnet" "private" {
 
 # Elastic IP for NAT Gateway
 resource "aws_eip" "nat" {
-  count  = !var.enable_nat ? 0 : (var.nat_per_az ? length(aws_subnet.public) : 1)
+  count  = !var.enable_nat_gateway ? 0 : (var.nat_per_az ? length(aws_subnet.public) : 1)
   domain = "vpc"
 
   tags = {
@@ -100,7 +100,7 @@ resource "aws_eip" "nat" {
 
 # NAT Gateway (single AZ to reduce costs)
 resource "aws_nat_gateway" "main" {
-  count         = !var.enable_nat ? 0 : (var.nat_per_az ? length(aws_subnet.public) : 1)
+  count         = !var.enable_nat_gateway ? 0 : (var.nat_per_az ? length(aws_subnet.public) : 1)
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = var.nat_per_az ? aws_subnet.public[count.index].id : aws_subnet.public[0].id
 
@@ -132,21 +132,27 @@ resource "aws_route_table" "private" {
   count  = var.nat_per_az ? length(aws_subnet.private) : 1
   vpc_id = aws_vpc.main.id
 
-  # D15: no default route when there is no NAT. The private subnets then carry
-  # only the VPC-local route, which is all RDS and ElastiCache ever use - they
-  # are reached by the tasks over `local` and make no outbound call themselves.
-  dynamic "route" {
-    for_each = var.enable_nat ? [1] : []
-    content {
-      cidr_block     = "0.0.0.0/0"
-      nat_gateway_id = var.nat_per_az ? aws_nat_gateway.main[count.index].id : aws_nat_gateway.main[0].id
-    }
-  }
+  # D15: the route is a standalone `aws_route` below, not an inline block.
+  #
+  # An inline `route` cannot express "no routes". The attribute is Optional AND
+  # Computed on `aws_route_table`, so zero blocks reads as "not configured" and
+  # Terraform keeps whatever is in state - a plan with the block removed reports
+  # the table unchanged and the default route survives the gateway it points at.
+  # An explicit empty list is the only inline form that removes it.
+  route = []
 
   tags = {
     Name = var.nat_per_az ? "${local.name_prefix}-private-rt-${count.index + 1}" : "${local.name_prefix}-private-rt"
     Type = "shared"
   }
+}
+
+# The private subnets' default route, separate so that it can be destroyed.
+resource "aws_route" "private_nat" {
+  count                  = var.enable_nat_gateway ? (var.nat_per_az ? length(aws_route_table.private) : 1) : 0
+  route_table_id         = aws_route_table.private[count.index].id
+  destination_cidr_block = "0.0.0.0/0"
+  nat_gateway_id         = var.nat_per_az ? aws_nat_gateway.main[count.index].id : aws_nat_gateway.main[0].id
 }
 
 # Route Table Associations

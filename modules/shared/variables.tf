@@ -114,7 +114,7 @@ variable "enable_s3_artifacts" {
 }
 
 
-variable "enable_nat" {
+variable "enable_nat_gateway" {
   description = <<-EOT
     Whether the private subnets get a NAT gateway.
 

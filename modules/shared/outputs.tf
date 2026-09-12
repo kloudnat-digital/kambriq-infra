@@ -28,7 +28,7 @@ output "all_subnet_ids" {
 }
 
 output "nat_gateway_id" {
-  description = "NAT Gateway ID, or null when enable_nat is false"
+  description = "NAT Gateway ID, or null when enable_nat_gateway is false"
   value       = length(aws_nat_gateway.main) > 0 ? aws_nat_gateway.main[0].id : null
 }
 

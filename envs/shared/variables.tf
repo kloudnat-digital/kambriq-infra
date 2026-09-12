@@ -99,7 +99,7 @@ variable "enable_s3_artifacts" {
   default     = true
 }
 
-variable "enable_nat" {
+variable "enable_nat_gateway" {
   description = "D15: false removes the NAT gateway and its EIP. Only safe once every task needing egress runs in a public subnet."
   type        = bool
   default     = true

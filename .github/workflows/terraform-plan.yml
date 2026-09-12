@@ -127,8 +127,23 @@ jobs:
         id: plan
         run: |
           set -euo pipefail
-          terraform -chdir="envs/${{ steps.env.outputs.env_name }}" plan -no-color 2>&1 | tee plan.txt
+          terraform -chdir="envs/${{ steps.env.outputs.env_name }}" plan -no-color -out=tfplan.bin 2>&1 | tee plan.txt
           echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+
+      # D15. The Fargate tasks run in public subnets with public IPs, so this
+      # security group is the only thing between them and the internet - the
+      # private subnet that used to be the second layer is gone. Asserted on
+      # every pull request, against the resolved plan rather than the source,
+      # because a `dynamic "ingress"` block cannot be read by grepping.
+      #
+      # Deliberately NOT conditional on the plan's exit code: a run that fails
+      # to plan should not also skip the security assertion silently.
+      - name: Assert the task security group admits only the ALB
+        if: steps.env.outputs.env_name == 'dev'
+        run: |
+          set -euo pipefail
+          terraform -chdir="envs/${{ steps.env.outputs.env_name }}" show -json tfplan.bin > tfplan.json
+          ./scripts/assert-task-sg-closed.sh tfplan.json
 
       - name: Post plan as PR comment
         if: github.event_name == 'pull_request'
