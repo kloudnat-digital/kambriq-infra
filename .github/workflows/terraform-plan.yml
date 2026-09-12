@@ -1,12 +1,18 @@
 name: Terraform Plan
 
 on:
+  # No `paths:` filter, deliberately, and it is not an oversight.
+  #
+  # A required status check that does not report leaves a pull request waiting
+  # for a status that will never arrive - the merge is blocked forever, with no
+  # failure to look at. A workflow filtered by path does exactly that on any
+  # pull request touching only documentation.
+  #
+  # So the workflow always runs and the *work* is filtered instead: detect-envs
+  # is a few seconds, and the plan jobs below do nothing when no environment
+  # changed. The gate at the end always reports, and it is the only check that
+  # needs to be required.
   pull_request:
-    paths:
-      - "envs/**"
-      - "modules/**"
-      - "scripts/**"
-      - ".github/workflows/terraform-*.yml"
   workflow_dispatch:
     inputs:
       env:
@@ -306,3 +312,42 @@ jobs:
       - name: Module test summary
         if: always()
         run: echo "Module tests completed"
+
+  # ---------------------------------------------------------------------------
+  # The one check that is required, and the only one that can safely be.
+  #
+  # It reports on every pull request, whatever the change touches, so it can
+  # never leave a merge waiting on a status that will not come. It passes only
+  # if every job it depends on either succeeded or was legitimately skipped, and
+  # a skipped job is genuinely fine here: a documentation change has no
+  # environment to plan.
+  #
+  # `cancelled` and `failure` are both refused. Treating a cancellation as a
+  # pass would let a cancelled run merge, which is the same hole as not
+  # requiring the check at all.
+  # ---------------------------------------------------------------------------
+  gate:
+    name: CI Gate
+    runs-on: ${{ fromJSON(vars.CI_RUNNER_LABELS || '["ubuntu-latest"]') }}
+    needs: [detect-envs, plan, shell-lint, module-tests]
+    if: always()
+    steps:
+      - name: Refuse unless every job passed or was skipped
+        run: |
+          set -euo pipefail
+          failed=0
+          check() {
+            case "$2" in
+              success|skipped) echo "  ok       $1: $2" ;;
+              *)               echo "  REFUSED  $1: $2"; failed=1 ;;
+            esac
+          }
+          check "Detect changed environments" "${{ needs.detect-envs.result }}"
+          check "Plan"                        "${{ needs.plan.result }}"
+          check "Shell Lint"                  "${{ needs.shell-lint.result }}"
+          check "Module Tests"                "${{ needs.module-tests.result }}"
+          if [ "$failed" -ne 0 ]; then
+            echo "CI Gate refuses this pull request." >&2
+            exit 1
+          fi
+          echo "CI Gate: every job passed or was skipped."
