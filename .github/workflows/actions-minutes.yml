@@ -1,0 +1,38 @@
+name: Actions Minutes
+
+# Watches the thing that stopped everything between 7 and 11 September 2026.
+#
+# The account hit its spending limit and jobs stopped starting: two to three
+# seconds, zero steps, no log. Five webapp pull requests merged with nothing
+# verified. Branch protection now makes the required checks binding, so the same
+# event would freeze merges on both repositories outright, and the only symptom
+# would be a check that never reports - there is no failure to read in that
+# state.
+#
+# Daily rather than weekly, deliberately. At the burn rate measured on
+# 12 September the margin was three and a half days, so a weekly watcher would
+# have found out afterwards. One rounded-up minute a day to protect three
+# thousand is a trade worth writing down rather than defaulting into.
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  minutes:
+    name: Actions minutes headroom
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read consumption and refuse above the threshold
+        env:
+          # The workflow token is repository-scoped and cannot read org billing.
+          # Absent, the script fails loudly rather than reporting healthy - an
+          # unconfigured watcher is the loud case, not the quiet one.
+          GH_TOKEN: ${{ secrets.BILLING_READ_TOKEN }}
+        run: ./scripts/assert-actions-minutes.sh

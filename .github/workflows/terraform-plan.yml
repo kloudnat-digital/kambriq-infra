@@ -351,3 +351,14 @@ jobs:
             exit 1
           fi
           echo "CI Gate: every job passed or was skipped."
+
+      # Advisory here, and failing in the scheduled workflow. The asymmetry is
+      # the point: if this step could fail the gate, a missing billing token
+      # would block every merge on both repositories - which is precisely the
+      # freeze the watcher exists to prevent. It informs at the moment somebody
+      # is about to need CI, and the daily job is what actually objects.
+      - name: Actions minutes headroom (advisory)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.BILLING_READ_TOKEN }}
+        run: ./scripts/assert-actions-minutes.sh || true
