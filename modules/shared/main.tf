@@ -87,7 +87,7 @@ resource "aws_subnet" "private" {
 
 # Elastic IP for NAT Gateway
 resource "aws_eip" "nat" {
-  count  = var.nat_per_az ? length(aws_subnet.public) : 1
+  count  = !var.enable_nat_gateway ? 0 : (var.nat_per_az ? length(aws_subnet.public) : 1)
   domain = "vpc"
 
   tags = {
@@ -100,7 +100,7 @@ resource "aws_eip" "nat" {
 
 # NAT Gateway (single AZ to reduce costs)
 resource "aws_nat_gateway" "main" {
-  count         = var.nat_per_az ? length(aws_subnet.public) : 1
+  count         = !var.enable_nat_gateway ? 0 : (var.nat_per_az ? length(aws_subnet.public) : 1)
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = var.nat_per_az ? aws_subnet.public[count.index].id : aws_subnet.public[0].id
 
@@ -132,10 +132,40 @@ resource "aws_route_table" "private" {
   count  = var.nat_per_az ? length(aws_subnet.private) : 1
   vpc_id = aws_vpc.main.id
 
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = var.nat_per_az ? aws_nat_gateway.main[count.index].id : aws_nat_gateway.main[0].id
-  }
+  # D15 - the default route is declared HERE and nowhere else.
+  #
+  # `route` is Optional AND Computed on `aws_route_table`, and that single fact
+  # rules out the two obvious alternatives:
+  #
+  #   - omitting the block, or a `dynamic` block producing none, reads as "not
+  #     configured" rather than "no routes", so Terraform keeps whatever is in
+  #     state. The route would outlive the gateway it points at, and the plan
+  #     would report the table unchanged while doing it.
+  #   - a standalone `aws_route` resource cannot remove it either: the route is
+  #     in state as part of this table, so a resource at count zero that was
+  #     never in state destroys nothing. The provider also forbids managing one
+  #     table's routes both inline and by resource, which is exactly the
+  #     contradiction that arises the moment the gateway is switched back on.
+  #
+  # An explicit list is the only form that can say "no routes" out loud. Every
+  # attribute is spelled, the unused ones as `null` rather than `""`: the
+  # provider stores them as empty strings but validates them as CIDRs and ids on
+  # the way in, and `ipv6_cidr_block = ""` is refused as an invalid CIDR.
+  route = var.enable_nat_gateway ? [{
+    cidr_block                 = "0.0.0.0/0"
+    nat_gateway_id             = var.nat_per_az ? aws_nat_gateway.main[count.index].id : aws_nat_gateway.main[0].id
+    carrier_gateway_id         = null
+    core_network_arn           = null
+    destination_prefix_list_id = null
+    egress_only_gateway_id     = null
+    gateway_id                 = null
+    ipv6_cidr_block            = null
+    local_gateway_id           = null
+    network_interface_id       = null
+    transit_gateway_id         = null
+    vpc_endpoint_id            = null
+    vpc_peering_connection_id  = null
+  }] : []
 
   tags = {
     Name = var.nat_per_az ? "${local.name_prefix}-private-rt-${count.index + 1}" : "${local.name_prefix}-private-rt"

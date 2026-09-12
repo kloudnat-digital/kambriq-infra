@@ -113,3 +113,21 @@ variable "enable_s3_artifacts" {
   default     = true
 }
 
+
+variable "enable_nat_gateway" {
+  description = <<-EOT
+    Whether the private subnets get a NAT gateway.
+
+    D15: with the Fargate tasks moved to the public subnets and
+    `assign_public_ip = true`, nothing in the private subnets needs outbound
+    internet any more - only RDS and ElastiCache remain there, and neither
+    makes an outbound call. The gateway was the largest single line in the dev
+    bill, larger than the Fargate compute it served.
+
+    Set to false only when every task that needs egress is in a public subnet.
+    A task left in a private subnet with this false cannot pull its image and
+    the deploy fails at task start, which is loud rather than silent.
+  EOT
+  type        = bool
+  default     = true
+}
