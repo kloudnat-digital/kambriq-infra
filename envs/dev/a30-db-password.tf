@@ -2,11 +2,12 @@
 # A30 - the RDS master password, generated rather than written down.
 # ============================================================================
 #
-# Until this file existed, `envs/dev/terraform.tfvars` carried
-# `db_password = "CHANGE_ME"` and that nine-character string was the live master
-# password of the dev database. Not a placeholder that had been superseded: the
-# live value. The README and docs/deployment-sequence.md both instruct the
-# operator to `export TF_VAR_db_password=...` before applying, but
+# Until this file existed, `envs/dev/terraform.tfvars` carried a `db_password`
+# entry holding a nine-character placeholder, and that string was the live
+# master password of the dev database. Not a placeholder that had been
+# superseded at some point: the live value. The README and
+# docs/deployment-sequence.md both instruct the operator to
+# `export TF_VAR_db_password=...` before applying, but
 # `.github/workflows/terraform-apply.yml` passes no `-var` and sets no `TF_VAR_`,
 # so every apply since February wrote the placeholder back. The documentation
 # described a discipline nothing enforced, which is the most expensive kind.
@@ -19,9 +20,9 @@
 #
 # `ignore_changes = [password]` and the new value cannot land in the same apply.
 # On an existing resource Terraform would see the ignore rule first, decline to
-# compare, and leave CHANGE_ME in place while reporting success. So this file
-# lands first, alone, and rotates. The ignore rule follows in a second apply,
-# once the new value is the one in state.
+# compare, and leave the old password in place while reporting success. So this
+# file lands first, alone, and rotates. The ignore rule follows in a second
+# apply, once the new value is the one in state.
 #
 # WHY `special = false`
 #
