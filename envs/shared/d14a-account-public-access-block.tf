@@ -1,7 +1,22 @@
 # ---------------------------------------------------------------------------
+# Moved here from envs/dev on 2026-09-13, by state move, without touching AWS.
+#
+# It is an ACCOUNT-level control: `account_id` is the whole account, so it
+# already governs buckets that prod has not created yet. Living in dev's state
+# meant the environment whose purpose is experimentation owned a protection
+# covering production - and a destroy or a careless apply there would have
+# removed it for everything.
+#
+# The rule this follows: a resource belongs to the state whose lifecycle it
+# shares, and AWS decides its scope, not us. If AWS makes it unique per account,
+# it cannot be per-environment.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
 # D14 (a) - Block Public Access at the ACCOUNT level.
 #
-# PROPOSED, NOT APPLIED. Plan only.
+# Applied 11 September 2026. (This line read "PROPOSED, NOT APPLIED" until the
+# move on 13 September - a comment that had been false for two days.)
 #
 # kambriq-media-dev already carries all four flags on the bucket itself, which
 # is what makes the KYC documents unreachable today. The account does not, so a
@@ -24,6 +39,10 @@
 # impossible without first removing this resource, which is a reviewed
 # Terraform change rather than a console click.
 # ---------------------------------------------------------------------------
+
+# The dev state declared this; the shared root did not, so it comes with the
+# resource it feeds.
+data "aws_caller_identity" "current" {}
 
 resource "aws_s3_account_public_access_block" "account" {
   account_id = data.aws_caller_identity.current.account_id
