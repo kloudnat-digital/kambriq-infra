@@ -106,23 +106,29 @@ These sensitive values are NOT stored in git. Collect them before running Terraf
 
 | Secret | How to generate | Where it goes |
 |--------|-----------------|---------------|
-| `db_password` | `openssl rand -base64 24` | `-var db_password="..."` at `terraform apply` time |
+| `db_password` | **nothing to collect** | generated in-stack by `random_password`; see A30 and copy `envs/dev/a30-db-password.tf` |
 | `jwt_secret` | `openssl rand -base64 64` | Set in `envs/prd/terraform.tfvars`: `jwt_secret = "..."` **or** pass via `-var` |
 | `redis_auth_token` | `openssl rand -base64 32` | Set in `envs/prd/terraform.tfvars`: `redis_auth_token = "..."` |
 | `AUTH_SECRET` (Next.js) | `openssl rand -base64 32` | Passed to SSM by Terraform as `NEXTAUTH_SECRET` |
 
-> **Never commit real secrets.** The `terraform.tfvars` entries `db_password = "CHANGE_ME"` and
-> `jwt_secret = ""` are placeholders. Pass actual values via `-var` flags or a local
-> `terraform.tfvars.local` (gitignored) file.
+> **Never commit real secrets, and prefer generating them to remembering not to.**
+> `db_password` used to be a placeholder in `envs/dev/terraform.tfvars` with an
+> instruction to override it at apply time. The instruction was never enforced -
+> `terraform-apply.yml` passes no `-var` - so the placeholder was the live master
+> password for seven months. A30 removed the variable entirely: with no variable,
+> no placeholder is possible. `jwt_secret = ""` already falls through to
+> `random_password`. Do the same for anything new rather than adding a rule
+> somebody has to follow.
 
 **Recommended approach — pass sensitive vars at apply time:**
 
 ```bash
 terraform apply \
-  -var db_password="$(openssl rand -base64 24)" \
   -var jwt_secret="$(openssl rand -base64 64)" \
   -var redis_auth_token="$(openssl rand -base64 32)"
 ```
+
+`db_password` is absent from that list on purpose: there is no such variable.
 
 ---
 
@@ -185,13 +191,11 @@ terraform init
 
 # Dry run — review all resources to be created
 terraform plan \
-  -var db_password="YOUR_DB_PASSWORD" \
   -var jwt_secret="YOUR_JWT_SECRET" \
   -var redis_auth_token="YOUR_REDIS_TOKEN"
 
 # Apply (takes ~10–15 min for RDS + ElastiCache to provision)
 terraform apply \
-  -var db_password="YOUR_DB_PASSWORD" \
   -var jwt_secret="YOUR_JWT_SECRET" \
   -var redis_auth_token="YOUR_REDIS_TOKEN"
 ```
@@ -399,7 +403,7 @@ curl -fsS https://kambriq.com/health
 
 ### Infrastructure (kambriq-infra)
 
-- [ ] Collect sensitive secrets (db_password, jwt_secret, redis_auth_token)
+- [ ] Collect sensitive secrets (jwt_secret, redis_auth_token - `db_password` is generated, A30)
 - [ ] Update `envs/prd/terraform.tfvars` with real `api_acm_certificate_arn`
 - [ ] Create ALB access log S3 bucket (optional but recommended)
 - [ ] Run `terraform apply` for `envs/prd/`
@@ -427,7 +431,7 @@ curl -fsS https://kambriq.com/health
 ## Consequences
 
 - **One-time effort**: After the bootstrap phases above, all future production deployments are triggered by merging the release-please PR. No manual steps required.
-- **Secret management**: Sensitive Terraform variables (`db_password`, `jwt_secret`, `redis_auth_token`) must never be committed. Use `-var` flags or a gitignored local file. All are stored as SSM SecureString after `terraform apply`.
+- **Secret management**: `db_password` is generated in-stack and has no variable (A30). `jwt_secret` and `redis_auth_token` must never be committed - use `-var` flags or a gitignored local file, and prefer converting them to `random_password` too. All are stored as SSM SecureString after `terraform apply`.
 - **Multi-AZ cost**: Enabling `rds_multi_az = true` for prd roughly doubles the RDS cost (one standby instance). This is required for production availability.
 - **Web prd image tag**: The web image will be tagged with the semver version (`v1.x.x`) and `web-prd-latest`. Unlike dev, the tag is human-readable and tied to a release.
 - **GitHub Environment protection**: The `prd` environment requires 1 reviewer approval before a deployment can run. This prevents accidental triggers from automated workflows.
