@@ -283,7 +283,7 @@ module "rds" {
   env                     = var.env
   db_name                 = var.db_core_name
   db_username             = var.db_username
-  db_password             = var.db_password
+  db_password             = random_password.db_master.result
   instance_class          = var.rds_instance_class
   allocated_storage       = var.rds_allocated_storage
   storage_type            = var.rds_storage_type
@@ -335,7 +335,7 @@ module "ssm_app_parameters" {
   db_lands_name           = var.db_lands_name
   db_extra                = var.db_extra
   db_username             = var.db_username
-  db_password             = var.db_password
+  db_password             = random_password.db_master.result
   jwt_secret              = var.jwt_secret
   use_existing_jwt_secret = var.use_existing_jwt_secret
   frontend_url            = var.frontend_url
