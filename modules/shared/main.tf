@@ -242,6 +242,15 @@ resource "aws_s3_bucket" "logs" {
     Name = "${local.name_prefix}-logs"
     Type = "shared"
   }
+
+  # This bucket is CloudTrail's S3 destination - it holds the KYC access trail,
+  # which is evidence. A managed bucket is destroyable by a future plan (a
+  # removed count, a renamed prefix, a module refactor), and evidence that a
+  # plan can delete is not evidence. Refuse the destroy at the source; removing
+  # the bucket is then a deliberate two-step, never a side effect.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_s3_bucket_versioning" "logs" {
@@ -272,6 +281,13 @@ resource "aws_s3_bucket" "artifacts" {
   tags = {
     Name = "${local.name_prefix}-artifacts"
     Type = "shared"
+  }
+
+  # Versioned build artefacts, and the same reasoning as the logs bucket: a
+  # bucket a plan can delete should not hold anything worth keeping. Deleting it
+  # is a deliberate act, not a consequence of an unrelated refactor.
+  lifecycle {
+    prevent_destroy = true
   }
 }
 
