@@ -1,0 +1,24 @@
+# Identifiers that predate the environment convention.
+#
+# CLOSED LIST, dated 2026-09-13. It may SHRINK and must never GROW.
+#
+# The convention says every resource carries its environment in its Name and in
+# an Environment tag. The TAG applies to everything, now. The IDENTIFIER cannot:
+# renaming one replaces the resource, and for this estate that means the
+# database, sixty SSM parameters, six IAM roles, four security groups, four log
+# groups and three buckets. So identifiers carry the convention for what is NEW
+# - all of prod - and for nothing that already exists.
+#
+# Every entry below is a SHARED resource, which is the coherent part: each
+# dev-dedicated resource already carries "dev" in its identifier. Nothing here
+# is a dev resource that got away with a bad name.
+#
+# A new resource whose identifier lacks its environment word is refused, and the
+# refusal says it is not covered by this list. Adding a line here is a decision
+# somebody has to argue for in review, which is the only thing that stops a
+# convention dying quietly.
+#
+# format: <arn-suffix-substring>  # why
+kambriq-artifacts-b9321a78   # shared build artefacts, pre-dates the convention, renaming replaces the bucket
+kambriq-logs-b9321a78        # shared log bucket, holds CloudTrail evidence, renaming replaces the bucket
+contact-list/kambriq-newsletter  # SES permits ONE contact list per account per region, so it cannot be per-environment

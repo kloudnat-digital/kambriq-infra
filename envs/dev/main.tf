@@ -14,6 +14,17 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
+
+  # Every resource this provider creates carries its environment, so the
+  # convention holds by construction rather than by remembering to add a tag
+  # on each new resource. A resource that sets Environment itself still wins;
+  # this only fills the gap. `assert-environment-convention.sh` is the check
+  # that this default is actually reaching everything.
+  default_tags {
+    tags = {
+      Environment = "dev"
+    }
+  }
 }
 
 locals {
