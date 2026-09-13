@@ -409,7 +409,7 @@ module "ecs_service_api" {
     # Sourced from the resource, never a literal: Terraform is the single source
     # of the contact list name. The app's default in env.validation.ts is then a
     # fallback that never applies in a deployed environment.
-    AWS_SES_CONTACT_LIST_NAME = aws_sesv2_contact_list.newsletter.contact_list_name
+    AWS_SES_CONTACT_LIST_NAME = data.terraform_remote_state.shared.outputs.newsletter_contact_list_name
     FRONTEND_URL              = var.frontend_url
     SALT_ROUNDS               = tostring(var.salt_rounds)
     JWT_ACCESS_EXPIRATION     = var.jwt_access_expiration

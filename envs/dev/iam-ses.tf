@@ -62,7 +62,7 @@ resource "aws_iam_role_policy" "api_ses_send" {
         # CreateContact only. CreateContactList is deliberately withheld: the
         # list is a Terraform resource, not something the API may create.
         Action   = ["ses:CreateContact"]
-        Resource = aws_sesv2_contact_list.newsletter.arn
+        Resource = data.terraform_remote_state.shared.outputs.newsletter_contact_list_arn
       }
     ]
   })
