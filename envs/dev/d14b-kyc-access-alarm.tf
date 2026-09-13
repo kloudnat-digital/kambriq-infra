@@ -69,39 +69,9 @@ data "aws_s3_bucket" "d14_logs" {
   bucket = local.d14_logs_bucket
 }
 
-data "aws_iam_policy_document" "d14_trail_bucket" {
-  statement {
-    sid     = "AWSCloudTrailAclCheck"
-    effect  = "Allow"
-    actions = ["s3:GetBucketAcl"]
-    principals {
-      type        = "Service"
-      identifiers = ["cloudtrail.amazonaws.com"]
-    }
-    resources = [data.aws_s3_bucket.d14_logs.arn]
-  }
-
-  statement {
-    sid     = "AWSCloudTrailWrite"
-    effect  = "Allow"
-    actions = ["s3:PutObject"]
-    principals {
-      type        = "Service"
-      identifiers = ["cloudtrail.amazonaws.com"]
-    }
-    resources = ["${data.aws_s3_bucket.d14_logs.arn}/AWSLogs/${data.aws_caller_identity.current.account_id}/*"]
-    condition {
-      test     = "StringEquals"
-      variable = "s3:x-amz-acl"
-      values   = ["bucket-owner-full-control"]
-    }
-  }
-}
-
-resource "aws_s3_bucket_policy" "d14_trail_bucket" {
-  bucket = data.aws_s3_bucket.d14_logs.id
-  policy = data.aws_iam_policy_document.d14_trail_bucket.json
-}
+# The policy on that bucket is account-scoped and now lives in `envs/shared`
+# (d14b-trail-bucket-policy.tf). The data source above stays here because the
+# trail below still needs the bucket's id and arn.
 
 # Short retention: this log group exists to raise an alarm within minutes, not
 # to be an archive. The trail's own S3 copy is the record that keeps.
@@ -171,8 +141,6 @@ resource "aws_cloudtrail" "d14_kyc" {
       starts_with = ["${module.s3_media.bucket_arn}/${local.d14_kyc_prefix}"]
     }
   }
-
-  depends_on = [aws_s3_bucket_policy.d14_trail_bucket]
 }
 
 # AccessDenied on a KYC key. An anonymous caller has no userIdentity to name,
