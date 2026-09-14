@@ -76,6 +76,11 @@ data "aws_iam_policy_document" "github_actions_infra_assume_role" {
       values = [
         "repo:${var.github_repo_infra}:environment:shared",
         "repo:${var.github_repo_infra}:environment:dev",
+        # D2. Without this a Plan (prd) job (it runs under the prd GitHub Environment) is
+        # refused at sts:AssumeRoleWithWebIdentity, so the production plan the chain now
+        # schedules cannot authenticate. The detector making the job appear and this
+        # making it able to run are the two halves of teaching the pipeline about prd.
+        "repo:${var.github_repo_infra}:environment:prd",
       ]
     }
   }
