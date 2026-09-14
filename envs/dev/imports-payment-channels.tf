@@ -55,21 +55,6 @@ import {
 }
 
 import {
-  to = module.ssm_app_parameters.aws_ssm_parameter.payment_channels["MOBILE_MONEY_OPERATOR"]
-  id = "/kambriq/${var.env}/api/payment-channels/MOBILE_MONEY_OPERATOR"
-}
-
-import {
-  to = module.ssm_app_parameters.aws_ssm_parameter.payment_channels["MOBILE_MONEY_NUMBER"]
-  id = "/kambriq/${var.env}/api/payment-channels/MOBILE_MONEY_NUMBER"
-}
-
-import {
-  to = module.ssm_app_parameters.aws_ssm_parameter.payment_channels["MOBILE_MONEY_NAME"]
-  id = "/kambriq/${var.env}/api/payment-channels/MOBILE_MONEY_NAME"
-}
-
-import {
   to = module.ssm_app_parameters.aws_ssm_parameter.payment_channels["NOTARY_NAME"]
   id = "/kambriq/${var.env}/api/payment-channels/NOTARY_NAME"
 }
