@@ -185,6 +185,18 @@ jobs:
           set -euo pipefail
           ./scripts/assert-environment-convention.sh
 
+      # D17. dev and prod share one VPC, so isolation is configurational. This
+      # refuses the three crossings: an SG in one env admitting the other's SG, a
+      # role in one env reading the other's SSM, or a rule citing a CIDR that
+      # covers the other's subnets. Reads the live estate; account-scoped like the
+      # convention check, so it runs on the dev leg. Green today because prod does
+      # not exist yet - it starts protecting the moment envs/prd lands.
+      - name: Assert dev and prod do not cross
+        if: steps.env.outputs.env_name == 'dev'
+        run: |
+          set -euo pipefail
+          ./scripts/assert-environment-isolation.sh
+
       - name: Post plan as PR comment
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
