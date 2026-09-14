@@ -27,3 +27,5 @@ output "public_subnet_ids" {
   description = "Prod public subnets"
   value       = aws_subnet.public[*].id
 }
+
+# throwaway: touch only envs/prd to prove Plan (prd) runs. Reverted before merge.
