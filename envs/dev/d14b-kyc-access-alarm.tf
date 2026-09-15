@@ -1,13 +1,18 @@
 # ---------------------------------------------------------------------------
 # D14 (b) - alarm on a SERIES of denied anonymous reads of KYC keys.
 #
-# PROPOSED, NOT APPLIED. Plan only.
+# APPLIED on 11 September 2026 at 06:59 UTC, by a local Terraform 1.9.4 apply
+# (IAM user vmiaff; CloudTrail event history shows CreateTopic, CreateLogGroup,
+# CreateTrail and PutMetricAlarm between 06:59:17 and 06:59:27). That was before
+# #26 merged at 07:24 describing this file as "plan only, not applied". All nine
+# addresses below are in the dev state, and every apply since has carried them.
+# Until 15 September this header still said "PROPOSED, NOT APPLIED".
 #
 # One 403 is noise: a stale presigned URL, a crawler, a typo. A run of them on
-# users/*/id-documents/ is somebody trying keys, and today nobody would see it -
-# the account has no CloudTrail trail at all, and kambriq-media-dev has no
-# server access logging. Neither mechanism is on, which is why the request
-# volume below is an estimate rather than a measurement.
+# users/*/id-documents/ is somebody trying keys, and when this was written
+# nobody would have seen it - the account had no CloudTrail trail at all, and
+# kambriq-media-dev has no server access logging. Neither mechanism was on,
+# which is why the request volume below is an estimate rather than a measurement.
 #
 # ---------------------------------------------------------------------------
 # Why CloudTrail data events rather than S3 server access logging
