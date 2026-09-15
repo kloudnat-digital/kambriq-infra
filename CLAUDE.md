@@ -176,7 +176,7 @@ modules/
   - SSM Parameter Store SecureString under `/kambriq/{env}/{api,db,web}/...`. Never inline in `.tf` files (always via `var.<sensitive> = true`).
   - The ECS task pulls them via the `secrets:` block (`valueFrom = <ssm-arn>`), NOT `environment_variables:`.
   - Non-secret config also gets stored as plain SSM `String` for inventory consistency, AND injected directly into ECS `environment_variables` for runtime use.
-  - **Sixteen payment-channel parameters, not twelve** (v03 section 9). Splitting mobile money into `OMO` (Orange) and `MOMO` (MTN) adds `ORANGE_MONEY_NUMBER`, `ORANGE_MONEY_NAME`, `MTN_MONEY_NUMBER`, `MTN_MONEY_NAME` - two operators, two numbers, two account names. The three older `MOBILE_MONEY_*` are **kept and read by no channel**: `PaymentChannelsService.FIELDS` still requires them at startup, so deleting them stops the API booting. Removing them is a webapp change first (drop them from `FIELDS`, deploy), infra second.
+  - **Thirteen payment-channel parameters** (v03 section 9 said sixteen: twelve plus the four per-operator ones). Splitting mobile money into `OMO` (Orange) and `MOMO` (MTN) added `ORANGE_MONEY_NUMBER`, `ORANGE_MONEY_NAME`, `MTN_MONEY_NUMBER`, `MTN_MONEY_NAME` - two operators, two numbers, two account names. The three older `MOBILE_MONEY_*` were then read by no channel and still required at startup, so they could not simply be deleted. **D9 removed them in the only safe order:** out of `PaymentChannelsService.FIELDS` in the webapp, deployed, the API seen reaching steady state and answering `/health` without them - and only then out of `payment_channel_defaults` here, which destroys the three parameters on the next apply. Deleting them with `aws ssm delete-parameter` instead would have been undone: they are in terraform state, so the next apply recreates them with their placeholder values.
   - **Fictitious values on dev must not be diallable or payable.** A Cameroonian mobile number is `+237 6XX XXX XXX`; a placeholder of that shape can be copied into a transfer form and money leaves. The dev placeholders are not numbers at all and say so in their own text - `DEV-NUMERO-ORANGE-FICTIF-NE-PAS-UTILISER`.
   - **A third pattern exists, deliberately: values the application reads itself, at runtime.** The twelve `/kambriq/{env}/api/payment-channels/*` parameters (`G10`) are `SecureString`, are **not** in the `secrets:` block and **not** in `environment_variables`. Only the *prefix* is injected; the API reads the values through the SSM SDK with a 60-second cache.
     - Why: `G3` chose that reader so a wrong bank account number is corrected with one `aws ssm put-parameter --overwrite` and takes effect on the running task within a minute. As `secrets:` a correction would need a task restart; as `environment_variables` it would need an apply. Either would undo the design decision the parameters exist to serve.
@@ -355,3 +355,56 @@ while the gateway survived. The flag lives in `envs/shared/terraform.tfvars`.
 **Rollback is one line there, and it is planned rather than assumed:** with the
 gateway re-enabled, the plan against the infrastructure as it stands is a strict
 no-op.
+
+## D22 - the account's management events are kept, by a trail of their own
+
+`envs/shared/d22-management-events-trail.tf`. Planned 14 September 2026, **not
+applied**. CloudTrail's event history keeps 90 days; until this trail nothing
+kept CreateRole, AttachRolePolicy, PutBucketPolicy or CreateUser past them, on
+an account several projects and several administrators share. Switching it on
+recovers nothing: December 2025 stays unattributable.
+
+### A single-region trail outside us-east-1 never sees IAM
+
+The obvious fix was a flag on D14's trail. Read live, not from the source, that
+trail is `IsMultiRegionTrail = false`, `IncludeGlobalServiceEvents = false`, with
+advanced selectors for Data events only. Turning management events on there
+would have recorded eu-central-1's management plane and missed exactly what the
+chantier exists for: **IAM is global, and its events are delivered in
+us-east-1.** The trail is therefore multi-region with global service events on,
+and it is its own resource - D14's is a dev, KYC-scoped trail, and making it the
+account's audit trail would have put the account's record under a dev name.
+
+### The first copy is free; the second is billed
+
+Management events cost nothing on the first trail that records them in a region
+and USD 2.00 per 100 000 on any other. On 14 September no trail in the account,
+in any region, recorded them (`describe-trails --include-shadow-trails`, every
+region), so this one is the free copy. **Nothing else may switch management
+events on** - D14's trail included - without reading that sentence first.
+
+Read AND write, not write-only: `AssumeRole` and `AssumeRoleWithWebIdentity` are
+logged `readOnly = true`, and they are how an action taken through a role is
+traced to whoever took the role. Measured volume: about 1 140 management events
+an hour, under USD 0.25 a month in S3. The bucket has no lifecycle rule, so it
+accumulates; that is a decision for the register, not a default.
+
+No key prefix, deliberately: the bucket policy grants `AWSLogs/<account>/*`, and
+a prefix would put delivery outside the grant and log nothing.
+
+### Plan with the Terraform the pipeline runs
+
+Found while planning D19 and D22. `terraform-apply.yml` pins **1.12.0**; the
+local binary was 1.9.4. Under 1.9.4 the dev plan was one change. Under 1.12.0 it
+was two: the second, `aws_ssm_parameter.web_nextauth_secret` updated in place, is
+invisible to 1.9.4 because it comes from write-only attribute handling
+(`value_wo`) that only 1.11+ understands. A plan taken with another version is
+not the plan that will be applied, in exactly the way a plan taken with `-var`
+is not. Fetch the pinned version and verify it against HashiCorp's SHA256SUMS
+before trusting a plan.
+
+That NextAuth update is itself open. Its before and after are identical in every
+attribute (compared by name; values are sensitive and were never printed), it
+first appears in the dev plan of `fix/a30-rotate-db-password` on 13 September
+11:08 UTC and in every dev plan since, and it was not in the last dev apply
+(12 September). Whatever applies dev next applies it too.
