@@ -928,12 +928,6 @@ locals {
     BANK_ACCOUNT_NAME = "DEV - ne pas virer d'argent"
     BANK_IBAN         = "DEV-COMPTE-FICTIF-NE-PAS-UTILISER"
     BANK_SWIFT        = "DEVDEVDEV"
-    # Mobile money, one operator - kept, and read by no channel. See the note
-    # below the map: removing them today stops the API booting.
-    MOBILE_MONEY_OPERATOR = "DEV - operateur fictif"
-    MOBILE_MONEY_NUMBER   = "DEV-NUMERO-FICTIF"
-    MOBILE_MONEY_NAME     = "DEV - ne pas envoyer d'argent"
-
     # Mobile money, per operator (v03 section 9). Orange and MTN have neither
     # the same number, nor the same confirmation format, nor the same dispute
     # procedure, so OMO and MOMO are two channels and need two sets.
@@ -956,30 +950,27 @@ locals {
 }
 
 # ---------------------------------------------------------------------------
-# Sixteen, not twelve - and why the old mobile-money trio stays
+# Thirteen, not sixteen - the old mobile-money trio is gone (D9)
 # ---------------------------------------------------------------------------
 #
-# v03 section 9: "Seize parametres sont requis, et non douze. Le decoupage de
-# mobile money en deux canaux ajoute ORANGE_MONEY_NUMBER, ORANGE_MONEY_NAME,
-# MTN_MONEY_NUMBER et MTN_MONEY_NAME." Four are **added** to the twelve; the
-# arithmetic in the design is 12 + 4, not a replacement.
+# v03 section 9 asked for sixteen: the twelve plus ORANGE_MONEY_NUMBER,
+# ORANGE_MONEY_NAME, MTN_MONEY_NUMBER and MTN_MONEY_NAME. Once OMO and MOMO each
+# had their own pair, MOBILE_MONEY_OPERATOR, MOBILE_MONEY_NUMBER and
+# MOBILE_MONEY_NAME were read by **no channel** - but
+# `PaymentChannelsService.FIELDS` still required all three at startup, so
+# deleting them would have stopped the API booting.
 #
-# MOBILE_MONEY_OPERATOR, MOBILE_MONEY_NUMBER and MOBILE_MONEY_NAME are therefore
-# kept, and they are now read by **no channel**: in the webapp, `CHANNEL_FIELDS`
-# sends OMO the Orange pair and MOMO the MTN pair, and nothing asks for these
-# three.
+# D9 removed them in the only order that cannot break an environment:
+#   1. the webapp dropped them from `FIELDS`;
+#   2. that was deployed;
+#   3. a running API task reached steady state and answered /health without
+#      them;
+#   4. only then were they removed from this map, which destroys the three
+#      parameters on the next apply.
+# The same order holds for any environment created before this change.
 #
-# They are kept anyway, and not renamed or removed, for one hard reason:
-# `PaymentChannelsService.FIELDS` still lists all three as **required at
-# startup**, and an absent or empty one refuses the boot. Deleting them here
-# would stop the API starting on dev the moment it deploys - trading a channel
-# that cannot be sent for an environment that will not run.
-#
-# Removing them is a webapp change first, infra second, in that order:
-#   1. drop the three from `FIELDS` in payment-channels.service.ts,
-#   2. merge and deploy that,
-#   3. then remove them here.
-# Doing it the other way round breaks dev. Registered as a follow-up.
+# Not with `aws ssm delete-parameter`: they are in state, so the next apply
+# would have recreated them, placeholders and all.
 
 
 resource "aws_ssm_parameter" "payment_channels" {
