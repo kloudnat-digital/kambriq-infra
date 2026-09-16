@@ -125,7 +125,13 @@ data "aws_iam_policy_document" "github_actions_infra_permissions" {
       "logs:*",
       "rds:*",
       "route53:*",
-      "sesv2:*",
+      # `ses`, not `sesv2`. The SESv2 API authorises against the `ses` prefix;
+      # `sesv2:` is not a service IAM knows, and an unknown prefix is not an
+      # error - it is a silent deny that grants nothing. Access Analyzer calls
+      # it INVALID_SERVICE_IN_ACTION (severity ERROR). This estate manages
+      # aws_sesv2_contact_list in envs/shared/ses-newsletter.tf, so the refresh
+      # of a shared plan needs it.
+      "ses:*",
       "sns:*",
       "tag:*",
     ]
@@ -171,6 +177,22 @@ data "aws_iam_policy_document" "github_actions_infra_permissions" {
     sid       = "TheProjectParameters"
     actions   = ["ssm:*"]
     resources = ["arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/kambriq/*"]
+  }
+
+  # Some actions take no resource AT ALL: IAM evaluates them only against "*",
+  # so naming them inside a resource-scoped statement grants nothing, however
+  # plainly the statement lists them. `ssm:*` above therefore does not carry
+  # ssm:DescribeParameters, and the provider calls it on every
+  # aws_ssm_parameter refresh - 3442 CloudTrail events from this role over 90
+  # days include it, 50 of them in the last apply alone. Which actions are in
+  # this class is a fact of the Service Authorization Reference, not a judgement:
+  # DescribeParameters' resource-type column is empty.
+  statement {
+    sid = "TheSsmReadThatTakesNoResource"
+    actions = [
+      "ssm:DescribeParameters",
+    ]
+    resources = ["*"]
   }
 
   # The project's buckets, plus the state bucket's kambriq/ prefix. Not the
