@@ -51,6 +51,14 @@ output "jwt_secret_parameter_name" {
   value       = aws_ssm_parameter.jwt_secret.name
 }
 
+# D20. The ECS `secrets:` block takes an ARN, which is why this is an ARN and
+# not a name: the agent resolves it at task start, so the token never appears in
+# a task definition, in a plan, or in a log.
+output "redis_auth_token_parameter_arn" {
+  description = "SSM parameter ARN for REDIS_PASSWORD (the ElastiCache AUTH token, D20)"
+  value       = aws_ssm_parameter.redis_auth_token.arn
+}
+
 output "jwt_secret_parameter_arn" {
   description = "SSM parameter ARN for JWT_SECRET"
   value       = aws_ssm_parameter.jwt_secret.arn

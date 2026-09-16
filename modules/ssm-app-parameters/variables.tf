@@ -147,6 +147,16 @@ variable "redis_port" {
   default     = 6379
 }
 
+# D20. The ElastiCache AUTH token, written as a SecureString and handed to the
+# task through the ECS `secrets:` block. No default: an environment that creates
+# these parameters must say what the token is, and "" would silently recreate
+# the defect this closes - a Redis with no password.
+variable "redis_auth_token" {
+  description = "ElastiCache AUTH token, stored as /kambriq/{env}/api/REDIS_PASSWORD (D20)"
+  type        = string
+  sensitive   = true
+}
+
 variable "aws_s3_bucket" {
   description = "S3 bucket name for uploads"
   type        = string
