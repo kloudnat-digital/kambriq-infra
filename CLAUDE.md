@@ -259,11 +259,24 @@ a second one would diverge from the first inside a week.
 
 ---
 
-### CI is billed per job, rounded up — five jobs of seconds cost five minutes
+### CI costs nothing here, because both repositories are public
+
+**Corrected 2026-09-16.** This section used to assert that CI is billed per job,
+rounded up, and that claim was steering decisions. It is false for these
+repositories. Both `kambriq-infra` and `kambriq-webapp` are
+`visibility=public`, and GitHub does not meter Actions on public repositories:
+every run of 2026-09-16, on GitHub-hosted `ubuntu-latest` runners, reports
+`billable.UBUNTU.total_ms = 0` from `/actions/runs/{id}/timing` — including the
+ten-job webapp CI run whose wall clock was 21m31s. Read from the API, not
+assumed. **Net Actions cost for this work: USD 0.00.**
+
+The per-job rounding rule below is real GitHub behaviour; it is simply not in
+force here. **It starts applying the day a repository goes private**, so the
+table is kept and its third column reads as a conditional, not as a bill.
 
 Measured 2026-09-09, against `Terraform Plan` run `34106681008`.
 
-| job | measured | billed |
+| job | measured | would be billed if private |
 | --- | ---: | ---: |
 | Detect changed environments | 5s | 1m |
 | Shell Lint | 6s | 1m |
@@ -272,16 +285,18 @@ Measured 2026-09-09, against `Terraform Plan` run `34106681008`.
 | Plan (dev) | 54s | 1m |
 | **total** | **143s** | **5m** |
 
-GitHub rounds each job up to the minute and charges per job, so 2m23s of work
-bills as five minutes. The three cheapest jobs — 53 seconds between them — cost
-three of those five.
-
-**The rule: parallelism is bought, and the price is one rounded-up minute per
-job.** Split when someone waits on the clock; merge when they only pay the bill.
+On a private repository GitHub rounds each job up to the minute and charges per
+job, so 2m23s of work would bill as five minutes, and the three cheapest jobs —
+53 seconds between them — would cost three of those five. **Parallelism would be
+bought, at one rounded-up minute per job.** On these public repositories it is
+free, so split whenever someone waits on the clock and stop trading latency for
+a bill that does not exist.
 
 What was applied here: concurrency on the plan (superseded PR runs cancelled),
-and `timeout-minutes` on every job. The default is **360 minutes**, so one job
-wedged on a provider call burns 18% of a monthly quota unnoticed.
+and `timeout-minutes` on every job. The default is **360 minutes**: on a public
+repository that costs nothing, but it still holds a runner and a `concurrency`
+slot for six hours; on a private one it would burn 18% of a monthly quota
+unnoticed.
 
 **`terraform-apply` keeps `cancel-in-progress: false`, and that is not
 symmetry.** A plan is a read: cancelling it loses nothing. A cancelled apply can
@@ -634,6 +649,58 @@ on `Resource: *`. **Replacing a wildcard with an enumeration turns every
 mis-spelled or mis-scoped entry from harmless into load-bearing**, and nothing
 in `terraform validate`, `fmt`, or a plan checks that an action exists. Run
 `validate-policy` over a policy before applying it, not after.
+
+### A policy repair cannot be applied by a plan that the same policy breaks
+
+The sharpest lesson of 2026-09-16. It cost two extra merges and an `--admin`
+override, and it will happen again to anyone who enumerates this role's policy.
+
+**A pull request that changes the CI role's own policy cannot be validated by its
+own plan.** The pre-merge plan runs under the OLD credentials, so it fails on the
+very defect the PR repairs. #59's `Plan (shared)` failed exactly that way and CI
+Gate refused it. That is expected and it is not evidence against the change — but
+it means the gate is silent on the only question that matters. **The proof has to
+come from somewhere the broken credentials are not:**
+`aws iam simulate-custom-policy` against the *proposed* document, and
+`accessanalyzer validate-policy` on it. Both were run before merging, and both
+passed: every refused action became `allowed`, and the plan role stayed refused
+on all five writes.
+
+**Worse — the apply could not run either.** `terraform-apply.yml` plans and
+applies in one run, so the apply inherits whatever the plan can read. Run
+`35143582139` died at step 9 (Terraform plan) on `ses:GetContactList`; step 11
+(Terraform apply) was **skipped** and no state was written. The one apply that
+would restore the permission needed that permission to get past its own refresh.
+**A repair that is a prerequisite for itself.**
+
+The way out was measured, not guessed — four local plans, pinned 1.12.0, same
+tree:
+
+| variant | managed refreshes | reads SES | plan |
+| --- | ---: | --- | --- |
+| plain (what CI runs) | 29 | **yes** | fails in CI |
+| `-refresh=false` | 0 | no | 0 add / 2 change |
+| `-refresh=false -target=…` | 0 | no | 0 add / 2 change |
+| **`-target=…`** | **5** | no | 0 add / 2 change |
+
+`-target` alone is the right instrument: it still refreshes the five resources
+being changed — the OIDC provider, both roles, both role policies — so it is not
+a blind apply, and it never reads SES. `terraform-apply.yml` therefore accepts an
+optional `extra_plan_args` input (default empty, #60). **A targeted apply is a
+partial apply**, so the step logs `PARTIAL APPLY` and the run summary states
+which arguments were in effect. It exists to break a deadlock, not for routine
+use.
+
+What the repair reported, against a local plan taken immediately before it:
+`Apply complete! Resources: 0 added, 2 changed, 0 destroyed`, matching
+`Plan: 0 to add, 2 to change, 0 to destroy` exactly. The live documents are
+canonically identical to the ones the plan intended (`sha256 53b95eec…`,
+`fafe5e8b…`), and both environments then plan clean under the pipeline.
+
+**The general rule: before replacing a wildcard in a CI role's own policy, work
+out how you would apply the fix if you got it wrong.** If the answer is "through
+the pipeline", check that the pipeline's own read surface does not include the
+permission you are about to remove.
 
 ### Two older invalid actions, in other subjects' policies
 
