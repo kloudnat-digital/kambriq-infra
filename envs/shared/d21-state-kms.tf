@@ -66,6 +66,12 @@
 # call kms:PutKeyPolicy and write themselves back in. It also does nothing about
 # the state being cleartext at rest inside the object, nor about the bucket
 # having no versioning (a bad write is unrecoverable, D21's own finding).
+#
+# SINCE 2026-09-16 THERE IS A SIXTH PRINCIPAL, and it is the exception to the
+# sentence above: D16's plan role, added at the bottom of this policy in two
+# statements of its own. It is NOT an administrator and cannot rewrite this
+# policy - it may read the key's metadata and, through S3 only, Decrypt. It
+# cannot GenerateDataKey, so it cannot write an encrypted state object.
 # ---------------------------------------------------------------------------
 
 locals {
@@ -187,6 +193,88 @@ data "aws_iam_policy_document" "d21_state_key" {
 
     # The key is usable only through S3, in this region. A credential that can
     # decrypt the state object cannot use the key for anything else.
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["s3.${var.aws_region}.amazonaws.com"]
+    }
+  }
+
+  # ---------------------------------------------------------------------------
+  # D16's PLAN ROLE, and why it needs TWO statements rather than a sixth seat in
+  # the readers list above.
+  #
+  # A KEY POLICY IS A SECOND GATE, and the plan role failed on it even though
+  # its own IAM policy allows the action:
+  #
+  #   AccessDenied: ... is not authorized to perform: kms:DescribeKey on
+  #   resource: arn:aws:kms:eu-central-1:051551940370:key/be2fbe9c-...
+  #   (terraform-plan.yml run 35147649894, shared, 2026-09-16 20:37 UTC)
+  #
+  # `simulate-principal-policy` said `allowed` for all four reads, because it
+  # evaluates IDENTITY policies only. For a customer-managed key BOTH gates must
+  # allow, and this policy named the plan role nowhere - measured, not assumed:
+  # `get-key-policy | grep -c github-actions-plan` returned 0.
+  #
+  # THE PATHS NEED DIFFERENT CONDITIONS, which is why one statement will not do:
+  #
+  #   - `envs/shared` MANAGES this key, so a plan REFRESHES it, calling KMS
+  #     directly with no `kms:ViaService` context at all. CloudTrail shows what a
+  #     successful refresh calls, and it is exactly four: DescribeKey,
+  #     GetKeyPolicy, GetKeyRotationStatus, ListResourceTags. A conditioned grant
+  #     cannot satisfy them. (ListAliases is account-level - no key resource - so
+  #     no key policy gates it; `kms:List*` in the identity policy is enough.)
+  #   - reading the ENCRYPTED STATE goes through S3, so `Decrypt` keeps the
+  #     ViaService condition, exactly like the readers above.
+  #
+  # NOT `kms:GenerateDataKey`. That is what WRITING an encrypted object needs,
+  # and a plan must never write the state - which is the whole of D16. Adding
+  # the plan role to `d21_state_key_readers` would have granted it, because that
+  # list grants all three actions together. Hence separate statements.
+  #
+  # The Decrypt half is inert today - both state objects are still SSE-S3 - and
+  # becomes load-bearing at the first apply after D26 sets `kms_key_id`. It is
+  # here now because discovering it later means another refused plan.
+  # ---------------------------------------------------------------------------
+  statement {
+    sid    = "StateKeyMetadataForPlans"
+    effect = "Allow"
+
+    principals {
+      type = "AWS"
+      identifiers = [
+        "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-infra-github-actions-plan",
+      ]
+    }
+
+    # Unconditioned on purpose: a refresh of aws_kms_key/aws_kms_alias calls KMS
+    # directly, so there is no ViaService value to match. Read-only metadata.
+    actions = [
+      "kms:DescribeKey",
+      "kms:GetKeyPolicy",
+      "kms:GetKeyRotationStatus",
+      "kms:ListResourceTags",
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "StateKeyDecryptForPlans"
+    effect = "Allow"
+
+    principals {
+      type = "AWS"
+      identifiers = [
+        "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-infra-github-actions-plan",
+      ]
+    }
+
+    # Decrypt only. No GenerateDataKey: that is the write side.
+    actions = ["kms:Decrypt"]
+
+    resources = ["*"]
+
     condition {
       test     = "StringEquals"
       variable = "kms:ViaService"
