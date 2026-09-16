@@ -467,7 +467,7 @@ measurement, not by reading policies:** `simulate-principal-policy` for
 `arn:aws:s3:::kloudnat-infra-shared-store/kambriq/envs/dev/terraform.tfstate`,
 run over all 5 users and all 32 roles in the account on 16 September 2026.
 
-### Five readers, not four
+### Five readers, not four — and then a sixth that is not an administrator
 
 `vmiaff`, `uekeum`, `gitops.admin`, `kambriq-infra-github-actions` — and
 `AWSReservedSSO_AdministratorAccess_c1b30cb73dd006be`, the IAM Identity Center
@@ -477,6 +477,28 @@ key policy on purpose**. Leaving it out would not lock it out - it holds `kms:*`
 through IAM and can call `kms:PutKeyPolicy` - and would make the barrier read
 stronger than it is. Whether that permission set should reach this account at
 all is an Identity Center assignment decision, not a key policy one.
+
+**A sixth principal was added on 2026-09-16: D16's plan role**, and it is the
+one that breaks the pattern - it is not an administrator and cannot rewrite this
+policy. It arrived because a shared plan under the plan role was **refused**:
+
+```
+AccessDenied: ... is not authorized to perform: kms:DescribeKey on resource:
+arn:aws:kms:eu-central-1:051551940370:key/be2fbe9c-...   (run 35147649894)
+```
+
+`envs/shared` *manages* this key, so every shared plan refreshes it. The plan
+role's own IAM policy allowed all four reads and `simulate-principal-policy`
+agreed — but a **key policy is a second gate**, and `get-key-policy` named the
+plan role nowhere (`grep -c` returned 0). It gets two statements rather than a
+seat in the readers list, because the two access paths carry different context:
+the refresh calls KMS **directly** with no `kms:ViaService` to match
+(`DescribeKey`, `GetKeyPolicy`, `GetKeyRotationStatus`, `ListResourceTags` —
+exactly what CloudTrail shows a successful refresh calling), while reading the
+encrypted state goes through S3 and keeps the condition, for `Decrypt` alone.
+**Not `GenerateDataKey`:** that is the write side, and the readers list grants
+all three actions together — which is precisely why a sixth seat there would
+have been wrong.
 
 ### The barrier is the key policy, and it starts holding per object
 
@@ -509,11 +531,18 @@ key that does not exist.
 USD 1.00 per month for the key, plus USD 0.03 per 10 000 requests, which rounds
 to nothing at a few state writes a day. Not free - the figure is a dollar.
 
-All five readers are administrators. This stops a principal that was never meant
-to read the state; it does not stop somebody who is supposed to be an
+All five *readers* are administrators. This stops a principal that was never
+meant to read the state; it does not stop somebody who is supposed to be an
 administrator. It also does nothing about the state being cleartext inside the
 object, and nothing about the bucket having **no versioning** - a bad state
 write is unrecoverable, which is how D23's evidence went missing.
+
+The sixth principal is the exception: the plan role reads the key's metadata,
+and through S3 only it may `Decrypt`. It cannot administer the key, cannot
+rewrite this policy, and cannot `GenerateDataKey`, so it cannot write an
+encrypted state object. Its `Decrypt` grant is **inert today** — both state
+objects are still SSE-S3 — and becomes load-bearing at the first apply after
+D26 sets `kms_key_id`.
 
 ### A key policy must let somebody change the key policy
 
