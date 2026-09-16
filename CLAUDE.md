@@ -644,11 +644,36 @@ is true and means nothing. The instrument is
 `INVALID_SERVICE_IN_ACTION` at severity ERROR. It is now stage 0 of the proof
 script, and it is the only stage that can see this class of defect.
 
-All three were invisible before the split because the old policy was `Action: *`
-on `Resource: *`. **Replacing a wildcard with an enumeration turns every
-mis-spelled or mis-scoped entry from harmless into load-bearing**, and nothing
-in `terraform validate`, `fmt`, or a plan checks that an action exists. Run
-`validate-policy` over a policy before applying it, not after.
+**A fourth, found on the same day: `simulate-principal-policy` evaluates
+IDENTITY policies only — never resource policies.** The plan role's
+`kms:Decrypt` is conditioned on `kms:ViaService = s3`, so simulating a Decrypt
+against `alias/aws/ssm` returns `implicitDeny` even with the context key
+supplied. The real calls succeed: CloudTrail shows **20 `Decrypt` calls by the
+plan role at 20:18:33–20:18:46Z, every one with no error**, because
+`alias/aws/ssm` is AWS-managed and its own key policy authorises the account's
+principals. So a denial from the simulator is not a denial — for anything
+guarded by a key policy, a bucket policy or any other resource policy, the
+authority is the call, or CloudTrail's record of it.
+
+**And a fifth, about wildcards inside a service:** `s3:GetBucket*` does not
+cover S3's bucket-configuration reads whose IAM names carry no `Bucket` infix —
+`GetAccelerateConfiguration`, `GetAnalyticsConfiguration`,
+`GetIntelligentTieringConfiguration`, `GetInventoryConfiguration`,
+`GetMetricsConfiguration`. Three of that family were listed by hand
+(`GetEncryptionConfiguration`, `GetLifecycleConfiguration`,
+`GetReplicationConfiguration`) and the rest were missed, so a dev plan died on
+`s3:GetAccelerateConfiguration` against `kambriq-media-dev` (run 35145720238).
+A prefix wildcard covers a naming convention, not a capability — check the
+Service Authorization Reference for the family, not the prefix.
+
+All of these were invisible before the split because the old policy was
+`Action: *` on `Resource: *`. **Replacing a wildcard with an enumeration turns
+every mis-spelled, mis-scoped or merely unlisted entry from harmless into
+load-bearing**, and nothing in `terraform validate`, `fmt`, or a plan checks
+that an action exists. Run `validate-policy` over a policy before applying it,
+not after — and when a read is refused, fix the whole family in one change.
+Adding permissions one error at a time is how the first enumeration got
+written.
 
 ### A policy repair cannot be applied by a plan that the same policy breaks
 

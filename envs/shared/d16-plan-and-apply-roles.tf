@@ -147,8 +147,27 @@ data "aws_iam_policy_document" "github_actions_infra_plan_permissions" {
       # plan. Its absence refused the plan role a read it cannot do without.
       "s3:GetAccountPublicAccessBlock",
       "s3:GetBucket*",
+      # S3's bucket-configuration reads DO NOT all carry "Bucket" in their IAM
+      # name, so `s3:GetBucket*` cannot match them. Three were already listed by
+      # hand below; the other five were simply never thought of, and a dev plan
+      # died on the first of them:
+      #
+      #   AccessDenied: ... is not authorized to perform:
+      #   s3:GetAccelerateConfiguration on resource:
+      #   "arn:aws:s3:::kambriq-media-dev"                    (run 35145720238)
+      #
+      # All eight are listed together rather than adding the one that failed,
+      # because adding permissions one error at a time is how the first
+      # enumeration got written. These read bucket CONFIGURATION, never object
+      # data: s3:GetObject stays scoped to the two state objects below, and a
+      # GetObject on a media object is still refused.
+      "s3:GetAccelerateConfiguration",
+      "s3:GetAnalyticsConfiguration",
       "s3:GetEncryptionConfiguration",
+      "s3:GetIntelligentTieringConfiguration",
+      "s3:GetInventoryConfiguration",
       "s3:GetLifecycleConfiguration",
+      "s3:GetMetricsConfiguration",
       "s3:GetReplicationConfiguration",
       "s3:List*",
       # `ses`, not `sesv2` - the same correction as the apply policy in
