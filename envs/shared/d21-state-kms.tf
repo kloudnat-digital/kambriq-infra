@@ -91,13 +91,40 @@ locals {
 # because that statement delegates the decision straight back to IAM and this
 # key exists to stop exactly that. Two statements instead:
 #
-#   1. KeyAdministration - the two human administrators and gitops.admin may
-#      manage the key (and are not locked out of their own key), but the
-#      administration statement grants no data-plane action.
+#   1. KeyAdministration - the two human administrators, gitops.admin, AND the
+#      role that manages this key, may manage it. No data-plane action.
 #   2. StateEncryptionAndDecryption - the five readers above, and only they, may
 #      Decrypt / GenerateDataKey / DescribeKey, and only for S3 in this region:
 #      the kms:ViaService condition means a stolen credential cannot use this key
 #      through any other service.
+#
+# THE CI ROLE IS IN THE ADMINISTRATION STATEMENT, AND IT HAS TO BE. The first
+# version of this file named only the three humans, and the apply was refused:
+#
+#   MalformedPolicyDocumentException: The new key policy will not allow you to
+#   update the key policy in the future.
+#   (terraform-apply.yml run 35134521387, 2026-09-16 18:30 UTC)
+#
+# That is KMS's policy lockout safety check, and the rule behind it is written
+# into the service: "Unlike other AWS resource policies, an AWS KMS key policy
+# does not automatically give permission to the account or any of its
+# principals. To give permission to any principal, including the account
+# principal, you must use a key policy statement that provides the permission
+# explicitly." A policy that lets nobody who can actually call PutKeyPolicy do
+# so is a key that cannot be administered, and CreateKey refuses it up front.
+#
+# Terraform manages this key, so the principal Terraform runs as must be able to
+# administer it - otherwise the very next change to this policy would fail, and
+# the key would be maintainable only by a human with console access. The
+# alternative, `bypass_policy_lockout_safety_check = true`, is deliberately NOT
+# used: it silences the check rather than satisfying it, and it is exactly how a
+# key ends up unmanageable and reachable only through AWS Support.
+#
+# What that costs, said plainly: the apply role can rewrite this key policy, so
+# it can grant itself the data-plane permissions the second statement withholds.
+# It could already do that before D16 (Action:* Resource:*) and still can after
+# it (iam:* over kambriq-* principals). The barrier this key adds is against a
+# principal that was never meant to read the state, not against the pipeline.
 #
 # There is no Deny statement. A Deny would also hit the key administrators and
 # make the key unmanageable; the barrier here is the ABSENCE of an allow for
@@ -114,6 +141,9 @@ data "aws_iam_policy_document" "d21_state_key" {
         "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/vmiaff",
         "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/uekeum",
         "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/gitops.admin",
+        # The principal that creates and maintains this key. Without it, KMS
+        # refuses the policy outright - see the block above.
+        "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/kambriq-infra-github-actions",
       ]
     }
 
