@@ -96,16 +96,7 @@ jobs:
       fail-fast: false
       matrix:
         env: ${{ github.event_name == 'workflow_dispatch' && fromJson(format('["{0}"]', inputs.env)) || fromJson(needs.detect-envs.outputs.envs) }}
-    # D16. `dev-plan` / `shared-plan`, not `dev` / `shared`, and that is the
-    # whole mechanism. The environment name is what the OIDC token carries in its
-    # `sub` claim, so declaring a different environment is the only way this job
-    # can present a claim the apply role's trust policy does not accept. A second
-    # secret name in the same environment would hand the plan a different role
-    # ARN while leaving both roles reachable from one claim.
-    #
-    # Each of these environments holds its own AWS_ROLE_ARN, pointing at
-    # kambriq-infra-github-actions-plan. `terraform apply` keeps `dev`/`shared`.
-    environment: ${{ matrix.env }}-plan
+    environment: ${{ matrix.env }}
     steps:
       - uses: actions/checkout@v4
 
