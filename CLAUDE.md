@@ -499,3 +499,38 @@ to read the state; it does not stop somebody who is supposed to be an
 administrator. It also does nothing about the state being cleartext inside the
 object, and nothing about the bucket having **no versioning** - a bad state
 write is unrecoverable, which is how D23's evidence went missing.
+
+### A key policy must let somebody change the key policy
+
+The first apply was **refused**, and the refusal was right:
+
+```
+MalformedPolicyDocumentException: The new key policy will not allow you to
+update the key policy in the future.
+```
+
+`terraform-apply.yml` run 35134521387, 2026-09-16 18:30 UTC. The plan was
+exactly the local one (`2 to add`), no key and no alias were created, and the
+state was rewritten unchanged at the end of the run.
+
+The cause is KMS's policy lockout safety check. A key policy is not like other
+resource policies: *"an AWS KMS key policy does not automatically give
+permission to the account or any of its principals. To give permission to any
+principal, including the account principal, you must use a key policy statement
+that provides the permission explicitly."* The first version named only the
+three human administrators, so the role actually calling `CreateKey` - the
+pipeline - could never have called `PutKeyPolicy` afterwards, and KMS refuses
+that up front rather than letting a key become unmanageable.
+
+**The fix is to name the manager, not to bypass the check.**
+`bypass_policy_lockout_safety_check = true` exists and is not used here: it
+silences the guard instead of satisfying it, and AWS's own example of how a key
+becomes reachable only through Support is a policy naming principals that can
+later be deleted.
+
+**And the cost of that fix, stated rather than hidden:** the apply role can now
+rewrite this key policy, so it can grant itself the data-plane permissions the
+second statement withholds. It could do that before D16 (`Action:*` on
+`Resource:*`) and can still do it after (`iam:*` over `kambriq-*`). What this key
+buys is a barrier against a principal never meant to read the state - not
+against the pipeline that manages it.
