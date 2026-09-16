@@ -589,6 +589,68 @@ plan role can therefore read every `/kambriq/dev/*` SecureString, `JWT_SECRET`
 and the four `DATABASE_URL`s included. The split removes the power to **change**
 the estate; a leaked plan credential is still a leaked set of secrets.
 
+### Three ways a policy lies about what it grants
+
+All three were found on 2026-09-16, **after** the split was applied, by
+measuring the live roles rather than reading the HCL. Each produced a confident
+wrong answer first. They are properties of IAM, not of this estate.
+
+**An action simulated without its resource is not the action the pipeline
+performs.** `simulate-principal-policy` defaults `--resource-arns` to `*`, and a
+resource-scoped statement can never match `*`. Seven mutating actions therefore
+read as `implicitDeny` for the *apply* role, and
+`scripts/d16-prove-role-split.sh` reported that the apply role had lost powers
+it still held. Re-simulated against real ARNs, all seven are
+`plan=implicitDeny, apply=allowed`. The split was never broken; the measurement
+was. Every case in that script now carries a resource.
+
+**Some actions take no resource at all, and a scoped statement grants them
+nothing.** IAM evaluates them only against `*`, however plainly a scoped
+statement lists them. `ssm:DescribeParameters` sat in the plan role's
+`ReadTheProjectParameters` (scoped to `parameter/kambriq/*`) and was refused
+every time — and the AWS provider calls it on **every** `aws_ssm_parameter`
+refresh, so a dev plan or apply under either role would have failed on it. The
+shared apply of 18:43Z survived only because shared owns no SSM parameters.
+`s3:GetAccountPublicAccessBlock` was the same class in the other direction: the
+plan role never had it, and D14a's `aws_s3_account_public_access_block` is
+refreshed by every shared plan. Which actions are in this class is a fact of the
+Service Authorization Reference — an empty resource-type column — not a
+judgement.
+
+**A service prefix IAM does not know is a silent deny, not an error.** Both
+policies said `sesv2:`; the SESv2 API authorises against `ses:` ("Amazon Simple
+Email Service v2 (service prefix: `ses`)"). `sesv2:*` matched nothing and
+refused nothing, and `envs/shared/ses-newsletter.tf` manages an
+`aws_sesv2_contact_list`. **The simulator cannot catch this**: it string-matches,
+and returns `implicitDeny` for `notarealservice:DoThing` rather than rejecting
+it — so it cheerfully agreed that `sesv2:*` allows `sesv2:GetContactList`, which
+is true and means nothing. The instrument is
+`aws accessanalyzer validate-policy`, which returns
+`INVALID_SERVICE_IN_ACTION` at severity ERROR. It is now stage 0 of the proof
+script, and it is the only stage that can see this class of defect.
+
+All three were invisible before the split because the old policy was `Action: *`
+on `Resource: *`. **Replacing a wildcard with an enumeration turns every
+mis-spelled or mis-scoped entry from harmless into load-bearing**, and nothing
+in `terraform validate`, `fmt`, or a plan checks that an action exists. Run
+`validate-policy` over a policy before applying it, not after.
+
+### Two older invalid actions, in other subjects' policies
+
+The same account-wide sweep (`validate-policy` over every inline policy of every
+`kambriq-*` role) found two pre-dating this work, left for their own subjects
+rather than fixed in passing: `s3:HeadObject` in `kambriq-media-dev-access`
+(there is no such IAM action; the HeadObject API authorises as `s3:GetObject`)
+and `ecs:Wait` in `kambriq-dev-github-actions` (no such action; `aws ecs wait`
+polls `DescribeServices` client-side).
+
+**Both are inert, checked rather than assumed:** the media policy also grants
+`s3:GetObject` and the deploy policy also grants `ecs:DescribeServices`, so each
+API call lands on a permission that exists. They are dead entries that make a
+policy read wider than it is — worth deleting, but nothing is failing because of
+them. That is the difference between these two and the `sesv2:` defect above,
+where nothing else granted what the call needed.
+
 ### What it does not cover
 
 Both repository administrators (`Ekeu`, `visquis-miaffossa`) can still dispatch

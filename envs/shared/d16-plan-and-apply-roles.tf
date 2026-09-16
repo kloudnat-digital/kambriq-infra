@@ -142,15 +142,25 @@ data "aws_iam_policy_document" "github_actions_infra_plan_permissions" {
       "rds:List*",
       "route53:Get*",
       "route53:List*",
+      # Account-scoped, so it cannot be granted against a bucket ARN - and
+      # D14a's aws_s3_account_public_access_block is refreshed by every shared
+      # plan. Its absence refused the plan role a read it cannot do without.
+      "s3:GetAccountPublicAccessBlock",
       "s3:GetBucket*",
       "s3:GetEncryptionConfiguration",
       "s3:GetLifecycleConfiguration",
       "s3:GetReplicationConfiguration",
       "s3:List*",
-      "sesv2:Get*",
-      "sesv2:List*",
+      # `ses`, not `sesv2` - the same correction as the apply policy in
+      # envs/shared/main.tf, and for the same reason: `sesv2:` is not a service
+      # IAM knows, so it granted nothing at all.
+      "ses:Get*",
+      "ses:List*",
       "sns:Get*",
       "sns:List*",
+      # Takes no resource, so it cannot live in the scoped SSM statement below -
+      # it was listed there and granted nothing.
+      "ssm:DescribeParameters",
       "sts:GetCallerIdentity",
       "tag:Get*",
     ]
@@ -160,10 +170,14 @@ data "aws_iam_policy_document" "github_actions_infra_plan_permissions" {
   # A plan refreshes every SSM parameter it manages, and that reads the value.
   # Scoped to the project's own prefix, which is the difference between "can
   # read our secrets" and "can read the account's".
+  #
+  # ssm:DescribeParameters is deliberately NOT here. It supports no
+  # resource-level permission, so a scoped statement grants it nothing - it sat
+  # in this list looking granted and was refused every time. It is in
+  # DescribeTheEstate above, on "*", which is the only way it can be granted.
   statement {
     sid = "ReadTheProjectParameters"
     actions = [
-      "ssm:DescribeParameters",
       "ssm:GetParameter",
       "ssm:GetParameters",
       "ssm:GetParametersByPath",
