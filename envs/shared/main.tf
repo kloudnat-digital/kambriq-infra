@@ -91,10 +91,134 @@ resource "aws_iam_role" "github_actions_infra" {
   }
 }
 
+# D16. This was one statement, `Action: *` on `Resource: *` - an administrator
+# in fact, not something limited to Terraform and this estate. The enumeration
+# below is derived from the two states, not invented: 134 addresses in dev and
+# 33 in shared, across ec2, ecs, ecr, elbv2, rds, elasticache, s3, ssm, iam,
+# kms, logs, cloudwatch, sns, cloudtrail, sesv2 and route53.
+#
+# Enumerated BY SERVICE rather than by action. An action-level list would be
+# longer, look stricter, and break the first apply that needed the one verb
+# nobody thought of - and an apply that fails half way is worse than an apply
+# role that is wider than the minimum. What this removes is everything else in
+# the account: no organizations, no sso/identitystore, no eks, no lambda, no
+# cloudfront, no dynamodb, no iam on principals outside this project. This
+# account also runs fotomena's EKS clusters and argocd; the apply role could
+# delete them this morning and cannot after this lands.
+#
+# WHAT IT STILL ALLOWS, said plainly: iam on kambriq-* principals means this
+# role can write its own policies and those of the ECS task roles, so a person
+# who can reach it can still escalate within the project. Narrowing that needs a
+# permissions boundary, which is a separate decision.
 data "aws_iam_policy_document" "github_actions_infra_permissions" {
   statement {
-    sid       = "TerraformAdmin"
-    actions   = ["*"]
+    sid = "TheEstateByService"
+    actions = [
+      "acm:*",
+      "cloudtrail:*",
+      "cloudwatch:*",
+      "ec2:*",
+      "ecr:*",
+      "ecs:*",
+      "elasticache:*",
+      "elasticloadbalancing:*",
+      "logs:*",
+      "rds:*",
+      "route53:*",
+      "sesv2:*",
+      "sns:*",
+      "tag:*",
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid = "ReadAnyPrincipalPlansAndPolicyDocumentsNeed"
+    actions = [
+      "iam:Get*",
+      "iam:List*",
+      "iam:SimulatePrincipalPolicy",
+      "sts:GetCallerIdentity",
+    ]
+    resources = ["*"]
+  }
+
+  # The project's own principals: five task and CI roles, their policies, the
+  # OIDC provider, and the kambriq-app-dev user the media policy attaches to.
+  statement {
+    sid = "ManageThisProjectsPrincipals"
+    actions = [
+      "iam:*",
+    ]
+    resources = [
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/kambriq-*",
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/kambriq-*",
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/kambriq-*",
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:instance-profile/kambriq-*",
+      "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/token.actions.githubusercontent.com",
+    ]
+  }
+
+  # ECS cannot register a task definition without passing the task roles.
+  statement {
+    sid       = "PassTheTaskRoles"
+    actions   = ["iam:PassRole"]
+    resources = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/kambriq-*"]
+  }
+
+  # Every parameter this project owns, and none of anybody else's.
+  statement {
+    sid       = "TheProjectParameters"
+    actions   = ["ssm:*"]
+    resources = ["arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/kambriq/*"]
+  }
+
+  # The project's buckets, plus the state bucket's kambriq/ prefix. Not the
+  # bucket's other tenants: the three legacy states and the shared/ prefix are
+  # deliberately outside this.
+  statement {
+    sid     = "TheProjectBuckets"
+    actions = ["s3:*"]
+    resources = [
+      "arn:aws:s3:::kambriq-*",
+      "arn:aws:s3:::kambriq-*/*",
+      "arn:aws:s3:::kloudnat-infra-shared-store",
+      "arn:aws:s3:::kloudnat-infra-shared-store/kambriq/*",
+    ]
+  }
+
+  # D14a's account-level public access block is account-scoped, so it cannot be
+  # written against a bucket ARN.
+  statement {
+    sid = "AccountPublicAccessBlock"
+    actions = [
+      "s3:GetAccountPublicAccessBlock",
+      "s3:PutAccountPublicAccessBlock",
+    ]
+    resources = ["*"]
+  }
+
+  # D21's state key: creating it, managing it, and using it through S3.
+  statement {
+    sid = "TheStateKey"
+    actions = [
+      "kms:CancelKeyDeletion",
+      "kms:CreateAlias",
+      "kms:CreateKey",
+      "kms:Decrypt",
+      "kms:DeleteAlias",
+      "kms:Describe*",
+      "kms:DisableKeyRotation",
+      "kms:EnableKeyRotation",
+      "kms:GenerateDataKey",
+      "kms:Get*",
+      "kms:List*",
+      "kms:PutKeyPolicy",
+      "kms:ScheduleKeyDeletion",
+      "kms:TagResource",
+      "kms:UntagResource",
+      "kms:UpdateAlias",
+    ]
     resources = ["*"]
   }
 }
