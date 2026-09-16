@@ -443,6 +443,79 @@ unavoidable, run it with the pinned version and say so in the pull request.
 version in each root module would make an older binary refuse to touch the
 state, and is a separate change to decide.
 
+## D13 - dev.kambriq.com is gated at the load balancer, by Cognito
+
+`envs/dev/d13-cognito-dev-access.tf` and the `web_auth_*` variables of
+`modules/alb`. **Planned, not applied** - see the last section, which is the
+reason.
+
+### HTTP Basic at the ALB is impossible, not merely awkward
+
+The obvious design was a listener rule matching `Authorization` with a
+`fixed-response` 401 carrying `WWW-Authenticate: Basic realm="kambriq-dev"`.
+`FixedResponseActionConfig` accepts **three** fields - `StatusCode`,
+`ContentType`, `MessageBody`. There is no header field, so **no ALB rule can
+issue a Basic challenge** and no browser will ever prompt. That is what sent
+this to `authenticate-cognito`, which is an ALB action type rather than
+something the web container has to implement.
+
+Priced at the time, for the record: Cognito is free below 10 000 monthly active
+users and then USD 0.015 each, so USD 0 here; CloudFront with Lambda@Edge is
+USD 0.60 per million requests plus duration and needs a distribution; a
+`fixed-response` 403 is free but leaves no way for a person to get in.
+
+### What is exempt, and why that is the whole design
+
+`/api/v1/*` is already priority 1 to the API target group, and `/health` is
+added at priority 5. Those two cover **every machine caller**: the delivery
+journeys and api-e2e default to `https://dev.kambriq.com/api/v1`, the smoke test
+reads `/api/v1/health/ready`, the API version gate `/api/v1/health/version`, and
+the web version gate `NEXT_PUBLIC_APP_URL` + `/health`. Target group health
+checks never touch a listener rule - the load balancer checks the task directly.
+
+The API is not left open by the exemption: it carries its own bearer guard on
+every route except the deliberate public surface, which is public in production
+too.
+
+### `count` cannot read an unknown value
+
+The gate was first switched on by testing whether the pool ARN was empty. That
+fails with `Invalid count argument`, because the ARN comes from a resource and
+is unknown until apply. The switch is therefore a plain `bool`
+(`web_auth_enabled`), and a `check` block refuses a gate that is enabled without
+its three pool values - so a half-configured gate fails at plan rather than
+creating a rule that authenticates nobody.
+
+Plan, Terraform 1.12.0 from tfvars: **5 to add, 0 to change, 1 to destroy** -
+pool, domain, client, the exempt rule, the authenticated rule, and the old
+unauthenticated `/*` rule destroyed. The two cannot both hold priority 100, and
+leaving the old one beside the gate would leave the site reachable.
+
+### The pool is created empty, and that is where this stops
+
+No user is created: identities are Visquis's decision. One person is admitted
+with
+
+```
+aws cognito-idp admin-create-user --region eu-central-1 \
+  --user-pool-id <pool-id> --username <email> \
+  --user-attributes Name=email,Value=<email> Name=email_verified,Value=true \
+  --desired-delivery-mediums EMAIL
+```
+
+**Not applied, because the web E2E suite cannot pass through it.** That suite
+browses pages with `page.goto` and asserts exact statuses - 404 on an unknown
+URL, 307 with `location` containing `/login` for a protected one, the
+`x-robots-tag` on robots paths, real inputs on `/login` and `/register`. With
+the gate on, each of those is a 302 to the Cognito domain. It has no
+`globalSetup` and no `storageState`, so it cannot carry a session, and an empty
+pool means there is no identity to log in with anyway.
+
+Exempting the test runner was considered and refused: an exemption that admits
+the runner admits anybody who reads the workflow, which is the protection
+undone. The choice is Visquis's - a CI identity plus a Playwright login step, or
+accepting that the web E2E suite stops running against dev.
+
 ## D21 - who can read the state, and the key barrier it did not have
 
 `envs/shared/d21-state-kms.tf`. The state carries secrets in cleartext (A29,

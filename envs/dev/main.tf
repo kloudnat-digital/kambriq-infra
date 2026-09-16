@@ -75,6 +75,19 @@ module "alb" {
   api_port                  = var.api_port
   web_port                  = var.web_port
   redirect_www_to_apex_host = "dev.kambriq.com"
+
+  # D13. The gate on the web paths, and the two exemptions that keep every
+  # machine caller working: /api/v1/* is already priority 1 to the API target
+  # group, and /health is what deploy-dev.yml's web version gate reads.
+  #
+  # Sourced from the pool created in d13-cognito-dev-access.tf rather than
+  # written as literals, so the rule and the pool cannot drift; Terraform's own
+  # graph creates the pool, its domain and its client before the rule.
+  web_auth_enabled             = true
+  web_auth_user_pool_arn       = aws_cognito_user_pool.dev_access.arn
+  web_auth_user_pool_client_id = aws_cognito_user_pool_client.dev_access.id
+  web_auth_user_pool_domain    = aws_cognito_user_pool_domain.dev_access.domain
+  web_auth_exempt_paths        = ["/health"]
 }
 
 resource "aws_route53_record" "dev_api" {
