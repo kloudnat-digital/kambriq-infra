@@ -534,3 +534,67 @@ second statement withholds. It could do that before D16 (`Action:*` on
 `Resource:*`) and can still do it after (`iam:*` over `kambriq-*`). What this key
 buys is a barrier against a principal never meant to read the state - not
 against the pipeline that manages it.
+
+## D16 - the plan role and the apply role are not the same role
+
+`envs/shared/d16-plan-and-apply-roles.tf`, plus the apply role's policy in
+`envs/shared/main.tf` and one line in `terraform-plan.yml`.
+
+### Branch protection guards merges, not AWS
+
+`terraform-apply.yml` is a `workflow_dispatch`, launchable from any ref. Read
+live, not deduced: all three environments (`dev`, `prd`, `shared`) have
+`"protection_rules": []` and no deployment branch policy, and develop's
+protection is one required check with `reviews=0` and `enforce_admins=false`.
+So the shortest route to an unreviewed apply does not go through a pull request,
+and once required checks are in place the feeling of protection is real for
+merges and **false** for infrastructure.
+
+### One role, one claim - for both plan and apply
+
+Both workflows declare `environment: <env>` and read `secrets.AWS_ROLE_ARN`, an
+environment secret present in all three environments. The role trusts exactly
+`repo:kloudnat-digital/kambriq-infra:environment:{dev,shared}`, so a pull-request
+plan and a dispatched apply present the **same** `sub` and receive the **same**
+credentials - `Action: *` on `Resource: *`.
+
+No claim available here can carry a branch restriction: the repository uses the
+default subject format (`use_default: true`, read through the API), and a job
+that declares an environment loses the ref from `sub`. IAM cannot read `ref`.
+
+### The split is by environment name, because that is what `sub` carries
+
+`dev-plan` and `shared-plan` are declared by the plan workflow; the plan role
+trusts only those two subs. A second secret name in the same environments would
+change which ARN the plan job reads while leaving both roles reachable from one
+claim - the trust policy could not tell them apart. Creating those two
+environments and their `AWS_ROLE_ARN` is a GitHub settings change, listed in the
+pull request.
+
+### What a plan needs - and the lock that does not exist
+
+The read surface comes from the two states (134 addresses in dev, 33 in shared).
+**The brief's premise that a plan needs write access to a lock table is false
+here:** neither backend block sets `dynamodb_table` or `use_lockfile`, the
+account has no DynamoDB table, and `terraform-plan.yml` already says "it
+acquires no state lock". Nothing locks these states - not the plan, and **not
+the apply either**, so two concurrent applies can both write. That is a separate
+defect, recorded here rather than fixed in passing. If `use_lockfile` is ever
+enabled, the plan role needs `s3:PutObject`/`s3:DeleteObject` on `<key>.tflock`.
+
+### Read power is not reduced
+
+A plan refreshes 57 `aws_ssm_parameter` resources, which reads their values. The
+plan role can therefore read every `/kambriq/dev/*` SecureString, `JWT_SECRET`
+and the four `DATABASE_URL`s included. The split removes the power to **change**
+the estate; a leaked plan credential is still a leaked set of secrets.
+
+### What it does not cover
+
+Both repository administrators (`Ekeu`, `visquis-miaffossa`) can still dispatch
+`terraform-apply.yml` from any ref, with no reviewer. Anyone with write access
+can push a workflow change and dispatch it. The apply role still holds `iam:*`
+over `kambriq-*` principals, so it can rewrite its own policy - narrowing that
+needs a permissions boundary. What this buys is that a plan cannot change
+anything, and that the apply role can no longer touch fotomena's EKS clusters,
+argocd, Organizations or Identity Center.
