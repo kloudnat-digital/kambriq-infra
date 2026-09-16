@@ -88,6 +88,12 @@ resource "aws_db_instance" "main" {
   publicly_accessible = false
   multi_az            = var.multi_az
 
+  # Off for dev (a dev DB must be destroyable), on for prod. This refuses an
+  # accidental `terraform destroy` or a replace-forcing change at the API level,
+  # the belt to prevent_destroy's braces. Prod also takes a final snapshot
+  # (skip_final_snapshot = false), so even a deliberate teardown is recoverable.
+  deletion_protection = var.deletion_protection
+
   enabled_cloudwatch_logs_exports = var.enable_cloudwatch_logs ? ["postgresql", "upgrade"] : []
 
   tags = {

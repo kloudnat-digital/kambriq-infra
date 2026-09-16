@@ -72,6 +72,12 @@ variable "enable_cloudwatch_logs" {
   default     = true
 }
 
+variable "deletion_protection" {
+  description = "Refuse deletion of the instance at the AWS API level. Off for dev, on for prod."
+  type        = bool
+  default     = false
+}
+
 variable "multi_az" {
   description = "Enable Multi-AZ for automatic failover (set true for production)"
   type        = bool

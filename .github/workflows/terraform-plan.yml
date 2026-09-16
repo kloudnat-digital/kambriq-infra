@@ -68,8 +68,13 @@ jobs:
           set -euo pipefail
           CHANGED=$(git diff --name-only origin/${{ github.base_ref }}...HEAD)
           ENVS=()
-          for ENV in shared dev; do
-            if echo "$CHANGED" | grep -qE "^envs/${ENV}/|^modules/"; then
+          for ENV in shared dev prd; do
+            # Only plan an environment whose directory exists in this checkout. A
+            # modules/ change touches every env, but envs/prd may not be on the
+            # branch yet - without this guard the matrix would list prd and the
+            # plan job would then fail on a missing directory, which is the same
+            # defect (a job that cannot run) one level down.
+            if [ -d "envs/${ENV}" ] && echo "$CHANGED" | grep -qE "^envs/${ENV}/|^modules/"; then
               ENVS+=("\"${ENV}\"")
             fi
           done
