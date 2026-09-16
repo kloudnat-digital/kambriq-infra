@@ -442,3 +442,60 @@ unavoidable, run it with the pinned version and say so in the pull request.
 **Nothing enforces this yet**: a `required_version` pinned to the pipeline's
 version in each root module would make an older binary refuse to touch the
 state, and is a separate change to decide.
+
+## D21 - who can read the state, and the key barrier it did not have
+
+`envs/shared/d21-state-kms.tf`. The state carries secrets in cleartext (A29,
+A30), so the only question is who can read the object. **Answered by
+measurement, not by reading policies:** `simulate-principal-policy` for
+`s3:GetObject` on
+`arn:aws:s3:::kloudnat-infra-shared-store/kambriq/envs/dev/terraform.tfstate`,
+run over all 5 users and all 32 roles in the account on 16 September 2026.
+
+### Five readers, not four
+
+`vmiaff`, `uekeum`, `gitops.admin`, `kambriq-infra-github-actions` — and
+`AWSReservedSSO_AdministratorAccess_c1b30cb73dd006be`, the IAM Identity Center
+permission set (SAML, `AdministratorAccess`, 12-hour sessions, last used
+2025-04-25). The D wave brief said four; the fifth is real and is **named in the
+key policy on purpose**. Leaving it out would not lock it out - it holds `kms:*`
+through IAM and can call `kms:PutKeyPolicy` - and would make the barrier read
+stronger than it is. Whether that permission set should reach this account at
+all is an Identity Center assignment decision, not a key policy one.
+
+### The barrier is the key policy, and it starts holding per object
+
+SSE-S3 has no key policy: `s3:GetObject` alone decrypts. Under a CMK a reader
+needs **both** `s3:GetObject` and `kms:Decrypt` on that key. S3 encrypts at
+write time, so each state object keeps SSE-S3 until it is rewritten: the shared
+object on the next shared apply after the backend change, the dev object on the
+next dev apply. Until then, that object is still readable with GetObject alone -
+say which apply moved which object, rather than announcing the barrier when the
+key is created.
+
+### The key is selected by the backend, not by the bucket
+
+`kloudnat-infra-shared-store` is not ours alone: it also holds three legacy
+kambriq states and a top-level `shared/` prefix, in an account that also runs
+fotomena's EKS clusters and argocd. A bucket **default** encryption key would
+re-encrypt every future write by every writer, including principals this key
+policy does not name, and break their applies. So `kms_key_id` goes in
+`backend "s3"`, which scopes it to the two objects Terraform writes.
+
+### Two pull requests, because the apply has no pause
+
+`terraform-apply.yml` plans and applies in one job. The key must exist before
+any backend names it, so the key ships alone and the backend change follows. In
+the other order, a dev apply creates resources and then fails writing state to a
+key that does not exist.
+
+### Cost, and what it does not cover
+
+USD 1.00 per month for the key, plus USD 0.03 per 10 000 requests, which rounds
+to nothing at a few state writes a day. Not free - the figure is a dollar.
+
+All five readers are administrators. This stops a principal that was never meant
+to read the state; it does not stop somebody who is supposed to be an
+administrator. It also does nothing about the state being cleartext inside the
+object, and nothing about the bucket having **no versioning** - a bad state
+write is unrecoverable, which is how D23's evidence went missing.
