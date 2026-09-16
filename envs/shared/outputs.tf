@@ -56,3 +56,17 @@ output "newsletter_contact_list_name" {
   description = "Name of the shared SES newsletter contact list"
   value       = aws_sesv2_contact_list.newsletter.contact_list_name
 }
+
+# D21. The backend cannot read an output - `backend "s3"` takes no variables and
+# no interpolation - so the ARN is written literally in envs/*/backend.tf. This
+# output exists so the value can be read back from the state that owns the key,
+# rather than copied from a console, and so a drift between the two is visible.
+output "tfstate_kms_key_arn" {
+  description = "ARN of the customer-managed key the Terraform state is encrypted with (D21)"
+  value       = aws_kms_key.state.arn
+}
+
+output "tfstate_kms_alias_arn" {
+  description = "Alias ARN of the Terraform state key (D21)"
+  value       = aws_kms_alias.state.arn
+}
