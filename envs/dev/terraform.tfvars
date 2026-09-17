@@ -37,11 +37,23 @@ rds_backup_retention_period = 0
 rds_skip_final_snapshot     = true
 rds_enable_cloudwatch_logs  = false
 
-redis_node_type                  = "cache.t4g.micro"
-redis_engine_version             = "7.1"
-redis_port                       = 6379
-redis_auth_token                 = ""
-redis_transit_encryption_enabled = false
+redis_node_type      = "cache.t4g.micro"
+redis_engine_version = "7.1"
+redis_port           = 6379
+
+# D20 - STEP ONE of two. `preferred` + `ROTATE` means the cluster accepts
+# encrypted and unencrypted connections, and authenticated and unauthenticated
+# ones, at the same time. That is the window: the application is already
+# deployed able to speak TLS with the token (feat/d20-redis-tls-client), this
+# apply gives it something to speak to, and nothing that connects today breaks.
+#
+# STEP TWO is a one-line change to each of these - "required" and "SET" - in its
+# own pull request and its own apply, once a task has been seen connecting with
+# TLS and the token. That apply is the one that drops unencrypted connections
+# and makes the password mandatory.
+redis_transit_encryption_enabled = true
+redis_transit_encryption_mode    = "preferred"
+redis_auth_token_update_strategy = "ROTATE"
 
 s3_media_bucket_name = ""
 cors_origins         = "https://dev.kambriq.com"

@@ -303,6 +303,32 @@ resource "aws_ssm_parameter" "redis_host" {
   }
 }
 
+# D20 - the ElastiCache AUTH token.
+#
+# A SecureString, and the third configuration pattern this repository uses is
+# deliberately NOT the one chosen here. The payment-channel parameters are read
+# at runtime through the SSM SDK so a wrong bank account is corrected without a
+# deployment; this token is needed to open the connection at boot, so it belongs
+# in the ECS `secrets:` block like JWT_SECRET and the four DATABASE_URLs - the
+# agent resolves it at task start, and the value never enters the task
+# definition.
+#
+# Named REDIS_PASSWORD rather than REDIS_AUTH_TOKEN because that is what the
+# application reads (`redisConnectionOptions`), and a parameter whose name does
+# not match the variable it feeds is how the two drift.
+resource "aws_ssm_parameter" "redis_auth_token" {
+  name  = "/kambriq/${var.env}/api/REDIS_PASSWORD"
+  type  = "SecureString"
+  value = var.redis_auth_token
+
+  description = "ElastiCache AUTH token for ${var.env} (D20)"
+  tags = {
+    Name        = "kambriq-api-redis-password-${var.env}"
+    Environment = var.env
+    Service     = "api"
+  }
+}
+
 resource "aws_ssm_parameter" "redis_port" {
   name  = "/kambriq/${var.env}/api/REDIS_PORT"
   type  = "String"

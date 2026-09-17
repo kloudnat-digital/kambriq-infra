@@ -344,16 +344,22 @@ module "rds" {
 }
 
 module "redis" {
-  source                     = "../../modules/elasticache-redis"
-  project_name               = var.project_name
-  env                        = var.env
-  subnet_ids                 = data.terraform_remote_state.shared.outputs.private_subnet_ids
-  security_group_ids         = [aws_security_group.redis.id]
-  node_type                  = var.redis_node_type
-  engine_version             = var.redis_engine_version
-  port                       = var.redis_port
-  auth_token                 = var.redis_auth_token
+  source             = "../../modules/elasticache-redis"
+  project_name       = var.project_name
+  env                = var.env
+  subnet_ids         = data.terraform_remote_state.shared.outputs.private_subnet_ids
+  security_group_ids = [aws_security_group.redis.id]
+  node_type          = var.redis_node_type
+  engine_version     = var.redis_engine_version
+  port               = var.redis_port
+
+  # D20. The token is generated (d20-redis-auth-token.tf), never a variable
+  # somebody fills in: a token in terraform.tfvars is a secret in the
+  # repository, and a token passed with -var is a value the apply never sees.
+  auth_token                 = random_password.redis_auth_token.result
+  auth_token_update_strategy = var.redis_auth_token_update_strategy
   transit_encryption_enabled = var.redis_transit_encryption_enabled
+  transit_encryption_mode    = var.redis_transit_encryption_mode
 }
 
 module "s3_media" {
@@ -388,14 +394,17 @@ module "ssm_app_parameters" {
   use_existing_jwt_secret = var.use_existing_jwt_secret
   frontend_url            = var.frontend_url
 
-  node_env                     = var.node_env
-  port                         = var.api_port
-  api_prefix                   = var.api_prefix
-  cors_origins                 = var.cors_origins
-  throttle_ttl                 = var.throttle_ttl
-  throttle_limit               = var.throttle_limit
-  redis_host                   = module.redis.primary_endpoint_address
-  redis_port                   = module.redis.port
+  node_env       = var.node_env
+  port           = var.api_port
+  api_prefix     = var.api_prefix
+  cors_origins   = var.cors_origins
+  throttle_ttl   = var.throttle_ttl
+  throttle_limit = var.throttle_limit
+  redis_host     = module.redis.primary_endpoint_address
+  redis_port     = module.redis.port
+  # D20. The same generated value the cluster is configured with, so the
+  # parameter the task reads and the token the cluster expects cannot drift.
+  redis_auth_token             = random_password.redis_auth_token.result
   aws_s3_bucket                = module.s3_media.bucket_id
   aws_region                   = var.aws_region
   aws_s3_region                = var.aws_region
@@ -487,6 +496,12 @@ module "ecs_service_api" {
     # the instruction email. See the register: the number is a choice, not a
     # specification, and it is a variable so that settling it is one edit.
     PAYMENT_VALIDITY_DAYS = tostring(var.payment_validity_days)
+
+    # D20 - speak TLS to ElastiCache. Not a secret, so an environment variable
+    # rather than a `secrets:` entry; the token beside it is the secret. Sourced
+    # from the same variable that puts the cluster in transit-encryption mode,
+    # so the client and the cluster cannot be configured in opposite directions.
+    REDIS_TLS = tostring(var.redis_transit_encryption_enabled)
   }
 
   secrets = merge({
@@ -495,6 +510,10 @@ module "ecs_service_api" {
     DATABASE_URL_KAMNET = module.ssm_app_parameters.database_url_kamnet_parameter_arn
     DATABASE_URL_LANDS  = module.ssm_app_parameters.database_url_lands_parameter_arn
     JWT_SECRET          = module.ssm_app_parameters.jwt_secret_parameter_arn
+
+    # D20 - the ElastiCache AUTH token, resolved by the ECS agent at task start.
+    # The value never enters the task definition, the plan, or a log.
+    REDIS_PASSWORD = module.ssm_app_parameters.redis_auth_token_parameter_arn
   }, module.ssm_app_parameters.database_url_extra_parameter_arns)
 }
 
