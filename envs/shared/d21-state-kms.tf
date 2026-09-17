@@ -66,6 +66,12 @@
 # call kms:PutKeyPolicy and write themselves back in. It also does nothing about
 # the state being cleartext at rest inside the object, nor about the bucket
 # having no versioning (a bad write is unrecoverable, D21's own finding).
+#
+# SINCE 2026-09-16 THERE IS A SIXTH PRINCIPAL, and it is the exception to the
+# sentence above: D16's plan role, added at the bottom of this policy in two
+# statements of its own. It is NOT an administrator and cannot rewrite this
+# policy - it may read the key's metadata and, through S3 only, Decrypt. It
+# cannot GenerateDataKey, so it cannot write an encrypted state object.
 # ---------------------------------------------------------------------------
 
 locals {
@@ -91,13 +97,40 @@ locals {
 # because that statement delegates the decision straight back to IAM and this
 # key exists to stop exactly that. Two statements instead:
 #
-#   1. KeyAdministration - the two human administrators and gitops.admin may
-#      manage the key (and are not locked out of their own key), but the
-#      administration statement grants no data-plane action.
+#   1. KeyAdministration - the two human administrators, gitops.admin, AND the
+#      role that manages this key, may manage it. No data-plane action.
 #   2. StateEncryptionAndDecryption - the five readers above, and only they, may
 #      Decrypt / GenerateDataKey / DescribeKey, and only for S3 in this region:
 #      the kms:ViaService condition means a stolen credential cannot use this key
 #      through any other service.
+#
+# THE CI ROLE IS IN THE ADMINISTRATION STATEMENT, AND IT HAS TO BE. The first
+# version of this file named only the three humans, and the apply was refused:
+#
+#   MalformedPolicyDocumentException: The new key policy will not allow you to
+#   update the key policy in the future.
+#   (terraform-apply.yml run 35134521387, 2026-09-16 18:30 UTC)
+#
+# That is KMS's policy lockout safety check, and the rule behind it is written
+# into the service: "Unlike other AWS resource policies, an AWS KMS key policy
+# does not automatically give permission to the account or any of its
+# principals. To give permission to any principal, including the account
+# principal, you must use a key policy statement that provides the permission
+# explicitly." A policy that lets nobody who can actually call PutKeyPolicy do
+# so is a key that cannot be administered, and CreateKey refuses it up front.
+#
+# Terraform manages this key, so the principal Terraform runs as must be able to
+# administer it - otherwise the very next change to this policy would fail, and
+# the key would be maintainable only by a human with console access. The
+# alternative, `bypass_policy_lockout_safety_check = true`, is deliberately NOT
+# used: it silences the check rather than satisfying it, and it is exactly how a
+# key ends up unmanageable and reachable only through AWS Support.
+#
+# What that costs, said plainly: the apply role can rewrite this key policy, so
+# it can grant itself the data-plane permissions the second statement withholds.
+# It could already do that before D16 (Action:* Resource:*) and still can after
+# it (iam:* over kambriq-* principals). The barrier this key adds is against a
+# principal that was never meant to read the state, not against the pipeline.
 #
 # There is no Deny statement. A Deny would also hit the key administrators and
 # make the key unmanageable; the barrier here is the ABSENCE of an allow for
@@ -114,6 +147,9 @@ data "aws_iam_policy_document" "d21_state_key" {
         "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/vmiaff",
         "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/uekeum",
         "arn:aws:iam::${data.aws_caller_identity.current.account_id}:user/gitops.admin",
+        # The principal that creates and maintains this key. Without it, KMS
+        # refuses the policy outright - see the block above.
+        "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/kambriq-infra-github-actions",
       ]
     }
 
@@ -157,6 +193,88 @@ data "aws_iam_policy_document" "d21_state_key" {
 
     # The key is usable only through S3, in this region. A credential that can
     # decrypt the state object cannot use the key for anything else.
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["s3.${var.aws_region}.amazonaws.com"]
+    }
+  }
+
+  # ---------------------------------------------------------------------------
+  # D16's PLAN ROLE, and why it needs TWO statements rather than a sixth seat in
+  # the readers list above.
+  #
+  # A KEY POLICY IS A SECOND GATE, and the plan role failed on it even though
+  # its own IAM policy allows the action:
+  #
+  #   AccessDenied: ... is not authorized to perform: kms:DescribeKey on
+  #   resource: arn:aws:kms:eu-central-1:051551940370:key/be2fbe9c-...
+  #   (terraform-plan.yml run 35147649894, shared, 2026-09-16 20:37 UTC)
+  #
+  # `simulate-principal-policy` said `allowed` for all four reads, because it
+  # evaluates IDENTITY policies only. For a customer-managed key BOTH gates must
+  # allow, and this policy named the plan role nowhere - measured, not assumed:
+  # `get-key-policy | grep -c github-actions-plan` returned 0.
+  #
+  # THE PATHS NEED DIFFERENT CONDITIONS, which is why one statement will not do:
+  #
+  #   - `envs/shared` MANAGES this key, so a plan REFRESHES it, calling KMS
+  #     directly with no `kms:ViaService` context at all. CloudTrail shows what a
+  #     successful refresh calls, and it is exactly four: DescribeKey,
+  #     GetKeyPolicy, GetKeyRotationStatus, ListResourceTags. A conditioned grant
+  #     cannot satisfy them. (ListAliases is account-level - no key resource - so
+  #     no key policy gates it; `kms:List*` in the identity policy is enough.)
+  #   - reading the ENCRYPTED STATE goes through S3, so `Decrypt` keeps the
+  #     ViaService condition, exactly like the readers above.
+  #
+  # NOT `kms:GenerateDataKey`. That is what WRITING an encrypted object needs,
+  # and a plan must never write the state - which is the whole of D16. Adding
+  # the plan role to `d21_state_key_readers` would have granted it, because that
+  # list grants all three actions together. Hence separate statements.
+  #
+  # The Decrypt half is inert today - both state objects are still SSE-S3 - and
+  # becomes load-bearing at the first apply after D26 sets `kms_key_id`. It is
+  # here now because discovering it later means another refused plan.
+  # ---------------------------------------------------------------------------
+  statement {
+    sid    = "StateKeyMetadataForPlans"
+    effect = "Allow"
+
+    principals {
+      type = "AWS"
+      identifiers = [
+        "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-infra-github-actions-plan",
+      ]
+    }
+
+    # Unconditioned on purpose: a refresh of aws_kms_key/aws_kms_alias calls KMS
+    # directly, so there is no ViaService value to match. Read-only metadata.
+    actions = [
+      "kms:DescribeKey",
+      "kms:GetKeyPolicy",
+      "kms:GetKeyRotationStatus",
+      "kms:ListResourceTags",
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "StateKeyDecryptForPlans"
+    effect = "Allow"
+
+    principals {
+      type = "AWS"
+      identifiers = [
+        "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project_name}-infra-github-actions-plan",
+      ]
+    }
+
+    # Decrypt only. No GenerateDataKey: that is the write side.
+    actions = ["kms:Decrypt"]
+
+    resources = ["*"]
+
     condition {
       test     = "StringEquals"
       variable = "kms:ViaService"

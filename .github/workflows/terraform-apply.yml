@@ -10,6 +10,28 @@ on:
           - shared
           - dev
         required: true
+      # WHY THIS EXISTS, because an empty input is easy to misread as decoration.
+      #
+      # This workflow plans and applies in one run, so the apply inherits
+      # whatever the plan can read. On 2026-09-16 that became a deadlock: the
+      # apply role lost `ses:GetContactList` (D16, see CLAUDE.md), and the one
+      # apply that would restore it could not get past its own refresh of
+      # aws_sesv2_contact_list. A policy repair cannot be applied by a plan that
+      # the same policy breaks.
+      #
+      # `-target` is the way out, and it was measured rather than assumed: a
+      # targeted plan of the two aws_iam_role_policy resources refreshes 5
+      # resources, never reads SES, and produces the identical
+      # "0 to add, 2 to change, 0 to destroy".
+      #
+      # A TARGETED APPLY IS A PARTIAL APPLY. Terraform says so itself, and so
+      # does the run summary below. Leave this empty for every normal apply; it
+      # is for breaking a deadlock, not for routine use.
+      extra_plan_args:
+        description: "Extra terraform plan args, e.g. -target=... (empty = normal full apply)"
+        type: string
+        required: false
+        default: ""
 
 permissions:
   id-token: write
@@ -60,17 +82,36 @@ jobs:
       - name: Terraform validate
         run: terraform -chdir="envs/${{ steps.env.outputs.env_name }}" validate
 
+      # EXTRA_PLAN_ARGS reaches the shell as an environment variable instead of
+      # being interpolated into the script with ${{ }}, which would let a
+      # dispatch input run arbitrary shell. It is deliberately unquoted on the
+      # terraform line: "-target=a -target=b" has to split into two arguments.
       - name: Terraform plan
         id: plan
+        env:
+          EXTRA_PLAN_ARGS: ${{ inputs.extra_plan_args }}
         run: |
           set -euo pipefail
-          terraform -chdir="envs/${{ steps.env.outputs.env_name }}" plan -no-color -out=tfplan 2>&1 | tee plan.txt
+          if [ -n "${EXTRA_PLAN_ARGS}" ]; then
+            echo "PARTIAL APPLY: extra plan arguments in effect: ${EXTRA_PLAN_ARGS}"
+          fi
+          # shellcheck disable=SC2086
+          terraform -chdir="envs/${{ steps.env.outputs.env_name }}" plan -no-color -out=tfplan ${EXTRA_PLAN_ARGS} 2>&1 | tee plan.txt
 
       - name: Plan summary (pre-apply)
+        env:
+          EXTRA_PLAN_ARGS: ${{ inputs.extra_plan_args }}
         run: |
           {
             echo "## Terraform plan — ${{ steps.env.outputs.env_name }} (pre-apply)"
             echo
+            if [ -n "${EXTRA_PLAN_ARGS}" ]; then
+              echo "> **PARTIAL APPLY** — extra plan arguments: \`${EXTRA_PLAN_ARGS}\`"
+              echo ">"
+              echo "> Only the targeted resources were planned and applied. Everything"
+              echo "> else in this environment was left untouched and unrefreshed."
+              echo
+            fi
             echo '```terraform'
             cat plan.txt 2>/dev/null || echo "(plan step did not produce output)"
             echo '```'
