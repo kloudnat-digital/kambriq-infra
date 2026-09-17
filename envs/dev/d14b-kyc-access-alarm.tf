@@ -1,13 +1,18 @@
 # ---------------------------------------------------------------------------
 # D14 (b) - alarm on a SERIES of denied anonymous reads of KYC keys.
 #
-# PROPOSED, NOT APPLIED. Plan only.
+# APPLIED on 11 September 2026 at 06:59 UTC, by a local Terraform 1.9.4 apply
+# (IAM user vmiaff; CloudTrail event history shows CreateTopic, CreateLogGroup,
+# CreateTrail and PutMetricAlarm between 06:59:17 and 06:59:27). That was before
+# #26 merged at 07:24 describing this file as "plan only, not applied". All nine
+# addresses below are in the dev state, and every apply since has carried them.
+# Until 15 September this header still said "PROPOSED, NOT APPLIED".
 #
 # One 403 is noise: a stale presigned URL, a crawler, a typo. A run of them on
-# users/*/id-documents/ is somebody trying keys, and today nobody would see it -
-# the account has no CloudTrail trail at all, and kambriq-media-dev has no
-# server access logging. Neither mechanism is on, which is why the request
-# volume below is an estimate rather than a measurement.
+# users/*/id-documents/ is somebody trying keys, and when this was written
+# nobody would have seen it - the account had no CloudTrail trail at all, and
+# kambriq-media-dev has no server access logging. Neither mechanism was on,
+# which is why the request volume below is an estimate rather than a measurement.
 #
 # ---------------------------------------------------------------------------
 # Why CloudTrail data events rather than S3 server access logging
@@ -69,39 +74,9 @@ data "aws_s3_bucket" "d14_logs" {
   bucket = local.d14_logs_bucket
 }
 
-data "aws_iam_policy_document" "d14_trail_bucket" {
-  statement {
-    sid     = "AWSCloudTrailAclCheck"
-    effect  = "Allow"
-    actions = ["s3:GetBucketAcl"]
-    principals {
-      type        = "Service"
-      identifiers = ["cloudtrail.amazonaws.com"]
-    }
-    resources = [data.aws_s3_bucket.d14_logs.arn]
-  }
-
-  statement {
-    sid     = "AWSCloudTrailWrite"
-    effect  = "Allow"
-    actions = ["s3:PutObject"]
-    principals {
-      type        = "Service"
-      identifiers = ["cloudtrail.amazonaws.com"]
-    }
-    resources = ["${data.aws_s3_bucket.d14_logs.arn}/AWSLogs/${data.aws_caller_identity.current.account_id}/*"]
-    condition {
-      test     = "StringEquals"
-      variable = "s3:x-amz-acl"
-      values   = ["bucket-owner-full-control"]
-    }
-  }
-}
-
-resource "aws_s3_bucket_policy" "d14_trail_bucket" {
-  bucket = data.aws_s3_bucket.d14_logs.id
-  policy = data.aws_iam_policy_document.d14_trail_bucket.json
-}
+# The policy on that bucket is account-scoped and now lives in `envs/shared`
+# (d14b-trail-bucket-policy.tf). The data source above stays here because the
+# trail below still needs the bucket's id and arn.
 
 # Short retention: this log group exists to raise an alarm within minutes, not
 # to be an archive. The trail's own S3 copy is the record that keeps.
@@ -171,8 +146,6 @@ resource "aws_cloudtrail" "d14_kyc" {
       starts_with = ["${module.s3_media.bucket_arn}/${local.d14_kyc_prefix}"]
     }
   }
-
-  depends_on = [aws_s3_bucket_policy.d14_trail_bucket]
 }
 
 # AccessDenied on a KYC key. An anonymous caller has no userIdentity to name,

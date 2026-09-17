@@ -14,6 +14,17 @@ terraform {
 
 provider "aws" {
   region = var.aws_region
+
+  # Every resource this provider creates carries its environment, so the
+  # convention holds by construction rather than by remembering to add a tag
+  # on each new resource. A resource that sets Environment itself still wins;
+  # this only fills the gap. `assert-environment-convention.sh` is the check
+  # that this default is actually reaching everything.
+  default_tags {
+    tags = {
+      Environment = "dev"
+    }
+  }
 }
 
 locals {
@@ -270,6 +281,43 @@ data "aws_iam_policy_document" "github_actions_permissions" {
       module.iam_roles_ecs.task_web_role_arn,
     ]
   }
+
+  # D19 - a failed deploy says so, to a human, by email.
+  #
+  # On 12 September the dev deploy failed at 10:28 and 19:20 and nobody knew for
+  # nine hours. deploy-dev.yml now ends with a step that runs only when the job
+  # fails or is cancelled and sends one message FROM the platform's
+  # transactional sender TO the contact@ mailbox people read. This role is the
+  # only credential that step holds, and it had no ses: action at all.
+  #
+  # Scoped three ways, so the grant cannot become a mail relay for whoever can
+  # run a workflow in the repository:
+  #   - the verified domain identity only (local.ses_identity_arn, iam-ses.tf);
+  #   - ses:FromAddress pinned to the transactional sender (var.ses_from_email);
+  #   - ses:Recipients pinned to the one mailbox, for every recipient on the
+  #     message. The address is the same literal as NOTIFY_TO in deploy-dev.yml;
+  #     if they ever differ, SES refuses the send with AccessDenied - loudly, in
+  #     the failed job's log - rather than mailing somewhere nobody chose.
+  #
+  # Cost: SES bills USD 0.10 per 1000 messages; one message per failed deploy.
+  # None in practice.
+  statement {
+    sid       = "DeployFailureNotice"
+    actions   = ["ses:SendEmail"]
+    resources = [local.ses_identity_arn]
+
+    condition {
+      test     = "StringEquals"
+      variable = "ses:FromAddress"
+      values   = [var.ses_from_email]
+    }
+
+    condition {
+      test     = "ForAllValues:StringEquals"
+      variable = "ses:Recipients"
+      values   = ["contact@kambriq.com"]
+    }
+  }
 }
 
 resource "aws_iam_role_policy" "github_actions" {
@@ -283,7 +331,7 @@ module "rds" {
   env                     = var.env
   db_name                 = var.db_core_name
   db_username             = var.db_username
-  db_password             = var.db_password
+  db_password             = random_password.db_master.result
   instance_class          = var.rds_instance_class
   allocated_storage       = var.rds_allocated_storage
   storage_type            = var.rds_storage_type
@@ -335,7 +383,7 @@ module "ssm_app_parameters" {
   db_lands_name           = var.db_lands_name
   db_extra                = var.db_extra
   db_username             = var.db_username
-  db_password             = var.db_password
+  db_password             = random_password.db_master.result
   jwt_secret              = var.jwt_secret
   use_existing_jwt_secret = var.use_existing_jwt_secret
   frontend_url            = var.frontend_url
@@ -430,7 +478,7 @@ module "ecs_service_api" {
     # Sourced from the resource, never a literal: Terraform is the single source
     # of the contact list name. The app's default in env.validation.ts is then a
     # fallback that never applies in a deployed environment.
-    AWS_SES_CONTACT_LIST_NAME = aws_sesv2_contact_list.newsletter.contact_list_name
+    AWS_SES_CONTACT_LIST_NAME = data.terraform_remote_state.shared.outputs.newsletter_contact_list_name
     FRONTEND_URL              = var.frontend_url
     SALT_ROUNDS               = tostring(var.salt_rounds)
     JWT_ACCESS_EXPIRATION     = var.jwt_access_expiration

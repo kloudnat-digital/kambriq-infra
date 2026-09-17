@@ -96,7 +96,22 @@ jobs:
       fail-fast: false
       matrix:
         env: ${{ github.event_name == 'workflow_dispatch' && fromJson(format('["{0}"]', inputs.env)) || fromJson(needs.detect-envs.outputs.envs) }}
-    environment: ${{ matrix.env }}
+    # D16: a plan authenticates as the PLAN role, never the apply role.
+    #
+    # The environment NAME is the whole mechanism. A job that declares an
+    # environment presents `repo:<repo>:environment:<name>` as its OIDC `sub`,
+    # and no claim available here can carry a branch or a workflow name - the
+    # repository uses the default subject format, and declaring an environment
+    # drops `ref` from `sub`. So `dev-plan` / `shared-plan` is the only thing
+    # that distinguishes a plan from an apply to IAM.
+    # `kambriq-infra-github-actions-plan` trusts exactly those two subs;
+    # `kambriq-infra-github-actions` trusts `dev` / `shared`.
+    #
+    # REVERSING THIS LINE TAKES EVERY PLAN JOB'S CREDENTIALS AWAY, because
+    # `secrets.AWS_ROLE_ARN` is an environment secret and the `-plan`
+    # environments are where the plan role's ARN lives. Run 35061522977 is what
+    # that looks like: the line was changed before the environments existed.
+    environment: ${{ matrix.env }}-plan
     steps:
       - uses: actions/checkout@v4
 
@@ -168,6 +183,34 @@ jobs:
               --query 'Vpcs[0].VpcId' --output text)"
           fi
           ./scripts/assert-no-blackhole-routes.sh "$vpc"
+
+      # The environment convention: every resource carries its environment in an
+      # Environment tag, and - for resources born after 2026-09-13 - in its name.
+      # Read from the account tagging API, not from the plan, because the tag a
+      # resource actually carries is a fact about AWS, and a resource can be
+      # tagged or lose its tag outside this state. Account-scoped, so it runs on
+      # the dev job rather than once per changed env; the check judges every
+      # kambriq resource in the account regardless of which env this job is for.
+      #
+      # Not conditional on the plan exit code, for the same reason as the asserts
+      # above: a failed plan must not silently skip a convention-relevant check.
+      - name: Assert every resource carries its environment
+        if: steps.env.outputs.env_name == 'dev'
+        run: |
+          set -euo pipefail
+          ./scripts/assert-environment-convention.sh
+
+      # D17. dev and prod share one VPC, so isolation is configurational. This
+      # refuses the three crossings: an SG in one env admitting the other's SG, a
+      # role in one env reading the other's SSM, or a rule citing a CIDR that
+      # covers the other's subnets. Reads the live estate; account-scoped like the
+      # convention check, so it runs on the dev leg. Green today because prod does
+      # not exist yet - it starts protecting the moment envs/prd lands.
+      - name: Assert dev and prod do not cross
+        if: steps.env.outputs.env_name == 'dev'
+        run: |
+          set -euo pipefail
+          ./scripts/assert-environment-isolation.sh
 
       - name: Post plan as PR comment
         if: github.event_name == 'pull_request'

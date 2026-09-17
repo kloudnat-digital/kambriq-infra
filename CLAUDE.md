@@ -176,7 +176,7 @@ modules/
   - SSM Parameter Store SecureString under `/kambriq/{env}/{api,db,web}/...`. Never inline in `.tf` files (always via `var.<sensitive> = true`).
   - The ECS task pulls them via the `secrets:` block (`valueFrom = <ssm-arn>`), NOT `environment_variables:`.
   - Non-secret config also gets stored as plain SSM `String` for inventory consistency, AND injected directly into ECS `environment_variables` for runtime use.
-  - **Sixteen payment-channel parameters, not twelve** (v03 section 9). Splitting mobile money into `OMO` (Orange) and `MOMO` (MTN) adds `ORANGE_MONEY_NUMBER`, `ORANGE_MONEY_NAME`, `MTN_MONEY_NUMBER`, `MTN_MONEY_NAME` - two operators, two numbers, two account names. The three older `MOBILE_MONEY_*` are **kept and read by no channel**: `PaymentChannelsService.FIELDS` still requires them at startup, so deleting them stops the API booting. Removing them is a webapp change first (drop them from `FIELDS`, deploy), infra second.
+  - **Thirteen payment-channel parameters** (v03 section 9 said sixteen: twelve plus the four per-operator ones). Splitting mobile money into `OMO` (Orange) and `MOMO` (MTN) added `ORANGE_MONEY_NUMBER`, `ORANGE_MONEY_NAME`, `MTN_MONEY_NUMBER`, `MTN_MONEY_NAME` - two operators, two numbers, two account names. The three older `MOBILE_MONEY_*` were then read by no channel and still required at startup, so they could not simply be deleted. **D9 removed them in the only safe order:** out of `PaymentChannelsService.FIELDS` in the webapp, deployed, the API seen reaching steady state and answering `/health` without them - and only then out of `payment_channel_defaults` here, which destroys the three parameters on the next apply. Deleting them with `aws ssm delete-parameter` instead would have been undone: they are in terraform state, so the next apply recreates them with their placeholder values.
   - **Fictitious values on dev must not be diallable or payable.** A Cameroonian mobile number is `+237 6XX XXX XXX`; a placeholder of that shape can be copied into a transfer form and money leaves. The dev placeholders are not numbers at all and say so in their own text - `DEV-NUMERO-ORANGE-FICTIF-NE-PAS-UTILISER`.
   - **A third pattern exists, deliberately: values the application reads itself, at runtime.** The twelve `/kambriq/{env}/api/payment-channels/*` parameters (`G10`) are `SecureString`, are **not** in the `secrets:` block and **not** in `environment_variables`. Only the *prefix* is injected; the API reads the values through the SSM SDK with a 60-second cache.
     - Why: `G3` chose that reader so a wrong bank account number is corrected with one `aws ssm put-parameter --overwrite` and takes effect on the running task within a minute. As `secrets:` a correction would need a task restart; as `environment_variables` it would need an apply. Either would undo the design decision the parameters exist to serve.
@@ -259,11 +259,24 @@ a second one would diverge from the first inside a week.
 
 ---
 
-### CI is billed per job, rounded up — five jobs of seconds cost five minutes
+### CI costs nothing here, because both repositories are public
+
+**Corrected 2026-09-16.** This section used to assert that CI is billed per job,
+rounded up, and that claim was steering decisions. It is false for these
+repositories. Both `kambriq-infra` and `kambriq-webapp` are
+`visibility=public`, and GitHub does not meter Actions on public repositories:
+every run of 2026-09-16, on GitHub-hosted `ubuntu-latest` runners, reports
+`billable.UBUNTU.total_ms = 0` from `/actions/runs/{id}/timing` — including the
+ten-job webapp CI run whose wall clock was 21m31s. Read from the API, not
+assumed. **Net Actions cost for this work: USD 0.00.**
+
+The per-job rounding rule below is real GitHub behaviour; it is simply not in
+force here. **It starts applying the day a repository goes private**, so the
+table is kept and its third column reads as a conditional, not as a bill.
 
 Measured 2026-09-09, against `Terraform Plan` run `34106681008`.
 
-| job | measured | billed |
+| job | measured | would be billed if private |
 | --- | ---: | ---: |
 | Detect changed environments | 5s | 1m |
 | Shell Lint | 6s | 1m |
@@ -272,16 +285,18 @@ Measured 2026-09-09, against `Terraform Plan` run `34106681008`.
 | Plan (dev) | 54s | 1m |
 | **total** | **143s** | **5m** |
 
-GitHub rounds each job up to the minute and charges per job, so 2m23s of work
-bills as five minutes. The three cheapest jobs — 53 seconds between them — cost
-three of those five.
-
-**The rule: parallelism is bought, and the price is one rounded-up minute per
-job.** Split when someone waits on the clock; merge when they only pay the bill.
+On a private repository GitHub rounds each job up to the minute and charges per
+job, so 2m23s of work would bill as five minutes, and the three cheapest jobs —
+53 seconds between them — would cost three of those five. **Parallelism would be
+bought, at one rounded-up minute per job.** On these public repositories it is
+free, so split whenever someone waits on the clock and stop trading latency for
+a bill that does not exist.
 
 What was applied here: concurrency on the plan (superseded PR runs cancelled),
-and `timeout-minutes` on every job. The default is **360 minutes**, so one job
-wedged on a provider call burns 18% of a monthly quota unnoticed.
+and `timeout-minutes` on every job. The default is **360 minutes**: on a public
+repository that costs nothing, but it still holds a runner and a `concurrency`
+slot for six hours; on a private one it would burn 18% of a monthly quota
+unnoticed.
 
 **`terraform-apply` keeps `cancel-in-progress: false`, and that is not
 symmetry.** A plan is a read: cancelling it loses nothing. A cancelled apply can
@@ -355,3 +370,414 @@ while the gateway survived. The flag lives in `envs/shared/terraform.tfvars`.
 **Rollback is one line there, and it is planned rather than assumed:** with the
 gateway re-enabled, the plan against the infrastructure as it stands is a strict
 no-op.
+
+## D22 - the account's management events are kept, by a trail of their own
+
+`envs/shared/d22-management-events-trail.tf`. Planned 14 September 2026, **not
+applied**. CloudTrail's event history keeps 90 days; until this trail nothing
+kept CreateRole, AttachRolePolicy, PutBucketPolicy or CreateUser past them, on
+an account several projects and several administrators share. Switching it on
+recovers nothing: December 2025 stays unattributable.
+
+### A single-region trail outside us-east-1 never sees IAM
+
+The obvious fix was a flag on D14's trail. Read live, not from the source, that
+trail is `IsMultiRegionTrail = false`, `IncludeGlobalServiceEvents = false`, with
+advanced selectors for Data events only. Turning management events on there
+would have recorded eu-central-1's management plane and missed exactly what the
+chantier exists for: **IAM is global, and its events are delivered in
+us-east-1.** The trail is therefore multi-region with global service events on,
+and it is its own resource - D14's is a dev, KYC-scoped trail, and making it the
+account's audit trail would have put the account's record under a dev name.
+
+### The first copy is free; the second is billed
+
+Management events cost nothing on the first trail that records them in a region
+and USD 2.00 per 100 000 on any other. On 14 September no trail in the account,
+in any region, recorded them (`describe-trails --include-shadow-trails`, every
+region), so this one is the free copy. **Nothing else may switch management
+events on** - D14's trail included - without reading that sentence first.
+
+Read AND write, not write-only: `AssumeRole` and `AssumeRoleWithWebIdentity` are
+logged `readOnly = true`, and they are how an action taken through a role is
+traced to whoever took the role. Measured volume: about 1 140 management events
+an hour, under USD 0.25 a month in S3. The bucket has no lifecycle rule, so it
+accumulates; that is a decision for the register, not a default.
+
+No key prefix, deliberately: the bucket policy grants `AWSLogs/<account>/*`, and
+a prefix would put delivery outside the grant and log nothing.
+
+### Plan with the Terraform the pipeline runs
+
+Found while planning D19 and D22. `terraform-apply.yml` pins **1.12.0**; the
+local binary was 1.9.4. Under 1.9.4 the dev plan was one change. Under 1.12.0 it
+was two: the second, `aws_ssm_parameter.web_nextauth_secret` updated in place. A
+plan taken with another version is not the plan that will be applied, in exactly
+the way a plan taken with `-var` is not. Fetch the pinned version and verify it
+against HashiCorp's SHA256SUMS before trusting a plan.
+
+**Retracted, and kept as a retraction.** This section first said the extra line
+came from write-only attribute handling (`value_wo`). It did not - the provider
+was never the cause. What it actually was is the next section.
+
+## D23 - a local apply writes the state in its own Terraform version
+
+**The update was a sensitivity change, not a value change.**
+`web_nextauth_secret` carries the tag
+`AutoGenerated = var.nextauth_secret == "" ? "true" : "false"`. Terraform 1.10.0
+changed conditional expressions so that _"marks must be combined from all values
+within the expression"_ (its changelog, verbatim), so a conditional that reads a
+sensitive variable now yields a sensitive result. Under 1.12.0 that tag is marked
+sensitive; under 1.9.4 it is not. Terraform core turns a no-op into an Update
+whenever the planned value's marks differ from the state's
+(`internal/terraform/node_resource_abstract_instance.go`, the `valueMarksEqual`
+check) - an in-place update whose before and after are identical. Compared by
+attribute name and as booleans only: identical values, and `after_sensitive`
+carrying `tags.AutoGenerated` where the state did not.
+
+**The state lost the mark because Terraform 1.9.4 wrote it.** The dev state
+bucket has no versioning, so only one version of the state object survives:
+written **2026-09-13 21:10:11 UTC**, `terraform_version` **1.9.4**. CloudTrail for
+21:06-21:12 shows the IAM user `vmiaff` issuing `ec2:CreateTags`,
+`s3:PutBucketTagging`, `iam:TagRole` and `iam:TagOpenIDConnectProvider` - the
+default-tags change applied from a laptop, outside `terraform-apply.yml`, before
+its pull request merged. The line first appeared at 11:08 the same day, so an
+earlier local write happened too; with no versioning that one cannot be shown.
+
+**Not introduced by #36.** Its own plan was merely the first to show it: replayed
+against today's state, #36's parent plans the same update.
+
+**The rule.** A local `terraform apply`, `import`, `state rm` or `state mv` writes
+the state with the Terraform version of the machine that ran it, and records that
+version in the state. A state written by an older version is not the state the
+pipeline plans against, and the difference arrives later as a change nobody made,
+on a resource nobody touched - here, the secret that signs every session. Change
+state only through `terraform-apply.yml`. If a local state operation is ever
+unavoidable, run it with the pinned version and say so in the pull request.
+**Nothing enforces this yet**: a `required_version` pinned to the pipeline's
+version in each root module would make an older binary refuse to touch the
+state, and is a separate change to decide.
+
+## D21 - who can read the state, and the key barrier it did not have
+
+`envs/shared/d21-state-kms.tf`. The state carries secrets in cleartext (A29,
+A30), so the only question is who can read the object. **Answered by
+measurement, not by reading policies:** `simulate-principal-policy` for
+`s3:GetObject` on
+`arn:aws:s3:::kloudnat-infra-shared-store/kambriq/envs/dev/terraform.tfstate`,
+run over all 5 users and all 32 roles in the account on 16 September 2026.
+
+### Five readers, not four — and then a sixth that is not an administrator
+
+`vmiaff`, `uekeum`, `gitops.admin`, `kambriq-infra-github-actions` — and
+`AWSReservedSSO_AdministratorAccess_c1b30cb73dd006be`, the IAM Identity Center
+permission set (SAML, `AdministratorAccess`, 12-hour sessions, last used
+2025-04-25). The D wave brief said four; the fifth is real and is **named in the
+key policy on purpose**. Leaving it out would not lock it out - it holds `kms:*`
+through IAM and can call `kms:PutKeyPolicy` - and would make the barrier read
+stronger than it is. Whether that permission set should reach this account at
+all is an Identity Center assignment decision, not a key policy one.
+
+**A sixth principal was added on 2026-09-16: D16's plan role**, and it is the
+one that breaks the pattern - it is not an administrator and cannot rewrite this
+policy. It arrived because a shared plan under the plan role was **refused**:
+
+```
+AccessDenied: ... is not authorized to perform: kms:DescribeKey on resource:
+arn:aws:kms:eu-central-1:051551940370:key/be2fbe9c-...   (run 35147649894)
+```
+
+`envs/shared` *manages* this key, so every shared plan refreshes it. The plan
+role's own IAM policy allowed all four reads and `simulate-principal-policy`
+agreed — but a **key policy is a second gate**, and `get-key-policy` named the
+plan role nowhere (`grep -c` returned 0). It gets two statements rather than a
+seat in the readers list, because the two access paths carry different context:
+the refresh calls KMS **directly** with no `kms:ViaService` to match
+(`DescribeKey`, `GetKeyPolicy`, `GetKeyRotationStatus`, `ListResourceTags` —
+exactly what CloudTrail shows a successful refresh calling), while reading the
+encrypted state goes through S3 and keeps the condition, for `Decrypt` alone.
+**Not `GenerateDataKey`:** that is the write side, and the readers list grants
+all three actions together — which is precisely why a sixth seat there would
+have been wrong.
+
+### The barrier is the key policy, and it starts holding per object
+
+SSE-S3 has no key policy: `s3:GetObject` alone decrypts. Under a CMK a reader
+needs **both** `s3:GetObject` and `kms:Decrypt` on that key. S3 encrypts at
+write time, so each state object keeps SSE-S3 until it is rewritten: the shared
+object on the next shared apply after the backend change, the dev object on the
+next dev apply. Until then, that object is still readable with GetObject alone -
+say which apply moved which object, rather than announcing the barrier when the
+key is created.
+
+### The key is selected by the backend, not by the bucket
+
+`kloudnat-infra-shared-store` is not ours alone: it also holds three legacy
+kambriq states and a top-level `shared/` prefix, in an account that also runs
+fotomena's EKS clusters and argocd. A bucket **default** encryption key would
+re-encrypt every future write by every writer, including principals this key
+policy does not name, and break their applies. So `kms_key_id` goes in
+`backend "s3"`, which scopes it to the two objects Terraform writes.
+
+### Two pull requests, because the apply has no pause
+
+`terraform-apply.yml` plans and applies in one job. The key must exist before
+any backend names it, so the key ships alone and the backend change follows. In
+the other order, a dev apply creates resources and then fails writing state to a
+key that does not exist.
+
+### Cost, and what it does not cover
+
+USD 1.00 per month for the key, plus USD 0.03 per 10 000 requests, which rounds
+to nothing at a few state writes a day. Not free - the figure is a dollar.
+
+All five *readers* are administrators. This stops a principal that was never
+meant to read the state; it does not stop somebody who is supposed to be an
+administrator. It also does nothing about the state being cleartext inside the
+object, and nothing about the bucket having **no versioning** - a bad state
+write is unrecoverable, which is how D23's evidence went missing.
+
+The sixth principal is the exception: the plan role reads the key's metadata,
+and through S3 only it may `Decrypt`. It cannot administer the key, cannot
+rewrite this policy, and cannot `GenerateDataKey`, so it cannot write an
+encrypted state object. Its `Decrypt` grant is **inert today** — both state
+objects are still SSE-S3 — and becomes load-bearing at the first apply after
+D26 sets `kms_key_id`.
+
+### A key policy must let somebody change the key policy
+
+The first apply was **refused**, and the refusal was right:
+
+```
+MalformedPolicyDocumentException: The new key policy will not allow you to
+update the key policy in the future.
+```
+
+`terraform-apply.yml` run 35134521387, 2026-09-16 18:30 UTC. The plan was
+exactly the local one (`2 to add`), no key and no alias were created, and the
+state was rewritten unchanged at the end of the run.
+
+The cause is KMS's policy lockout safety check. A key policy is not like other
+resource policies: *"an AWS KMS key policy does not automatically give
+permission to the account or any of its principals. To give permission to any
+principal, including the account principal, you must use a key policy statement
+that provides the permission explicitly."* The first version named only the
+three human administrators, so the role actually calling `CreateKey` - the
+pipeline - could never have called `PutKeyPolicy` afterwards, and KMS refuses
+that up front rather than letting a key become unmanageable.
+
+**The fix is to name the manager, not to bypass the check.**
+`bypass_policy_lockout_safety_check = true` exists and is not used here: it
+silences the guard instead of satisfying it, and AWS's own example of how a key
+becomes reachable only through Support is a policy naming principals that can
+later be deleted.
+
+**And the cost of that fix, stated rather than hidden:** the apply role can now
+rewrite this key policy, so it can grant itself the data-plane permissions the
+second statement withholds. It could do that before D16 (`Action:*` on
+`Resource:*`) and can still do it after (`iam:*` over `kambriq-*`). What this key
+buys is a barrier against a principal never meant to read the state - not
+against the pipeline that manages it.
+
+## D16 - the plan role and the apply role are not the same role
+
+`envs/shared/d16-plan-and-apply-roles.tf`, plus the apply role's policy in
+`envs/shared/main.tf` and one line in `terraform-plan.yml`.
+
+### Branch protection guards merges, not AWS
+
+`terraform-apply.yml` is a `workflow_dispatch`, launchable from any ref. Read
+live, not deduced: all three environments (`dev`, `prd`, `shared`) have
+`"protection_rules": []` and no deployment branch policy, and develop's
+protection is one required check with `reviews=0` and `enforce_admins=false`.
+So the shortest route to an unreviewed apply does not go through a pull request,
+and once required checks are in place the feeling of protection is real for
+merges and **false** for infrastructure.
+
+### One role, one claim - for both plan and apply
+
+Both workflows declare `environment: <env>` and read `secrets.AWS_ROLE_ARN`, an
+environment secret present in all three environments. The role trusts exactly
+`repo:kloudnat-digital/kambriq-infra:environment:{dev,shared}`, so a pull-request
+plan and a dispatched apply present the **same** `sub` and receive the **same**
+credentials - `Action: *` on `Resource: *`.
+
+No claim available here can carry a branch restriction: the repository uses the
+default subject format (`use_default: true`, read through the API), and a job
+that declares an environment loses the ref from `sub`. IAM cannot read `ref`.
+
+### The split is by environment name, because that is what `sub` carries
+
+`dev-plan` and `shared-plan` are declared by the plan workflow; the plan role
+trusts only those two subs. A second secret name in the same environments would
+change which ARN the plan job reads while leaving both roles reachable from one
+claim - the trust policy could not tell them apart. Creating those two
+environments and their `AWS_ROLE_ARN` is a GitHub settings change, listed in the
+pull request.
+
+### What a plan needs - and the lock that does not exist
+
+The read surface comes from the two states (134 addresses in dev, 33 in shared).
+**The brief's premise that a plan needs write access to a lock table is false
+here:** neither backend block sets `dynamodb_table` or `use_lockfile`, the
+account has no DynamoDB table, and `terraform-plan.yml` already says "it
+acquires no state lock". Nothing locks these states - not the plan, and **not
+the apply either**, so two concurrent applies can both write. That is a separate
+defect, recorded here rather than fixed in passing. If `use_lockfile` is ever
+enabled, the plan role needs `s3:PutObject`/`s3:DeleteObject` on `<key>.tflock`.
+
+### Read power is not reduced
+
+A plan refreshes 57 `aws_ssm_parameter` resources, which reads their values. The
+plan role can therefore read every `/kambriq/dev/*` SecureString, `JWT_SECRET`
+and the four `DATABASE_URL`s included. The split removes the power to **change**
+the estate; a leaked plan credential is still a leaked set of secrets.
+
+### Three ways a policy lies about what it grants
+
+All three were found on 2026-09-16, **after** the split was applied, by
+measuring the live roles rather than reading the HCL. Each produced a confident
+wrong answer first. They are properties of IAM, not of this estate.
+
+**An action simulated without its resource is not the action the pipeline
+performs.** `simulate-principal-policy` defaults `--resource-arns` to `*`, and a
+resource-scoped statement can never match `*`. Seven mutating actions therefore
+read as `implicitDeny` for the *apply* role, and
+`scripts/d16-prove-role-split.sh` reported that the apply role had lost powers
+it still held. Re-simulated against real ARNs, all seven are
+`plan=implicitDeny, apply=allowed`. The split was never broken; the measurement
+was. Every case in that script now carries a resource.
+
+**Some actions take no resource at all, and a scoped statement grants them
+nothing.** IAM evaluates them only against `*`, however plainly a scoped
+statement lists them. `ssm:DescribeParameters` sat in the plan role's
+`ReadTheProjectParameters` (scoped to `parameter/kambriq/*`) and was refused
+every time — and the AWS provider calls it on **every** `aws_ssm_parameter`
+refresh, so a dev plan or apply under either role would have failed on it. The
+shared apply of 18:43Z survived only because shared owns no SSM parameters.
+`s3:GetAccountPublicAccessBlock` was the same class in the other direction: the
+plan role never had it, and D14a's `aws_s3_account_public_access_block` is
+refreshed by every shared plan. Which actions are in this class is a fact of the
+Service Authorization Reference — an empty resource-type column — not a
+judgement.
+
+**A service prefix IAM does not know is a silent deny, not an error.** Both
+policies said `sesv2:`; the SESv2 API authorises against `ses:` ("Amazon Simple
+Email Service v2 (service prefix: `ses`)"). `sesv2:*` matched nothing and
+refused nothing, and `envs/shared/ses-newsletter.tf` manages an
+`aws_sesv2_contact_list`. **The simulator cannot catch this**: it string-matches,
+and returns `implicitDeny` for `notarealservice:DoThing` rather than rejecting
+it — so it cheerfully agreed that `sesv2:*` allows `sesv2:GetContactList`, which
+is true and means nothing. The instrument is
+`aws accessanalyzer validate-policy`, which returns
+`INVALID_SERVICE_IN_ACTION` at severity ERROR. It is now stage 0 of the proof
+script, and it is the only stage that can see this class of defect.
+
+**A fourth, found on the same day: `simulate-principal-policy` evaluates
+IDENTITY policies only — never resource policies.** The plan role's
+`kms:Decrypt` is conditioned on `kms:ViaService = s3`, so simulating a Decrypt
+against `alias/aws/ssm` returns `implicitDeny` even with the context key
+supplied. The real calls succeed: CloudTrail shows **20 `Decrypt` calls by the
+plan role at 20:18:33–20:18:46Z, every one with no error**, because
+`alias/aws/ssm` is AWS-managed and its own key policy authorises the account's
+principals. So a denial from the simulator is not a denial — for anything
+guarded by a key policy, a bucket policy or any other resource policy, the
+authority is the call, or CloudTrail's record of it.
+
+**And a fifth, about wildcards inside a service:** `s3:GetBucket*` does not
+cover S3's bucket-configuration reads whose IAM names carry no `Bucket` infix —
+`GetAccelerateConfiguration`, `GetAnalyticsConfiguration`,
+`GetIntelligentTieringConfiguration`, `GetInventoryConfiguration`,
+`GetMetricsConfiguration`. Three of that family were listed by hand
+(`GetEncryptionConfiguration`, `GetLifecycleConfiguration`,
+`GetReplicationConfiguration`) and the rest were missed, so a dev plan died on
+`s3:GetAccelerateConfiguration` against `kambriq-media-dev` (run 35145720238).
+A prefix wildcard covers a naming convention, not a capability — check the
+Service Authorization Reference for the family, not the prefix.
+
+All of these were invisible before the split because the old policy was
+`Action: *` on `Resource: *`. **Replacing a wildcard with an enumeration turns
+every mis-spelled, mis-scoped or merely unlisted entry from harmless into
+load-bearing**, and nothing in `terraform validate`, `fmt`, or a plan checks
+that an action exists. Run `validate-policy` over a policy before applying it,
+not after — and when a read is refused, fix the whole family in one change.
+Adding permissions one error at a time is how the first enumeration got
+written.
+
+### A policy repair cannot be applied by a plan that the same policy breaks
+
+The sharpest lesson of 2026-09-16. It cost two extra merges and an `--admin`
+override, and it will happen again to anyone who enumerates this role's policy.
+
+**A pull request that changes the CI role's own policy cannot be validated by its
+own plan.** The pre-merge plan runs under the OLD credentials, so it fails on the
+very defect the PR repairs. #59's `Plan (shared)` failed exactly that way and CI
+Gate refused it. That is expected and it is not evidence against the change — but
+it means the gate is silent on the only question that matters. **The proof has to
+come from somewhere the broken credentials are not:**
+`aws iam simulate-custom-policy` against the *proposed* document, and
+`accessanalyzer validate-policy` on it. Both were run before merging, and both
+passed: every refused action became `allowed`, and the plan role stayed refused
+on all five writes.
+
+**Worse — the apply could not run either.** `terraform-apply.yml` plans and
+applies in one run, so the apply inherits whatever the plan can read. Run
+`35143582139` died at step 9 (Terraform plan) on `ses:GetContactList`; step 11
+(Terraform apply) was **skipped** and no state was written. The one apply that
+would restore the permission needed that permission to get past its own refresh.
+**A repair that is a prerequisite for itself.**
+
+The way out was measured, not guessed — four local plans, pinned 1.12.0, same
+tree:
+
+| variant | managed refreshes | reads SES | plan |
+| --- | ---: | --- | --- |
+| plain (what CI runs) | 29 | **yes** | fails in CI |
+| `-refresh=false` | 0 | no | 0 add / 2 change |
+| `-refresh=false -target=…` | 0 | no | 0 add / 2 change |
+| **`-target=…`** | **5** | no | 0 add / 2 change |
+
+`-target` alone is the right instrument: it still refreshes the five resources
+being changed — the OIDC provider, both roles, both role policies — so it is not
+a blind apply, and it never reads SES. `terraform-apply.yml` therefore accepts an
+optional `extra_plan_args` input (default empty, #60). **A targeted apply is a
+partial apply**, so the step logs `PARTIAL APPLY` and the run summary states
+which arguments were in effect. It exists to break a deadlock, not for routine
+use.
+
+What the repair reported, against a local plan taken immediately before it:
+`Apply complete! Resources: 0 added, 2 changed, 0 destroyed`, matching
+`Plan: 0 to add, 2 to change, 0 to destroy` exactly. The live documents are
+canonically identical to the ones the plan intended (`sha256 53b95eec…`,
+`fafe5e8b…`), and both environments then plan clean under the pipeline.
+
+**The general rule: before replacing a wildcard in a CI role's own policy, work
+out how you would apply the fix if you got it wrong.** If the answer is "through
+the pipeline", check that the pipeline's own read surface does not include the
+permission you are about to remove.
+
+### Two older invalid actions, in other subjects' policies
+
+The same account-wide sweep (`validate-policy` over every inline policy of every
+`kambriq-*` role) found two pre-dating this work, left for their own subjects
+rather than fixed in passing: `s3:HeadObject` in `kambriq-media-dev-access`
+(there is no such IAM action; the HeadObject API authorises as `s3:GetObject`)
+and `ecs:Wait` in `kambriq-dev-github-actions` (no such action; `aws ecs wait`
+polls `DescribeServices` client-side).
+
+**Both are inert, checked rather than assumed:** the media policy also grants
+`s3:GetObject` and the deploy policy also grants `ecs:DescribeServices`, so each
+API call lands on a permission that exists. They are dead entries that make a
+policy read wider than it is — worth deleting, but nothing is failing because of
+them. That is the difference between these two and the `sesv2:` defect above,
+where nothing else granted what the call needed.
+
+### What it does not cover
+
+Both repository administrators (`Ekeu`, `visquis-miaffossa`) can still dispatch
+`terraform-apply.yml` from any ref, with no reviewer. Anyone with write access
+can push a workflow change and dispatch it. The apply role still holds `iam:*`
+over `kambriq-*` principals, so it can rewrite its own policy - narrowing that
+needs a permissions boundary. What this buys is that a plan cannot change
+anything, and that the apply role can no longer touch fotomena's EKS clusters,
+argocd, Organizations or Identity Center.

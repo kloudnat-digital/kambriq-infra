@@ -23,9 +23,16 @@ All environments store state in:
 ## Database Credentials (SSM)
 - The RDS master password is stored in SSM at
   `/kambriq/{env}/db/DB_PASSWORD` (SecureString).
-- Do not store the real password in git. Use `TF_VAR_db_password` when applying:
+- It is **generated**, not supplied. `envs/dev/a30-db-password.tf` declares a
+  `random_password`, Terraform writes it to the instance and to SSM once, and
+  `modules/rds-postgres` then ignores the attribute forever. There is no
+  `db_password` variable and nothing to export at apply time.
+- This replaced a `TF_VAR_db_password` instruction that nothing enforced: the
+  apply workflow passes no `-var`, so the tfvars placeholder was what actually
+  reached the database. See A30.
+- To read the current value (for psql, not for Terraform):
 ```
-export TF_VAR_db_password="$(aws ssm get-parameter --with-decryption --name /kambriq/dev/db/DB_PASSWORD --query Parameter.Value --output text)"
+aws ssm get-parameter --with-decryption --name /kambriq/dev/db/DB_PASSWORD --query Parameter.Value --output text
 ```
 
 ## Shell into a running task (ECS Exec)
